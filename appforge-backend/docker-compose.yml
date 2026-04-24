@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  appforge-db:
+    image: postgres:15-alpine
+    container_name: appforge-db
+    environment:
+      POSTGRES_USER: appforge
+      POSTGRES_PASSWORD: appforge_password
+      POSTGRES_DB: appforge_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  appforge-redis:
+    image: redis:7-alpine
+    container_name: appforge-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  appforge-minio:
+    image: minio/minio
+    container_name: appforge-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: appforge_minio
+      MINIO_ROOT_PASSWORD: appforge_minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:

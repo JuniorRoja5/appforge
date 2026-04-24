@@ -1,0 +1,80 @@
+{
+  "appId": "test-app-id",
+  "appName": "Demo App",
+  "apiUrl": "http://localhost:3000",
+  "schema": [
+    {
+      "id": "el-1",
+      "moduleId": "hero_profile",
+      "config": { "businessName": "Mi Negocio", "tagline": "La mejor experiencia", "avatarUrl": "", "coverUrl": "" },
+      "tabIndex": 0,
+      "tabLabel": "Inicio",
+      "tabIcon": "home"
+    },
+    {
+      "id": "el-2",
+      "moduleId": "text_module",
+      "config": { "content": "<p>Bienvenido a nuestra app. Aquí encontrarás todo lo que necesitas.</p>", "align": "left" },
+      "tabIndex": 0,
+      "tabLabel": "Inicio",
+      "tabIcon": "home"
+    },
+    {
+      "id": "el-3",
+      "moduleId": "news_feed",
+      "config": { "title": "Últimas Noticias" },
+      "tabIndex": 1,
+      "tabLabel": "Noticias",
+      "tabIcon": "news"
+    },
+    {
+      "id": "el-4",
+      "moduleId": "contact",
+      "config": { "title": "Contáctanos" },
+      "tabIndex": 2,
+      "tabLabel": "Contacto",
+      "tabIcon": "contact"
+    }
+  ],
+  "designTokens": {
+    "colors": {
+      "primary": { "main": "#4F46E5", "dark": "#3730A3", "light": "#818CF8" },
+      "secondary": { "main": "#6366F1", "dark": "#4338CA", "light": "#A5B4FC" },
+      "accent": { "main": "#F59E0B", "dark": "#D97706", "light": "#FCD34D" },
+      "surface": { "background": "#FFFFFF", "card": "#FFFFFF", "variant": "#F9FAFB" },
+      "text": { "primary": "#111827", "secondary": "#6B7280", "on_primary": "#FFFFFF" },
+      "feedback": { "success": "#10B981", "warning": "#F59E0B", "error": "#EF4444" },
+      "navigation": { "background": "#FFFFFF", "active": "#4F46E5", "inactive": "#9CA3AF", "indicator": "#4F46E5" },
+      "extras": { "divider": "#E5E7EB", "overlay": "rgba(0,0,0,0.5)", "shimmer_base": "#F3F4F6", "shimmer_highlight": "#E5E7EB" }
+    },
+    "typography": {
+      "families": { "display": "Inter", "heading": "Inter", "body": "Inter", "mono": "JetBrains Mono" },
+      "scale": { "xs": "0.625rem", "sm": "0.75rem", "base": "0.875rem", "md": "1rem", "lg": "1.25rem", "xl": "1.5rem", "xxl": "2rem", "xxxl": "2.75rem" },
+      "weight": { "regular": "400", "medium": "500", "semibold": "600", "bold": "700", "extrabold": "800" },
+      "line_height": { "tight": "1.2", "normal": "1.5", "relaxed": "1.75" },
+      "letter_spacing": { "tight": "-0.02em", "normal": "0em", "wide": "0.04em", "wider": "0.08em" }
+    },
+    "shape": {
+      "radius": { "none": "0px", "xs": "4px", "sm": "8px", "md": "12px", "lg": "16px", "xl": "24px", "full": "9999px" },
+      "components": { "card": "16px", "button": "12px", "input": "10px", "badge": "9999px", "image": "12px" },
+      "shadow": { "sm": "0 1px 2px rgba(0,0,0,0.05)", "md": "0 4px 6px rgba(0,0,0,0.07)", "lg": "0 10px 15px rgba(0,0,0,0.1)" },
+      "shadow_color": "rgba(0,0,0,0.1)"
+    },
+    "spacing": {
+      "screen_padding_h": "16px",
+      "screen_padding_v": "20px",
+      "card_padding": "16px",
+      "section_gap": "24px",
+      "item_gap": "12px",
+      "icon_size": { "sm": "18px", "md": "24px", "lg": "32px" }
+    },
+    "navigation": { "style": "bottom_tabs", "tab_count": 4, "show_labels": true, "label_size": "0.625rem", "icon_style": "outline", "active_indicator": "pill" },
+    "imagery": { "hero_aspect_ratio": "16:9", "card_image_style": "cover", "placeholder_style": "gradient", "overlay_style": "gradient_bottom", "icon_theme": "minimal" }
+  },
+  "appConfig": {
+    "icon": { "url": "" },
+    "splash": { "enabled": true, "type": "color", "backgroundColor": "#4F46E5", "duration": 2000 },
+    "onboarding": { "enabled": false, "slides": [] },
+    "terms": { "content": "" }
+  }
+}

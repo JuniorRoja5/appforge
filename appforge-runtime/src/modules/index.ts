@@ -1,0 +1,23 @@
+// Import all runtime modules to trigger registration
+import './text/TextRuntime';
+import './image/ImageRuntime';
+import './button/ButtonRuntime';
+import './hero-profile/HeroProfileRuntime';
+import './video/VideoRuntime';
+import './links/LinksRuntime';
+import './news-feed/NewsFeedRuntime';
+import './events/EventsRuntime';
+import './photo-gallery/PhotoGalleryRuntime';
+import './menu-restaurant/MenuRestaurantRuntime';
+import './catalog/CatalogRuntime';
+import './discount-coupon/DiscountCouponRuntime';
+import './contact/ContactRuntime';
+import './booking/BookingRuntime';
+import './loyalty-card/LoyaltyCardRuntime';
+import './pdf-reader/PdfReaderRuntime';
+import './testimonials/TestimonialsRuntime';
+import './custom-page/CustomPageRuntime';
+import './push-notification/PushNotificationRuntime';
+import './user-profile/UserProfileRuntime';
+import './social-wall/SocialWallRuntime';
+import './fan-wall/FanWallRuntime';

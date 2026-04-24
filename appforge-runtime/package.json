@@ -1,0 +1,46 @@
+{
+  "name": "appforge-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "build:pwa": "cross-env VITE_PLATFORM=pwa vite build"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/camera": "^6.0.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/device": "^6.0.3",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/preferences": "^6.0.4",
+    "@capacitor/push-notifications": "^6.0.5",
+    "@capacitor/share": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "dompurify": "^3.3.3",
+    "lucide-react": "^0.577.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "@types/dompurify": "^3.0.5",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "cross-env": "^10.1.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

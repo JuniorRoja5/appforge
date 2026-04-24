@@ -1,0 +1,749 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_DELETION
+  SUSPENDED
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Tenant {
+  id        String       @id @default(uuid())
+  name      String
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+
+  // Stripe
+  stripeCustomerId String? @unique
+
+  // White-label branding (for resellers)
+  brandName     String?
+  brandLogoUrl  String?
+  brandDomain   String?
+  brandColors   Json?
+
+  users        User[]
+  apps         App[]
+  subscription Subscription?
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  role      Role       @default(CLIENT)
+  status    UserStatus @default(ACTIVE)
+  tenantId  String?
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Profile
+  firstName    String?
+  lastName     String?
+  company      String?
+  avatarUrl    String?
+  phone        String?
+  address      String?
+  address2     String?
+  zipCode      String?
+  city         String?
+  country      String?
+  stateProvince String?
+
+  // Deletion
+  deletionRequestedAt DateTime?
+
+  // Password reset
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AppStatus {
+  DRAFT
+  PUBLISHED
+  BUILDING
+}
+
+model App {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  schema           Json      @default("[]")
+  designTokens     Json?
+  appConfig        Json?
+  needsRebuild     Boolean   @default(true)
+  lastBuiltSchema  Json?
+  lastBuiltAt      DateTime?
+
+  status    AppStatus @default(DRAFT)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  newsArticles       NewsArticle[]
+  contactSubmissions ContactSubmission[]
+  galleryItems       GalleryItem[]
+  events             Event[]
+  menuCategories     MenuCategory[]
+  discountCoupons    DiscountCoupon[]
+  catalogCollections CatalogCollection[]
+  bookings           Booking[]
+  smtpConfig         AppSmtpConfig?
+  builds             AppBuild[]
+  keystore           AppKeystore?
+  pushDevices        PushDevice[]
+  pushNotifications  PushNotification[]
+  appUsers           AppUser[]
+  socialPosts        SocialPost[]
+  fanPosts           FanPost[]
+  contentReports     ContentReport[]
+  analyticsEvents    AnalyticsEvent[]
+  analyticsSessions  AnalyticsSession[]
+  loyaltyCard         LoyaltyCard?
+  loyaltyStamps       LoyaltyStamp[]
+  loyaltyRedemptions  LoyaltyRedemption[]
+  couponRedemptions   CouponRedemption[]
+  orders              Order[]
+
+  // Client metadata (for reseller portfolio)
+  clientName    String?
+  clientEmail   String?
+  clientNotes   String?
+
+  // PWA
+  pwaEnabled        Boolean   @default(false)
+  pwaUrl            String?
+  pwaLastDeployedAt DateTime?
+
+  // Soft delete
+  deletedAt     DateTime?
+
+  @@index([tenantId, deletedAt])
+}
+
+model AppSmtpConfig {
+  id            String   @id @default(uuid())
+  appId         String   @unique
+  app           App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  host          String
+  port          Int
+  secure        Boolean  @default(false)
+  username      String
+  encryptedPass String
+  fromEmail     String
+  fromName      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model NewsArticle {
+  id          String   @id @default(uuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  title       String
+  content     String
+  imageUrl    String?
+  videoUrl    String?
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([appId])
+}
+
+model ContactSubmission {
+  id        String   @id @default(uuid())
+  appId     String
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  data      Json
+  fileUrls  String[]
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([appId])
+}
+
+model GalleryItem {
+  id          String   @id @default(uuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  title       String?
+  description String?
+  imageUrl    String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([appId])
+}
+
+model Event {
+  id           String    @id @default(uuid())
+  appId        String
+  app          App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  imageUrl     String?
+  location     String?
+  eventDate    DateTime
+  eventEndDate DateTime?
+  price        String?
+  ticketUrl    String?
+  ticketLabel  String?
+  category     String?
+  organizer    String?
+  contactInfo  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([appId])
+}
+
+// --- Subscription Plans ---
+
+enum PlanType {
+  FREE
+  STARTER
+  PRO
+  RESELLER_STARTER
+  RESELLER_PRO
+}
+
+model SubscriptionPlan {
+  id                String         @id @default(uuid())
+  name              String
+  planType          PlanType       @unique
+  maxApps           Int
+  maxBuildsPerMonth Int
+  storageGb         Float
+  canBuild          Boolean
+  isWhiteLabel      Boolean
+  priceMonthly      Float
+  createdAt         DateTime       @default(now())
+
+  subscriptions     Subscription[]
+}
+
+model Subscription {
+  id        String           @id @default(uuid())
+  tenantId  String           @unique
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId    String
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+
+  // Stripe
+  stripeSubscriptionId   String?   @unique
+  stripeCurrentPeriodEnd DateTime?
+  cancelAtPeriodEnd      Boolean   @default(false)
+}
+
+model PlatformSmtpConfig {
+  id            String   @id @default(uuid())
+  host          String
+  port          Int
+  secure        Boolean  @default(false)
+  username      String
+  encryptedPass String
+  fromEmail     String
+  fromName      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// --- Booking ---
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Booking {
+  id        String        @id @default(uuid())
+  appId     String
+  app       App           @relation(fields: [appId], references: [id], onDelete: Cascade)
+  date      DateTime      @db.Date
+  timeSlot  String
+  duration  Int
+  status    BookingStatus @default(CONFIRMED)
+  formData  Json
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([appId, date, timeSlot])
+  @@index([appId])
+  @@index([appId, date])
+}
+
+// --- Menu Restaurant ---
+
+model MenuCategory {
+  id          String     @id @default(uuid())
+  appId       String
+  app         App        @relation(fields: [appId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  imageUrl    String?
+  order       Int        @default(0)
+  items       MenuItem[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([appId])
+}
+
+model MenuItem {
+  id          String       @id @default(uuid())
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Decimal      @db.Decimal(10, 2)
+  imageUrl    String?
+  allergens   String[]
+  available   Boolean      @default(true)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([categoryId])
+}
+
+// --- Discount Coupons ---
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model DiscountCoupon {
+  id            String             @id @default(uuid())
+  appId         String
+  app           App                @relation(fields: [appId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  code          String
+  discountType  DiscountType
+  discountValue Decimal            @db.Decimal(10, 2)
+  imageUrl      String?
+  conditions    String?
+  maxUses       Int?
+  currentUses   Int                @default(0)
+  validFrom     DateTime           @default(now())
+  validUntil    DateTime?
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  redemptions   CouponRedemption[]
+
+  @@unique([appId, code])
+  @@index([appId])
+}
+
+// --- Catalog ---
+
+model CatalogCollection {
+  id          String           @id @default(uuid())
+  appId       String
+  app         App              @relation(fields: [appId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  imageUrl    String?
+  order       Int              @default(0)
+  products    CatalogProduct[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([appId])
+}
+
+model CatalogProduct {
+  id           String            @id @default(uuid())
+  collectionId String
+  collection   CatalogCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  price        Decimal           @db.Decimal(10, 2)
+  comparePrice Decimal?          @db.Decimal(10, 2)
+  imageUrls    String[]
+  inStock      Boolean           @default(true)
+  tags         String[]
+  order        Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([collectionId])
+}
+
+// --- App Keystore (for release signing) ---
+
+model AppKeystore {
+  id             String   @id @default(uuid())
+  appId          String   @unique
+  app            App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  keystorePath   String
+  storePassword  String   // AES-256-GCM encrypted
+  keyAlias       String   @default("appforge")
+  keyPassword    String   // AES-256-GCM encrypted
+  createdAt      DateTime @default(now())
+}
+
+// --- App Builds ---
+
+enum BuildStatus {
+  QUEUED
+  PREPARING
+  BUILDING
+  SIGNING
+  COMPLETED
+  FAILED
+}
+
+enum BuildType {
+  DEBUG
+  RELEASE
+  AAB
+  IOS_EXPORT
+  PWA
+}
+
+model AppBuild {
+  id            String      @id @default(uuid())
+  appId         String
+  app           App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  status        BuildStatus @default(QUEUED)
+  buildType     BuildType   @default(DEBUG)
+  schemaHash    String
+  logOutput     String?
+  artifactUrl   String?
+  artifactSize  Int?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([appId])
+  @@index([status])
+}
+
+// --- App Users (end-user auth for generated apps) ---
+
+enum AppUserStatus {
+  ACTIVE
+  BANNED
+}
+
+model AppUser {
+  id           String        @id @default(uuid())
+  appId        String
+  app          App           @relation(fields: [appId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  avatarUrl    String?
+  status           AppUserStatus @default(ACTIVE)
+  lastLoginAt      DateTime?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  socialPosts        SocialPost[]        @relation("SocialPostAuthor")
+  socialComments     SocialComment[]     @relation("SocialCommentAuthor")
+  socialLikes        SocialLike[]        @relation("SocialLikeUser")
+  fanPosts           FanPost[]           @relation("FanPostAuthor")
+  fanLikes           FanLike[]           @relation("FanLikeUser")
+  contentReports     ContentReport[]     @relation("ContentReportAuthor")
+  loyaltyStamps       LoyaltyStamp[]       @relation("LoyaltyStampUser")
+  loyaltyRedemptions  LoyaltyRedemption[]  @relation("LoyaltyRedemptionUser")
+  couponRedemptions   CouponRedemption[]   @relation("CouponRedemptionUser")
+  orders              Order[]              @relation("OrderUser")
+
+  @@unique([appId, email])
+  @@index([appId])
+}
+
+// --- Push Notifications (FCM) ---
+
+enum PushNotificationStatus {
+  DRAFT
+  SENT
+  FAILED
+}
+
+model PlatformFcmConfig {
+  id                   String   @id @default(uuid())
+  projectId            String
+  serviceAccountJson   String   // Encrypted (AES-256-GCM) — Firebase Admin SDK credential
+  googleServicesJson   String   // Encrypted — injected into Android builds
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model PushDevice {
+  id        String   @id @default(uuid())
+  appId     String
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  token     String
+  platform  String   @default("android")
+  webPushSubscription Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([appId, token])
+  @@index([appId])
+}
+
+model PushNotification {
+  id           String                 @id @default(uuid())
+  appId        String
+  app          App                    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  title        String
+  body         String
+  imageUrl     String?
+  data         Json?
+  status       PushNotificationStatus @default(DRAFT)
+  sentAt       DateTime?
+  successCount Int                    @default(0)
+  failureCount Int                    @default(0)
+  errorMessage String?
+  createdAt    DateTime               @default(now())
+
+  @@index([appId, createdAt])
+}
+
+// --- Social Wall ---
+
+model SocialPost {
+  id         String   @id @default(uuid())
+  appId      String
+  app        App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId  String
+  appUser    AppUser  @relation("SocialPostAuthor", fields: [appUserId], references: [id], onDelete: Cascade)
+  content    String
+  imageUrl   String?
+  likesCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  comments SocialComment[]
+  likes    SocialLike[]
+
+  @@index([appId, createdAt])
+}
+
+model SocialComment {
+  id        String     @id @default(uuid())
+  postId    String
+  post      SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  appUserId String
+  appUser   AppUser    @relation("SocialCommentAuthor", fields: [appUserId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime   @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model SocialLike {
+  id        String     @id @default(uuid())
+  postId    String
+  post      SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  appUserId String
+  appUser   AppUser    @relation("SocialLikeUser", fields: [appUserId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([postId, appUserId])
+}
+
+// --- Fan Wall ---
+
+model FanPost {
+  id         String   @id @default(uuid())
+  appId      String
+  app        App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId  String
+  appUser    AppUser  @relation("FanPostAuthor", fields: [appUserId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  caption    String?
+  likesCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  likes FanLike[]
+
+  @@index([appId, createdAt])
+}
+
+model FanLike {
+  id        String   @id @default(uuid())
+  postId    String
+  post      FanPost  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  appUserId String
+  appUser   AppUser  @relation("FanLikeUser", fields: [appUserId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, appUserId])
+}
+
+// --- Content Reports ---
+
+model ContentReport {
+  id         String   @id @default(uuid())
+  appId      String
+  app        App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId  String
+  appUser    AppUser  @relation("ContentReportAuthor", fields: [appUserId], references: [id], onDelete: Cascade)
+  targetType String   // "social_post" | "social_comment" | "fan_post"
+  targetId   String
+  reason     String?
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([appUserId, targetType, targetId])
+  @@index([appId, resolved])
+}
+
+// --- Analytics ---
+
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  sessionId   String
+  eventType   String   // "screen_view" | "session_start" | "session_end" | "module_view"
+  moduleId    String?
+  platform    String   // "android" | "ios" | "web"
+  deviceModel String?
+  osVersion   String?
+  appUserId   String?
+  metadata    Json?
+  timestamp   DateTime @default(now())
+
+  @@index([appId, timestamp])
+  @@index([appId, eventType, timestamp])
+  @@index([appId, moduleId, timestamp])
+}
+
+model AnalyticsSession {
+  id          String    @id @default(uuid())
+  appId       String
+  app         App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId   String?
+  platform    String
+  deviceModel String?
+  osVersion   String?
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  duration    Int?      // seconds
+
+  @@index([appId, startedAt])
+  @@index([appId, appUserId])
+}
+
+// --- Loyalty Card ---
+
+model LoyaltyCard {
+  id                String   @id @default(uuid())
+  appId             String   @unique
+  app               App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  totalStamps       Int      @default(10)
+  reward            String
+  rewardDescription String?
+  businessPin       String   // bcrypt hash
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model LoyaltyStamp {
+  id        String   @id @default(uuid())
+  appId     String
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId String
+  appUser   AppUser  @relation("LoyaltyStampUser", fields: [appUserId], references: [id], onDelete: Cascade)
+  stampedBy String?
+  createdAt DateTime @default(now())
+
+  @@index([appId, appUserId])
+  @@index([appId, createdAt])
+}
+
+model LoyaltyRedemption {
+  id         String   @id @default(uuid())
+  appId      String
+  app        App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId  String
+  appUser    AppUser  @relation("LoyaltyRedemptionUser", fields: [appUserId], references: [id], onDelete: Cascade)
+  redeemedAt DateTime @default(now())
+
+  @@index([appId, appUserId])
+}
+
+// --- Coupon Redemptions ---
+
+model CouponRedemption {
+  id         String         @id @default(uuid())
+  appId      String
+  app        App            @relation(fields: [appId], references: [id], onDelete: Cascade)
+  couponId   String
+  coupon     DiscountCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  appUserId  String?
+  appUser    AppUser?       @relation("CouponRedemptionUser", fields: [appUserId], references: [id], onDelete: SetNull)
+  deviceId   String?
+  redeemedAt DateTime       @default(now())
+
+  @@index([couponId])
+  @@index([appId, couponId])
+}
+
+// --- Orders ---
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  appId         String
+  app           App         @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId     String?
+  appUser       AppUser?    @relation("OrderUser", fields: [appUserId], references: [id], onDelete: SetNull)
+  status        OrderStatus @default(PENDING)
+  customerName  String
+  customerPhone String?
+  customerEmail String?
+  customerNotes String?
+  items         Json        // [{productId, name, price, quantity, collectionName}]
+  total         Decimal     @db.Decimal(10, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([appId, status])
+  @@index([appId, createdAt])
+}
