@@ -214,7 +214,13 @@ async function main() {
   // ========================================================================
   console.log('\n🔑 Creando usuario SUPER_ADMIN...');
 
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12) {
+    console.error('\n❌ ERROR: SEED_ADMIN_PASSWORD environment variable required (min 12 chars).');
+    console.error('   Run: SEED_ADMIN_PASSWORD="$(openssl rand -base64 24)" npx prisma db seed');
+    process.exit(1);
+  }
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@appforge.com' },

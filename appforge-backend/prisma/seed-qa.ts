@@ -54,6 +54,12 @@ function buildSchema(moduleIds: string[]) {
 // ─── Main ─────────────────────────────────────────────────────────────
 
 async function main() {
+  // QA seed only — fixed password is intentional for local testing.
+  // Never run this in production (the file's filename signals its purpose).
+  if (process.env.NODE_ENV === 'production') {
+    console.error('seed-qa.ts must not run in production.');
+    process.exit(1);
+  }
   const hash = await bcrypt.hash('test1234', 10);
 
   // Ensure plans exist (idempotent — depends on seed.ts having run first)

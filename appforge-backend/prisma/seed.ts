@@ -30,7 +30,15 @@ async function main() {
     create: { id: 'seed-admin-tenant', name: 'AppForge HQ' },
   });
 
-  const password = await bcrypt.hash('admin123', 10);
+  // Production: require SEED_ADMIN_PASSWORD env var. Dev: use a default for local convenience.
+  const isProd = process.env.NODE_ENV === 'production';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? (isProd ? '' : 'dev-only-change-me');
+  if (isProd && (!adminPassword || adminPassword.length < 12)) {
+    console.error('SEED_ADMIN_PASSWORD env var required in production (min 12 chars).');
+    console.error('Run: SEED_ADMIN_PASSWORD="$(openssl rand -base64 24)" npx prisma db seed');
+    process.exit(1);
+  }
+  const password = await bcrypt.hash(adminPassword, 10);
   await prisma.user.upsert({
     where: { email: 'admin@appforge.com' },
     update: {},

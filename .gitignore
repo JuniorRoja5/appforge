@@ -55,3 +55,6 @@ English version/
 .claude/
 documentacion proyecto.md
 templates/
+seed-error.txt
+*-error.txt
+*-error.log
