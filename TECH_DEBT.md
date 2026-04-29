@@ -2,19 +2,15 @@
 
 Items below are not blocking. Address them in calm windows, not during active feature work.
 
-## 1. nginx.conf structure mismatch
+## 1. nginx.conf structure mismatch — RESOLVED 2026-04-29
 
-**Problem:** The current `nginx.conf` in this repo contains `user nginx;`, `events {}`, and `http {}` blocks — that is the structure of a **main** nginx config (`/etc/nginx/nginx.conf`), not a **site** config (which only contains `server` blocks).
+The repo previously had a single `nginx.conf` at the root that mixed main-config
+directives (`user`, `events`, `http`) with site directives (`server` blocks),
+which made it impossible to deploy correctly via `cp` to either location.
 
-The header comment says "copy this to `/etc/nginx/sites-available/appforge.conf`", which would create a nested `http {}` inside Ubuntu's default `http {}` and break nginx on reload.
-
-**Fix:** Split the file into two:
-- `nginx-main.conf` → goes to `/etc/nginx/nginx.conf` (with `events {}`, `http {}`, gzip, ssl_protocols, rate-limit zones, etc.)
-- `appforge-sites.conf` → goes to `/etc/nginx/sites-available/appforge.conf` (only the 5 `server {}` blocks for api/app/admin/storage/marketing)
-
-Update `deploy-setup.sh` to install both files in the correct paths.
-
-**Don't touch this if production is currently working.** Only fix when redeploying nginx config from scratch.
+**Resolution:** Split into `infra/nginx/nginx.conf` (main) and
+`infra/nginx/sites-available/appforge.conf` (site), with deploy instructions in
+`infra/nginx/README.md`.
 
 ---
 
