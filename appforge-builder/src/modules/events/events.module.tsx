@@ -500,12 +500,22 @@ const EventForm: React.FC<{
             </button>
           </div>
         )}
+        <input
+          type="url"
+          value={form.imageUrl}
+          onChange={(e) => setForm(f => ({ ...f, imageUrl: e.target.value }))}
+          placeholder="https://ejemplo.com/imagen.jpg"
+          className="w-full mb-2 px-2 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+        />
         {uploading ? (
           <p className="text-xs text-teal-600 py-2">Subiendo imagen...</p>
         ) : (
-          <input type="file" accept="image/*" onChange={handleImageUpload}
-            className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-teal-100 file:text-teal-700 hover:file:bg-teal-200 cursor-pointer"
-          />
+          <>
+            <p className="text-[10px] text-gray-400 mb-1">o sube un archivo:</p>
+            <input type="file" accept="image/*" onChange={handleImageUpload}
+              className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-teal-100 file:text-teal-700 hover:file:bg-teal-200 cursor-pointer"
+            />
+          </>
         )}
       </div>
 

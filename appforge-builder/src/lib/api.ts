@@ -1149,7 +1149,7 @@ export interface AppBuild {
 export const requestBuild = async (
   appId: string,
   token: string,
-  buildType: 'debug' | 'release' | 'aab' | 'ios-export' = 'debug',
+  buildType: 'debug' | 'release' | 'aab' | 'ios-export' | 'pwa' = 'debug',
 ): Promise<AppBuild> => {
   const response = await fetch(`${API_URL}/apps/${appId}/builds`, {
     method: 'POST',
