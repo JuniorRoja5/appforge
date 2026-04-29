@@ -46,3 +46,23 @@ Internally encapsulates: preview with X button, URL input, file upload via `uplo
 Migrate the 4 existing modules one by one. Reduces ~160 lines of duplication and prevents inconsistencies like the events bug.
 
 **When to do this:** After current QA round is done, before adding new modules that need image upload.
+
+---
+
+## 3. CORS env var naming inconsistency — RESOLVED 2026-04-29
+
+`appforge-backend/src/main.ts` previously read `process.env.BUILDER_URL` and
+`process.env.ADMIN_URL` for its CORS allowlist, while the rest of the project
+(including `env.production.example` and `/opt/appforge/appforge-backend/.env`)
+used the `PUBLIC_*` naming convention (`PUBLIC_BUILDER_URL`, `PUBLIC_ADMIN_URL`).
+
+This caused a silent CORS failure that surfaced after the 14:18 UTC reboot on
+2026-04-29: `pm2 start` from a clean shell did not have the legacy
+`BUILDER_URL`/`ADMIN_URL` exports it had been relying on, so `allowedOrigins`
+became `[]` and all browser requests from `https://app.creatu.app` were
+rejected at the CORS preflight stage.
+
+**Resolution:** Updated `main.ts` to read `process.env.PUBLIC_BUILDER_URL` and
+`process.env.PUBLIC_ADMIN_URL`, matching the project-wide naming convention.
+Removed the temporary `BUILDER_URL` and `ADMIN_URL` entries from the
+production `.env` (they were added as a hotfix earlier the same day).
