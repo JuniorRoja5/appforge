@@ -12,6 +12,36 @@ export interface UsageStats {
 export class SubscriptionService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Ensure a tenant has at least a FREE subscription. Self-healing for tenants
+   * that were created before the SubscriptionPlan rows existed (or for users
+   * registered while the seed had not been run). Idempotent — does nothing
+   * if a subscription already exists.
+   *
+   * Throws if the FREE plan itself is missing (the seed must run first).
+   */
+  async ensureFreeSubscription(tenantId: string) {
+    const existing = await this.prisma.subscription.findUnique({ where: { tenantId } });
+    if (existing) return existing;
+
+    const freePlan = await this.prisma.subscriptionPlan.findUnique({
+      where: { planType: PlanType.FREE },
+    });
+    if (!freePlan) {
+      throw new Error(
+        'FREE SubscriptionPlan not found in database. Run `npx prisma db seed` to populate plans.',
+      );
+    }
+
+    return this.prisma.subscription.create({
+      data: {
+        tenantId,
+        planId: freePlan.id,
+        expiresAt: new Date('2099-12-31'),
+      },
+    });
+  }
+
   /** Get the tenant's current subscription with plan details */
   async getTenantPlan(tenantId: string) {
     const subscription = await this.prisma.subscription.findUnique({
@@ -56,10 +86,22 @@ export class SubscriptionService {
 
   /** Check if a tenant can create a new app */
   async canCreateApp(tenantId: string): Promise<{ allowed: boolean; reason?: string }> {
-    const subscription = await this.prisma.subscription.findUnique({
+    let subscription = await this.prisma.subscription.findUnique({
       where: { tenantId },
       include: { plan: true },
     });
+    // Self-heal: if tenant has no subscription, assign FREE automatically
+    if (!subscription) {
+      try {
+        await this.ensureFreeSubscription(tenantId);
+        subscription = await this.prisma.subscription.findUnique({
+          where: { tenantId },
+          include: { plan: true },
+        });
+      } catch (err: any) {
+        return { allowed: false, reason: err?.message ?? 'No tienes una suscripción activa.' };
+      }
+    }
     if (!subscription) {
       return { allowed: false, reason: 'No tienes una suscripción activa.' };
     }
@@ -88,10 +130,22 @@ export class SubscriptionService {
 
   /** Check if a tenant can request a build */
   async canBuild(tenantId: string): Promise<{ allowed: boolean; reason?: string }> {
-    const subscription = await this.prisma.subscription.findUnique({
+    let subscription = await this.prisma.subscription.findUnique({
       where: { tenantId },
       include: { plan: true },
     });
+    // Self-heal: if tenant has no subscription, assign FREE automatically
+    if (!subscription) {
+      try {
+        await this.ensureFreeSubscription(tenantId);
+        subscription = await this.prisma.subscription.findUnique({
+          where: { tenantId },
+          include: { plan: true },
+        });
+      } catch (err: any) {
+        return { allowed: false, reason: err?.message ?? 'No tienes una suscripción activa.' };
+      }
+    }
     if (!subscription) {
       return { allowed: false, reason: 'No tienes una suscripción activa.' };
     }

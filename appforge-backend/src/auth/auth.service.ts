@@ -52,24 +52,30 @@ export class AuthService {
   async register(data: Prisma.UserCreateInput) {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    // Create a tenant for the new user automatically
-    const tenant = await this.prisma.tenant.create({
-      data: { name: data.email.split('@')[0] },
-    });
-
-    // Assign FREE plan to new tenant
+    // Verify FREE plan exists BEFORE creating anything (fail-loud)
     const freePlan = await this.prisma.subscriptionPlan.findUnique({
       where: { planType: 'FREE' },
     });
-    if (freePlan) {
-      await this.prisma.subscription.create({
+    if (!freePlan) {
+      throw new BadRequestException(
+        'Sistema no inicializado correctamente. Contacta al administrador.',
+      );
+    }
+
+    // Atomic: create tenant + subscription + user in a single transaction
+    const tenant = await this.prisma.$transaction(async (tx) => {
+      const t = await tx.tenant.create({
+        data: { name: data.email.split('@')[0] },
+      });
+      await tx.subscription.create({
         data: {
-          tenantId: tenant.id,
+          tenantId: t.id,
           planId: freePlan.id,
           expiresAt: new Date('2099-12-31'),
         },
       });
-    }
+      return t;
+    });
 
     const user = await this.usersService.create({
       email: data.email,
@@ -129,22 +135,31 @@ export class AuthService {
     // Create new user with random password (Google-only user)
     const randomPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
-    const tenant = await this.prisma.tenant.create({
-      data: { name: payload.name || payload.email.split('@')[0] },
-    });
-
+    // Verify FREE plan exists BEFORE creating anything (fail-loud)
     const freePlan = await this.prisma.subscriptionPlan.findUnique({
       where: { planType: 'FREE' },
     });
-    if (freePlan) {
-      await this.prisma.subscription.create({
+    if (!freePlan) {
+      throw new BadRequestException(
+        'Sistema no inicializado correctamente. Contacta al administrador.',
+      );
+    }
+
+    // Atomic: create tenant + subscription in a single transaction
+    const tenantName = payload.name || payload.email.split('@')[0];
+    const tenant = await this.prisma.$transaction(async (tx) => {
+      const t = await tx.tenant.create({
+        data: { name: tenantName },
+      });
+      await tx.subscription.create({
         data: {
-          tenantId: tenant.id,
+          tenantId: t.id,
           planId: freePlan.id,
           expiresAt: new Date('2099-12-31'),
         },
       });
-    }
+      return t;
+    });
 
     const nameParts = (payload.name || '').split(' ');
     const user = await this.usersService.create({
