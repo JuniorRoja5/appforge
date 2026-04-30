@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
@@ -10,16 +10,12 @@ import {
   Globe,
   MessageCircle,
   User,
-  Image as ImageIcon,
   Plus,
   Trash2,
   ChevronDown,
-  Upload,
-  Loader2,
 } from 'lucide-react';
-import { uploadFile } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
-import { useAuthStore } from '../../store/useAuthStore';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 // --- Zod schemas ---
 
@@ -226,49 +222,6 @@ const SettingsPanel: React.FC<{
 }> = ({ data: rawData, onChange }) => {
   const data = { ...rawData, quickLinks: rawData.quickLinks ?? [] };
   const [openSection, setOpenSection] = useState<'general' | 'links' | 'layout'>('general');
-  const token = useAuthStore((s) => s.token);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [uploadingProfile, setUploadingProfile] = useState(false);
-  const coverInputRef = useRef<HTMLInputElement>(null);
-  const profileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar 5 MB.');
-      return;
-    }
-    setUploadingCover(true);
-    try {
-      const res = await uploadFile(file, token);
-      onChange({ ...data, coverImageUrl: res.url });
-    } catch {
-      alert('Error al subir imagen de portada.');
-    } finally {
-      setUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = '';
-    }
-  };
-
-  const handleProfileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert('La imagen no debe superar 2 MB.');
-      return;
-    }
-    setUploadingProfile(true);
-    try {
-      const res = await uploadFile(file, token);
-      onChange({ ...data, profileImageUrl: res.url });
-    } catch {
-      alert('Error al subir imagen de perfil.');
-    } finally {
-      setUploadingProfile(false);
-      if (profileInputRef.current) profileInputRef.current.value = '';
-    }
-  };
 
   const toggleSection = (section: 'general' | 'links' | 'layout') => {
     setOpenSection(openSection === section ? section : section);
@@ -322,105 +275,29 @@ const SettingsPanel: React.FC<{
       <SectionHeader id="general" title="Informacion del perfil" />
       {openSection === 'general' && (
         <div className="space-y-3 px-1">
-          {/* Cover image upload */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              <ImageIcon size={12} className="inline mr-1" />
-              Imagen de portada
-            </label>
-            {data.coverImageUrl ? (
-              <div className="space-y-1.5">
-                <div className="relative rounded-lg overflow-hidden border border-gray-200">
-                  <img
-                    src={resolveAssetUrl(data.coverImageUrl)}
-                    alt="Portada"
-                    className="w-full h-24 object-cover"
-                  />
-                </div>
-                <div className="flex gap-1.5">
-                  <label className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors bg-purple-50 text-purple-600 hover:bg-purple-100 ${uploadingCover ? 'opacity-50 pointer-events-none' : ''}`}>
-                    {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                    {uploadingCover ? 'Subiendo...' : 'Cambiar'}
-                    <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...data, coverImageUrl: '' })}
-                    className="px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
-                    Quitar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <label className={`flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg py-4 cursor-pointer hover:border-purple-300 transition-colors ${uploadingCover ? 'opacity-50 pointer-events-none' : ''}`}>
-                {uploadingCover ? (
-                  <Loader2 size={20} className="text-purple-400 animate-spin mb-1" />
-                ) : (
-                  <Upload size={20} className="text-gray-300 mb-1" />
-                )}
-                <span className="text-xs text-gray-400">{uploadingCover ? 'Subiendo...' : 'Subir imagen de portada (max. 5 MB)'}</span>
-                <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-              </label>
-            )}
-            <input
-              type="text"
-              value={data.coverImageUrl}
-              onChange={(e) => onChange({ ...data, coverImageUrl: e.target.value })}
-              className="w-full px-2 py-1.5 border rounded text-xs mt-1.5 text-gray-500"
-              placeholder="O pega una URL: https://ejemplo.com/portada.jpg"
-            />
-          </div>
+          {/* Cover image */}
+          <ImageInputField
+            value={data.coverImageUrl}
+            onChange={(url) => onChange({ ...data, coverImageUrl: url })}
+            accentColor="purple"
+            shape="cover"
+            previewSize="lg"
+            label="Imagen de portada"
+            urlPlaceholder="https://ejemplo.com/portada.jpg"
+            maxSizeMB={5}
+          />
 
-          {/* Profile image upload */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              <User size={12} className="inline mr-1" />
-              Imagen de perfil
-            </label>
-            {data.profileImageUrl ? (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={resolveAssetUrl(data.profileImageUrl)}
-                    alt="Perfil"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <label className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-colors bg-purple-50 text-purple-600 hover:bg-purple-100 ${uploadingProfile ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {uploadingProfile ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                      {uploadingProfile ? 'Subiendo...' : 'Cambiar'}
-                      <input ref={profileInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfileUpload} />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => onChange({ ...data, profileImageUrl: '' })}
-                      className="px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                    >
-                      Quitar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <label className={`flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg py-4 cursor-pointer hover:border-purple-300 transition-colors ${uploadingProfile ? 'opacity-50 pointer-events-none' : ''}`}>
-                {uploadingProfile ? (
-                  <Loader2 size={20} className="text-purple-400 animate-spin mb-1" />
-                ) : (
-                  <Upload size={20} className="text-gray-300 mb-1" />
-                )}
-                <span className="text-xs text-gray-400">{uploadingProfile ? 'Subiendo...' : 'Subir imagen de perfil (max. 2 MB)'}</span>
-                <input ref={profileInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfileUpload} />
-              </label>
-            )}
-            <input
-              type="text"
-              value={data.profileImageUrl}
-              onChange={(e) => onChange({ ...data, profileImageUrl: e.target.value })}
-              className="w-full px-2 py-1.5 border rounded text-xs mt-1.5 text-gray-500"
-              placeholder="O pega una URL: https://ejemplo.com/perfil.jpg"
-            />
-          </div>
+          {/* Profile image */}
+          <ImageInputField
+            value={data.profileImageUrl}
+            onChange={(url) => onChange({ ...data, profileImageUrl: url })}
+            accentColor="purple"
+            shape="circle"
+            previewSize="md"
+            label="Foto de perfil"
+            urlPlaceholder="https://ejemplo.com/perfil.jpg"
+            maxSizeMB={2}
+          />
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Nombre</label>
