@@ -4,17 +4,16 @@ import { z } from 'zod';
 import {
   Bell, Send, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Clock, Smartphone,
-  Loader2, Image as ImageIcon, X,
+  Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
   getPushNotifications,
   sendPushNotification,
   getPushDeviceCount,
-  uploadFile,
   type PushNotificationItem,
 } from '../../lib/api';
-import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 // --- Zod schema ---
 const PushNotificationConfigSchema = z.object({
@@ -152,7 +151,6 @@ const SettingsPanel: React.FC<{
   const [imageUrl, setImageUrl] = useState('');
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!data.appId || !token) return;
@@ -202,20 +200,6 @@ const SettingsPanel: React.FC<{
       });
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    setUploadingImage(true);
-    try {
-      const result = await uploadFile(file, token);
-      setImageUrl(result.url);
-    } catch {
-      setSendMsg({ type: 'error', text: 'Error al subir imagen' });
-    } finally {
-      setUploadingImage(false);
     }
   };
 
@@ -338,38 +322,17 @@ const SettingsPanel: React.FC<{
                   </div>
 
                   {/* Image upload */}
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Imagen (opcional)</label>
-                    {imageUrl ? (
-                      <div className="relative inline-block">
-                        <img src={resolveAssetUrl(imageUrl)} alt="" className="h-16 rounded-lg object-cover" />
-                        <button
-                          onClick={() => setImageUrl('')}
-                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-1.5 px-2.5 py-1.5 border border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors">
-                        {uploadingImage ? (
-                          <Loader2 size={12} className="animate-spin text-indigo-500" />
-                        ) : (
-                          <ImageIcon size={12} className="text-gray-400" />
-                        )}
-                        <span className="text-[10px] text-gray-500">
-                          {uploadingImage ? 'Subiendo...' : 'Agregar imagen'}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageUpload}
-                          disabled={uploadingImage}
-                        />
-                      </label>
-                    )}
-                  </div>
+                  <ImageInputField
+                    value={imageUrl}
+                    onChange={setImageUrl}
+                    accentColor="indigo"
+                    shape="square"
+                    previewSize="md"
+                    label="Imagen (opcional)"
+                    urlPlaceholder="URL de imagen (opcional)"
+                    maxSizeMB={10}
+                    onError={(msg) => setSendMsg({ type: 'error', text: msg })}
+                  />
 
                   {sendMsg && (
                     <div
