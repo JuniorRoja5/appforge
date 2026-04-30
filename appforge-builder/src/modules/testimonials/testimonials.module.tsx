@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
-import { Star, Quote, Plus, Trash2, MessageSquare, ChevronLeft, ChevronRight, Upload, Loader2 } from 'lucide-react';
-import { uploadFile } from '../../lib/api';
-import { useAuthStore } from '../../store/useAuthStore';
+import { Star, Quote, Plus, Trash2, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 // --- Zod schema ---
 const TestimonialItemSchema = z.object({
@@ -99,8 +99,9 @@ const TestimonialCard: React.FC<{
       {showImage && (
         testimonial.authorImageUrl ? (
           <img
-            src={testimonial.authorImageUrl}
+            src={resolveAssetUrl(testimonial.authorImageUrl)}
             alt={testimonial.authorName}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-white shadow-sm"
           />
         ) : (
@@ -213,8 +214,9 @@ const PreviewComponent: React.FC<{ data: TestimonialsConfig; isSelected: boolean
                 {data.showImage && (
                   data.testimonials[currentIndex].authorImageUrl ? (
                     <img
-                      src={data.testimonials[currentIndex].authorImageUrl}
+                      src={resolveAssetUrl(data.testimonials[currentIndex].authorImageUrl)}
                       alt={data.testimonials[currentIndex].authorName}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm mb-1.5"
                     />
                   ) : (
@@ -325,26 +327,7 @@ const RuntimeComponent: React.FC<{ data: TestimonialsConfig }> = ({ data }) => (
 
 // --- Settings Panel ---
 const SettingsPanel: React.FC<{ data: TestimonialsConfig; onChange: (data: TestimonialsConfig) => void }> = ({ data, onChange }) => {
-  const token = useAuthStore((s) => s.token);
   const [configOpen, setConfigOpen] = useState(true);
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
-
-  const handleImageUpload = async (testimonialId: string, file: File) => {
-    if (!token) return;
-    setUploadingId(testimonialId);
-    try {
-      const res = await uploadFile(file, token);
-      onChange({
-        ...data,
-        testimonials: data.testimonials.map(t =>
-          t.id === testimonialId ? { ...t, authorImageUrl: res.url } : t
-        ),
-      });
-    } catch (err) {
-      console.error('Upload error:', err);
-    }
-    setUploadingId(null);
-  };
 
   const addTestimonial = () => {
     const newItem: TestimonialItem = {
@@ -493,48 +476,17 @@ const SettingsPanel: React.FC<{ data: TestimonialsConfig; onChange: (data: Testi
                 placeholder="Rol (ej: Cliente habitual)"
               />
 
-              {/* Author image URL + upload */}
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={testimonial.authorImageUrl}
-                  onChange={e => updateTestimonial(testimonial.id, { authorImageUrl: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs font-mono"
-                  placeholder="URL de imagen (opcional)"
-                />
-                <label
-                  className={`shrink-0 p-1.5 rounded border border-gray-300 cursor-pointer transition-colors ${
-                    uploadingId === testimonial.id
-                      ? 'bg-purple-50 border-purple-300'
-                      : 'hover:bg-gray-100'
-                  }`}
-                  title="Subir imagen desde dispositivo"
-                >
-                  {uploadingId === testimonial.id ? (
-                    <Loader2 size={14} className="animate-spin text-purple-500" />
-                  ) : (
-                    <Upload size={14} className="text-gray-500" />
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={uploadingId === testimonial.id}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImageUpload(testimonial.id, file);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-              </div>
-              {testimonial.authorImageUrl && (
-                <img
-                  src={testimonial.authorImageUrl}
-                  alt="Preview"
-                  className="w-8 h-8 rounded-full object-cover border border-gray-200"
-                />
-              )}
+              {/* Author image */}
+              <ImageInputField
+                value={testimonial.authorImageUrl}
+                onChange={(url) => updateTestimonial(testimonial.id, { authorImageUrl: url })}
+                accentColor="purple"
+                shape="circle"
+                previewSize="sm"
+                label="Imagen del autor"
+                urlPlaceholder="URL de imagen (opcional)"
+                maxSizeMB={10}
+              />
 
               {/* Rating slider */}
               <div>
