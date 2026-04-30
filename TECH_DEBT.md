@@ -66,3 +66,20 @@ rejected at the CORS preflight stage.
 `process.env.PUBLIC_ADMIN_URL`, matching the project-wide naming convention.
 Removed the temporary `BUILDER_URL` and `ADMIN_URL` entries from the
 production `.env` (they were added as a hotfix earlier the same day).
+
+---
+
+## 4. Merchant PIN duplicated between Loyalty and Coupons — OPEN
+
+`LoyaltyCard.businessPin` and `CouponMerchantConfig.businessPin` are
+independent bcrypt hashes. A business that uses both modules must
+configure two separate PINs and keep them in sync manually.
+
+**Future refactor:** unify both into a single `App.merchantPin` (or a
+dedicated `MerchantConfig` 1:1 with App). Migrate both models to
+reference it, with a one-time data migration that copies whichever PIN
+exists into the new column.
+
+Detected: 2026-04-30 while implementing `feat(coupons): merchant PIN flow`.
+Not blocking — both modules work correctly in isolation. Address when a
+third "merchant validation" module is added (would force the abstraction).

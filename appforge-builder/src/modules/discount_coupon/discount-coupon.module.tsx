@@ -5,6 +5,7 @@ import {
   Ticket, Plus, Pencil, Trash2, Save, X,
   ChevronDown, ChevronUp,
   Clock, AlertTriangle, RefreshCw,
+  Lock, Link as LinkIcon, Loader2,
 } from 'lucide-react';
 import {
   getDiscountCoupons,
@@ -16,6 +17,8 @@ import {
   getCouponRedemptions,
   resetCouponRedemptions,
   type CouponRedemptionItem,
+  getCouponMerchantConfigStatus,
+  setupCouponMerchantConfig,
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { DiscountCoupon } from '../../lib/api';
@@ -436,11 +439,21 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
   const [loading, setLoading] = useState(false);
   const token = useAuthStore((s) => s.token) ?? '';
   const [error, setError] = useState('');
-  const [showVisual, setShowVisual] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CouponForm>(emptyCouponForm());
   const [generatingCode, setGeneratingCode] = useState(false);
+
+  // === Merchant Config state ===
+  const [merchantOpen, setMerchantOpen] = useState(true);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [savingPin, setSavingPin] = useState(false);
+  const [pinMsg, setPinMsg] = useState('');
+  const [merchantConfigured, setMerchantConfigured] = useState(false);
+
+  // === Display options state ===
+  const [displayOpen, setDisplayOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!data.appId || !token) return;
@@ -451,9 +464,52 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
     setLoading(false);
   }, [data.appId, token]);
 
+  const refreshMerchantStatus = useCallback(async () => {
+    if (!data.appId || !token) return;
+    try {
+      const status = await getCouponMerchantConfigStatus(data.appId, token);
+      setMerchantConfigured(status.configured);
+    } catch { /* ignore */ }
+  }, [data.appId, token]);
+
   useEffect(() => { if (token) refresh(); }, [token, refresh]);
+  useEffect(() => { if (token) refreshMerchantStatus(); }, [token, refreshMerchantStatus]);
 
   const triggerRefresh = () => onChange({ ...data, _refreshKey: (data._refreshKey || 0) + 1 });
+
+  // === PIN Save handler ===
+  const handleSavePin = async () => {
+    if (!data.appId || !token) {
+      alert('Guarda la app primero para configurar el PIN.');
+      return;
+    }
+    if (pin.length < 6) {
+      setPinMsg('El PIN debe tener al menos 6 caracteres');
+      setTimeout(() => setPinMsg(''), 3000);
+      return;
+    }
+    if (pin !== confirmPin) {
+      setPinMsg('Los PIN no coinciden');
+      setTimeout(() => setPinMsg(''), 3000);
+      return;
+    }
+    setSavingPin(true);
+    setPinMsg('');
+    try {
+      await setupCouponMerchantConfig(data.appId, pin, token);
+      setMerchantConfigured(true);
+      setPin('');
+      setConfirmPin('');
+      setPinMsg('PIN guardado correctamente');
+    } catch (err) {
+      setPinMsg(err instanceof Error ? err.message : 'Error al guardar el PIN');
+    } finally {
+      setSavingPin(false);
+      setTimeout(() => setPinMsg(''), 3000);
+    }
+  };
+
+  const redeemPageUrl = data.appId ? `${window.location.origin}/redeem/${data.appId}` : '';
 
   const handleGenCode = async () => {
     if (!data.appId) return;
@@ -531,7 +587,7 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
   };
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-[11px]">
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded flex items-center gap-1">
           <AlertTriangle size={12} /> {error}
@@ -539,58 +595,164 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
         </div>
       )}
 
-      {/* Visual Config */}
-      <button onClick={() => setShowVisual(!showVisual)} className="w-full flex items-center justify-between font-bold text-gray-700">
-        Configuración Visual {showVisual ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-      {showVisual && (
-        <div className="space-y-2 pl-1">
-          <div>
-            <label className="text-[10px] text-gray-500">Layout</label>
-            <div className="flex gap-1 mt-0.5">
-              {(['list', 'cards'] as const).map(l => (
-                <button
-                  key={l}
-                  onClick={() => onChange({ ...data, layout: l })}
-                  className={`text-[10px] px-2 py-1 rounded border ${data.layout === l ? 'bg-amber-100 border-amber-300' : 'border-gray-200'}`}
-                >
-                  {l === 'list' ? 'Lista' : 'Tarjetas'}
-                </button>
-              ))}
+      {/* ============================================ */}
+      {/* SECCIÓN 1: Configuración del negocio (PIN)    */}
+      {/* ============================================ */}
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setMerchantOpen(!merchantOpen)}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+            <Lock size={12} className="text-amber-600" />
+            Configuración del negocio
+            {merchantConfigured && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                Configurado
+              </span>
+            )}
+          </span>
+          {merchantOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        {merchantOpen && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-gray-500 leading-relaxed">
+              Configura un PIN para que tú o tu personal puedan validar cupones físicamente en el negocio
+              desde la página de canje.
+            </p>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1">
+                {merchantConfigured ? 'Cambiar PIN (mín. 6 caracteres)' : 'PIN nuevo (mín. 6 caracteres)'}
+              </label>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder={merchantConfigured ? '••••••' : 'Mínimo 6 caracteres'}
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
             </div>
-          </div>
-          <div>
-            <label className="text-[10px] text-gray-500">Moneda</label>
-            <select
-              value={data.currency || '€'}
-              onChange={e => onChange({ ...data, currency: e.target.value })}
-              className="w-full text-xs border rounded px-2 py-1 mt-0.5"
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1">
+                Confirmar PIN
+              </label>
+              <input
+                type="password"
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value)}
+                placeholder="Repite el PIN"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
+            </div>
+            <button
+              onClick={handleSavePin}
+              disabled={savingPin || !pin || !confirmPin}
+              className="w-full py-1.5 bg-amber-600 text-white text-xs font-medium rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
             >
-              {CURRENCY_GROUPS.map(group => (
-                <optgroup key={group} label={group}>
-                  {CURRENCIES.filter(c => c.group === group).map(c => (
-                    <option key={c.code} value={c.symbol}>
-                      {c.flag} {c.code} — {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          {([
-            ['showExpiry', 'Mostrar expiración'],
-            ['showConditions', 'Mostrar condiciones'],
-            ['showUsageCount', 'Mostrar usos'],
-          ] as const).map(([key, label]) => (
-            <label key={key} className="flex items-center gap-2 text-[11px]">
-              <input type="checkbox" checked={data[key]} onChange={e => onChange({ ...data, [key]: e.target.checked })} />
-              {label}
-            </label>
-          ))}
-        </div>
-      )}
+              {savingPin && <Loader2 size={11} className="animate-spin" />}
+              {merchantConfigured ? 'Actualizar PIN' : 'Guardar PIN'}
+            </button>
+            {pinMsg && (
+              <p className={`text-[10px] text-center ${pinMsg.includes('Error') || pinMsg.includes('coinciden') || pinMsg.includes('caracteres') ? 'text-red-500' : 'text-green-600'}`}>
+                {pinMsg}
+              </p>
+            )}
 
-      {/* Coupon Management */}
+            {/* Redeem page link */}
+            {merchantConfigured && redeemPageUrl && (
+              <div className="bg-amber-50 border border-amber-100 rounded p-2 mt-2">
+                <div className="flex items-center gap-1 mb-1">
+                  <LinkIcon size={10} className="text-amber-600" />
+                  <span className="text-[10px] font-semibold text-amber-700">Página de canje</span>
+                </div>
+                <p className="text-[9px] text-amber-700 break-all font-mono">{redeemPageUrl}</p>
+                <div className="flex gap-2 mt-1">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(redeemPageUrl)}
+                    className="text-[9px] text-amber-600 hover:text-amber-800 font-medium"
+                  >
+                    Copiar enlace
+                  </button>
+                  <a
+                    href={redeemPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[9px] text-amber-600 hover:text-amber-800 font-medium"
+                  >
+                    Abrir página ↗
+                  </a>
+                </div>
+                <p className="text-[9px] text-amber-600 mt-1.5 italic">
+                  Abre esta URL en la tablet/móvil del negocio para validar cupones.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 2: Opciones de visualización         */}
+      {/* ============================================ */}
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setDisplayOpen(!displayOpen)}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <span className="text-xs font-semibold text-gray-700">Opciones de visualización</span>
+          {displayOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+        {displayOpen && (
+          <div className="p-3 space-y-2">
+            <div>
+              <label className="text-[10px] text-gray-500">Layout</label>
+              <div className="flex gap-1 mt-0.5">
+                {(['list', 'cards'] as const).map(l => (
+                  <button
+                    key={l}
+                    onClick={() => onChange({ ...data, layout: l })}
+                    className={`flex-1 text-[10px] py-1 rounded border ${data.layout === l ? 'bg-amber-100 border-amber-300' : 'border-gray-200'}`}
+                  >
+                    {l === 'list' ? 'Lista' : 'Tarjetas'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500">Moneda</label>
+              <select
+                value={data.currency || '€'}
+                onChange={e => onChange({ ...data, currency: e.target.value })}
+                className="w-full text-xs border rounded px-2 py-1 mt-0.5"
+              >
+                {CURRENCY_GROUPS.map(group => (
+                  <optgroup key={group} label={group}>
+                    {CURRENCIES.filter(c => c.group === group).map(c => (
+                      <option key={c.code} value={c.symbol}>
+                        {c.flag} {c.code} — {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            {([
+              ['showExpiry', 'Mostrar expiración'],
+              ['showConditions', 'Mostrar condiciones'],
+              ['showUsageCount', 'Mostrar usos'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-[11px]">
+                <input type="checkbox" checked={data[key]} onChange={e => onChange({ ...data, [key]: e.target.checked })} />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 3: Gestión de cupones (existente)    */}
+      {/* ============================================ */}
       {data.appId ? (
         <>
           <div className="border-t pt-2 flex items-center justify-between">

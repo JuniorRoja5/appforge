@@ -122,8 +122,9 @@ model App {
   loyaltyCard         LoyaltyCard?
   loyaltyStamps       LoyaltyStamp[]
   loyaltyRedemptions  LoyaltyRedemption[]
-  couponRedemptions   CouponRedemption[]
-  orders              Order[]
+  couponRedemptions    CouponRedemption[]
+  couponMerchantConfig CouponMerchantConfig?
+  orders               Order[]
 
   // Client metadata (for reseller portfolio)
   clientName    String?
@@ -716,6 +717,17 @@ model CouponRedemption {
 
   @@index([couponId])
   @@index([appId, couponId])
+}
+
+// --- Coupon Merchant Config (PIN para validación en tienda) ---
+
+model CouponMerchantConfig {
+  id          String   @id @default(uuid())
+  appId       String   @unique
+  app         App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  businessPin String   // bcrypt hash
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // --- Orders ---

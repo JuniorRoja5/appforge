@@ -49,6 +49,7 @@ google-services.json
 stripe.exe
 stitch_config.html
 test-build.mjs
+test-*.mjs
 testing/
 dev.sh
 English version/

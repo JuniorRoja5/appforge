@@ -1770,6 +1770,87 @@ export const resetCouponRedemptions = async (
   return response.json();
 };
 
+// --- Coupon Merchant Config ---
+
+export interface CouponMerchantConfigStatus {
+  configured: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export const getCouponMerchantConfigStatus = async (
+  appId: string,
+  token: string,
+): Promise<CouponMerchantConfigStatus> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error('Error al obtener configuración del comerciante');
+  return response.json();
+};
+
+export const setupCouponMerchantConfig = async (
+  appId: string,
+  pin: string,
+  token: string,
+): Promise<{ id: string; appId: string; createdAt: string; updatedAt: string }> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ pin }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al configurar PIN');
+  }
+  return response.json();
+};
+
+export interface CouponMerchantPublicInfo {
+  appName: string;
+  activeCoupons: number;
+}
+
+export const getCouponMerchantPublicInfo = async (
+  appId: string,
+): Promise<CouponMerchantPublicInfo | null> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-info`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Error al obtener info del negocio');
+  return response.json();
+};
+
+export interface MerchantRedeemResult {
+  success: boolean;
+  redemption: { id: string };
+  coupon: {
+    id: string;
+    title: string;
+    code: string;
+    discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
+    discountValue: string;
+    currentUses: number;
+    maxUses: number | null;
+  };
+  message: string;
+}
+
+export const merchantRedeemCoupon = async (
+  appId: string,
+  data: { code: string; pin: string; appUserEmail?: string },
+): Promise<MerchantRedeemResult> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al validar cupón');
+  }
+  return response.json();
+};
+
 // --- Orders ---
 
 export interface OrderItem {
