@@ -39,7 +39,12 @@ export class PushService {
 
   // --- Device registration (public — called from runtime) ---
 
-  async registerDevice(appId: string, dto: RegisterDeviceDto) {
+  /**
+   * Registra o actualiza un dispositivo. Si appUserId está presente,
+   * asocia el device al usuario; si es null, lo desasocia explícitamente.
+   * Idempotente: el upsert por (appId, token) garantiza una sola fila.
+   */
+  async registerDevice(appId: string, dto: RegisterDeviceDto, appUserId: string | null = null) {
     await this.ensureAppExists(appId);
 
     if (!dto.token || dto.token.length < 10) {
@@ -50,12 +55,14 @@ export class PushService {
       where: { appId_token: { appId, token: dto.token } },
       update: {
         platform: dto.platform || 'android',
+        appUserId, // sobrescribe siempre — null si logout, valor si login
         updatedAt: new Date(),
       },
       create: {
         appId,
         token: dto.token,
         platform: dto.platform || 'android',
+        appUserId,
       },
     });
 
@@ -65,6 +72,19 @@ export class PushService {
     });
 
     return device;
+  }
+
+  /**
+   * Desasocia un device de su appUser sin borrarlo. Usado en logout del runtime.
+   * Idempotente: si el token no existe o ya está desasociado, no falla.
+   */
+  async detachDeviceFromUser(appId: string, token: string): Promise<{ ok: boolean }> {
+    if (!token) return { ok: false };
+    await this.prisma.pushDevice.updateMany({
+      where: { appId, token },
+      data: { appUserId: null },
+    });
+    return { ok: true };
   }
 
   async unregisterDevice(appId: string, token: string) {

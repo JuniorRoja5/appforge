@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ShoppingCart, ArrowLeft, Check, Minus, Plus } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Check, Minus, Plus, LogIn } from 'lucide-react';
 import { getCatalogCollections, createOrder } from '../../lib/api';
-import { getCurrentUser } from '../../lib/auth';
+import { getCurrentUser, isAuthenticated, login as appUserLogin, register as appUserRegister, onAuthChange } from '../../lib/auth';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
@@ -14,7 +14,7 @@ interface CartItem {
   quantity: number;
 }
 
-type View = 'shopping' | 'cart' | 'checkout' | 'confirmation';
+type View = 'shopping' | 'cart' | 'login-gate' | 'checkout' | 'confirmation';
 
 const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Catálogo';
@@ -38,9 +38,46 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   const [submitting, setSubmitting] = useState(false);
   const checkoutRef = useRef<HTMLDivElement>(null);
 
+  // Login gate state
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authForm, setAuthForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
   useEffect(() => {
     getCatalogCollections().then(setCollections).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  // Auto-advance to checkout when user logs in via the gate
+  useEffect(() => {
+    return onAuthChange((user) => {
+      if (user && view === 'login-gate') {
+        if (user.firstName) {
+          setCheckoutForm((p) => ({ ...p, name: p.name || `${user.firstName} ${user.lastName ?? ''}`.trim() }));
+        }
+        setView('checkout');
+        setTimeout(() => checkoutRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    });
+  }, [view]);
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      if (authMode === 'login') {
+        await appUserLogin(authForm.email, authForm.password);
+      } else {
+        await appUserRegister(authForm.email, authForm.password, authForm.firstName || undefined, authForm.lastName || undefined);
+      }
+      // onAuthChange listener handles the view transition
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   // Cart helpers
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -184,6 +221,97 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     );
   }
 
+  // ── Login gate ──
+  if (view === 'login-gate') {
+    return (
+      <div>
+        <button
+          onClick={() => setView('cart')}
+          className="flex items-center gap-1 text-sm font-medium mb-3"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          <ArrowLeft size={16} /> Volver al carrito
+        </button>
+
+        <div className="text-center mb-4">
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-2" style={{ backgroundColor: 'var(--color-primary, #4F46E5)15' }}>
+            <LogIn size={20} style={{ color: 'var(--color-primary)' }} />
+          </div>
+          <h3 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            {authMode === 'login' ? 'Inicia sesión para continuar' : 'Crear cuenta'}
+          </h3>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+            Necesitamos identificarte para procesar tu pedido y avisarte cuando esté listo.
+          </p>
+        </div>
+
+        <form onSubmit={handleAuthSubmit} className="space-y-2">
+          {authMode === 'register' && (
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Nombre"
+                value={authForm.firstName}
+                onChange={(e) => setAuthForm({ ...authForm, firstName: e.target.value })}
+                className="px-3 py-2 text-sm border rounded-lg"
+                style={{ borderColor: 'var(--color-divider)', borderRadius: 'var(--radius-input)' }}
+              />
+              <input
+                type="text"
+                placeholder="Apellido"
+                value={authForm.lastName}
+                onChange={(e) => setAuthForm({ ...authForm, lastName: e.target.value })}
+                className="px-3 py-2 text-sm border rounded-lg"
+                style={{ borderColor: 'var(--color-divider)', borderRadius: 'var(--radius-input)' }}
+              />
+            </div>
+          )}
+          <input
+            type="email"
+            placeholder="Email"
+            value={authForm.email}
+            onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+            required
+            className="w-full px-3 py-2 text-sm border rounded-lg"
+            style={{ borderColor: 'var(--color-divider)', borderRadius: 'var(--radius-input)' }}
+          />
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={authForm.password}
+            onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+            required
+            minLength={6}
+            className="w-full px-3 py-2 text-sm border rounded-lg"
+            style={{ borderColor: 'var(--color-divider)', borderRadius: 'var(--radius-input)' }}
+          />
+          {authError && (
+            <p className="text-xs" style={{ color: 'var(--color-feedback-error, #ef4444)' }}>{authError}</p>
+          )}
+          <button
+            type="submit"
+            disabled={authLoading}
+            className="w-full py-2.5 text-sm font-semibold rounded-xl disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-on-primary)', borderRadius: 'var(--radius-button)' }}
+          >
+            {authLoading ? '...' : authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+          </button>
+        </form>
+
+        <div className="text-center mt-3">
+          <button
+            type="button"
+            onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
+            className="text-xs underline"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            {authMode === 'login' ? '¿No tienes cuenta? Crear una' : '¿Ya tienes cuenta? Iniciar sesión'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Cart view ──
   if (view === 'cart') {
     return (
@@ -254,6 +382,10 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
               </div>
               <button
                 onClick={() => {
+                  if (!isAuthenticated()) {
+                    setView('login-gate');
+                    return;
+                  }
                   const user = getCurrentUser();
                   if (user?.firstName) {
                     setCheckoutForm((p) => ({ ...p, name: p.name || `${user.firstName} ${user.lastName ?? ''}`.trim() }));

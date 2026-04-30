@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsInt, Min } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsArray, ValidateNested, IsInt, Min, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class OrderItemDto {
@@ -19,7 +19,7 @@ export class CreateOrderDto {
   customerPhone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   customerEmail?: string;
 
   @IsOptional()
@@ -30,4 +30,10 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
+
+  // appUserId NO debe venir del cliente — el controller lo sobreescribe con el del JWT.
+  // Se acepta como opcional para que el TypeScript del controller no se queje.
+  @IsOptional()
+  @IsUUID()
+  appUserId?: string;
 }

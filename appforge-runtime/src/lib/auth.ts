@@ -1,5 +1,7 @@
+import { Capacitor } from '@capacitor/core';
 import { Prefs as Preferences } from './platform';
 import { getManifest } from './manifest';
+import { getCurrentFcmToken, registerPushDevice, detachPushDeviceFromUser } from './push';
 
 const TOKEN_KEY = 'appforge_user_token';
 const USER_KEY = 'appforge_user_data';
@@ -100,6 +102,7 @@ export async function register(
 
   const data = await res.json();
   await saveSession(data.access_token, data.user);
+  await reassociateDeviceWithUser();
   return data.user;
 }
 
@@ -117,6 +120,7 @@ export async function login(email: string, password: string): Promise<AppUserDat
 
   const data = await res.json();
   await saveSession(data.access_token, data.user);
+  await reassociateDeviceWithUser();
   return data.user;
 }
 
@@ -170,9 +174,38 @@ async function saveSession(token: string, user: AppUserData): Promise<void> {
 }
 
 async function clearSession(): Promise<void> {
+  // Detach device from this AppUser BEFORE clearing the token
+  // (the detach endpoint doesn't need auth, so order doesn't matter for the request,
+  // but we want to capture the token while it's still in memory if needed elsewhere)
+  try {
+    const fcmToken = await getCurrentFcmToken();
+    if (fcmToken) {
+      await detachPushDeviceFromUser(fcmToken);
+    }
+  } catch {
+    /* ignore — never block logout because of push housekeeping */
+  }
+
   _token = null;
   _user = null;
   await Preferences.remove({ key: TOKEN_KEY });
   await Preferences.remove({ key: USER_KEY });
   notify();
+}
+
+/**
+ * After a successful login, re-register the current FCM token so the device
+ * gets associated with the newly authenticated AppUser. No-op if no FCM token
+ * (web context, push module disabled, or permission not granted yet).
+ */
+async function reassociateDeviceWithUser(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const fcmToken = await getCurrentFcmToken();
+    if (fcmToken) {
+      await registerPushDevice(fcmToken, Capacitor.getPlatform());
+    }
+  } catch {
+    /* ignore — push association is best-effort */
+  }
 }

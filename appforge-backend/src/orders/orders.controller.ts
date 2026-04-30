@@ -8,6 +8,7 @@ import {
   Query,
   Request,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
@@ -15,6 +16,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
+import { OptionalAppUserAuthGuard } from '../push/optional-app-user.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -22,7 +24,8 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
-  // Stats must be declared BEFORE :id to avoid NestJS interpreting "stats" as an ID
+  // ─── Static routes first (before dynamic :id) ───
+
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
@@ -30,14 +33,39 @@ export class OrdersController {
     return this.ordersService.getStats(appId, req.user.tenantId);
   }
 
-  // Public: create order (rate limited)
-  @Post()
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
-  create(@Param('appId') appId: string, @Body() dto: CreateOrderDto) {
-    return this.ordersService.create(appId, dto);
+  // ─── Public tracking page (con tracking token) ───
+
+  @Get('public/:id')
+  async findPublic(
+    @Param('appId') appId: string,
+    @Param('id') id: string,
+    @Query('t') token: string,
+  ) {
+    if (!token) throw new NotFoundException();
+    return this.ordersService.findPublicByToken(appId, id, token);
   }
 
-  // Builder client: list orders
+  // ─── Create order (público con JWT opcional para asociar AppUser) ───
+
+  @Post()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @UseGuards(OptionalAppUserAuthGuard)
+  create(
+    @Param('appId') appId: string,
+    @Body() dto: CreateOrderDto,
+    @Request() req: any,
+  ) {
+    // El cliente puede enviar appUserId en el body, pero NUNCA confiamos en él.
+    // Solo usamos appUserId si viene del JWT validado del runtime.
+    const safeDto: CreateOrderDto = {
+      ...dto,
+      appUserId: req.user?.appUserId ?? undefined,
+    };
+    return this.ordersService.create(appId, safeDto);
+  }
+
+  // ─── Protected (panel del comerciante) ───
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
@@ -53,13 +81,13 @@ export class OrdersController {
     });
   }
 
-  // Public: get single order (for confirmation)
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   findOne(@Param('appId') appId: string, @Param('id') id: string) {
     return this.ordersService.findOne(appId, id);
   }
 
-  // Builder client: update order status
   @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)

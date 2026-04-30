@@ -1,7 +1,20 @@
 import { Capacitor } from '@capacitor/core';
 import { getManifest } from './manifest';
+import { Prefs } from './platform';
 
 let initialized = false;
+const FCM_TOKEN_KEY = 'appforge_fcm_token';
+// Same key as auth.ts uses — we read it directly to avoid circular import auth ↔ push.
+const AUTH_TOKEN_KEY = 'appforge_user_token';
+
+async function readAuthToken(): Promise<string | null> {
+  try {
+    const { value } = await Prefs.get({ key: AUTH_TOKEN_KEY });
+    return value;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Initialize push notifications if the app has the push_notification module.
@@ -42,27 +55,21 @@ export async function initPush(): Promise<void> {
     PushNotifications.addListener('registration', async (token) => {
       console.log('[Push] Device token:', token.value);
       try {
-        await registerDeviceToken(
-          manifest.apiUrl,
-          manifest.appId,
-          token.value,
-        );
+        await Prefs.set({ key: FCM_TOKEN_KEY, value: token.value });
+        await registerPushDevice(token.value, Capacitor.getPlatform());
       } catch (err) {
         console.error('[Push] Failed to register device token:', err);
       }
     });
 
-    // Listen for registration error
     PushNotifications.addListener('registrationError', (err) => {
       console.error('[Push] Registration error:', err);
     });
 
-    // Listen for push received in foreground
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
       console.log('[Push] Received in foreground:', notification);
     });
 
-    // Listen for push notification tap
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       console.log('[Push] Notification tapped:', action);
     });
@@ -71,15 +78,52 @@ export async function initPush(): Promise<void> {
   }
 }
 
-async function registerDeviceToken(
-  apiUrl: string,
-  appId: string,
-  token: string,
-): Promise<void> {
-  const platform = Capacitor.getPlatform(); // 'android' | 'ios'
-  await fetch(`${apiUrl}/apps/${appId}/push/devices`, {
+/**
+ * Returns the cached FCM token from Preferences (set during initPush).
+ * Returns null if no token is registered yet (web context, no permission, etc).
+ */
+export async function getCurrentFcmToken(): Promise<string | null> {
+  try {
+    const { value } = await Prefs.get({ key: FCM_TOKEN_KEY });
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Registers (or re-registers) a device token with the backend, including the
+ * AppUser JWT if there's an active session. Used both at first registration
+ * and after login (to associate the device with the newly logged-in user).
+ */
+export async function registerPushDevice(token: string, platform: string): Promise<void> {
+  const manifest = getManifest();
+  if (!manifest) return;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const jwt = await readAuthToken();
+  if (jwt) {
+    headers['Authorization'] = `Bearer ${jwt}`;
+  }
+
+  await fetch(`${manifest.apiUrl}/apps/${manifest.appId}/push/devices`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token, platform }),
+  }).catch(() => {});
+}
+
+/**
+ * Disassociates the device from any AppUser. Called from auth.clearSession()
+ * during logout, so the next user that logs in on this device starts clean.
+ */
+export async function detachPushDeviceFromUser(token: string): Promise<void> {
+  const manifest = getManifest();
+  if (!manifest || !token) return;
+
+  await fetch(`${manifest.apiUrl}/apps/${manifest.appId}/push/devices/detach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, platform }),
-  });
+    body: JSON.stringify({ token }),
+  }).catch(() => {});
 }

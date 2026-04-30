@@ -482,6 +482,7 @@ model AppUser {
   loyaltyRedemptions  LoyaltyRedemption[]  @relation("LoyaltyRedemptionUser")
   couponRedemptions   CouponRedemption[]   @relation("CouponRedemptionUser")
   orders              Order[]              @relation("OrderUser")
+  pushDevices         PushDevice[]         @relation("AppUserDevices")
 
   @@unique([appId, email])
   @@index([appId])
@@ -511,11 +512,14 @@ model PushDevice {
   token     String
   platform  String   @default("android")
   webPushSubscription Json?
+  appUserId String?
+  appUser   AppUser? @relation("AppUserDevices", fields: [appUserId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([appId, token])
   @@index([appId])
+  @@index([appUserId])
 }
 
 model PushNotification {
@@ -746,6 +750,8 @@ model Order {
   app           App         @relation(fields: [appId], references: [id], onDelete: Cascade)
   appUserId     String?
   appUser       AppUser?    @relation("OrderUser", fields: [appUserId], references: [id], onDelete: SetNull)
+  shortCode     String                              // ORD-XXXXXX, único por app
+  trackingToken String      @default(uuid())        // anti-enumeration en URL pública
   status        OrderStatus @default(PENDING)
   customerName  String
   customerPhone String?
@@ -756,6 +762,9 @@ model Order {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  @@unique([appId, shortCode])
   @@index([appId, status])
   @@index([appId, createdAt])
+  @@index([appId, trackingToken])
+  @@index([appUserId])
 }

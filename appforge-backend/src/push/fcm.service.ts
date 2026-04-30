@@ -122,6 +122,111 @@ export class FcmService {
     }
   }
 
+  /**
+   * Envía push a un token FCM concreto. No lanza si FCM no está configurado.
+   * Usado por sendToAppUser y otros casos puntuales.
+   */
+  async sendToToken(
+    token: string,
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ): Promise<{ success: boolean; error?: string }> {
+    let firebaseApp: admin.app.App;
+    try {
+      firebaseApp = await this.getApp();
+    } catch (err: any) {
+      return { success: false, error: err?.message ?? 'FCM not configured' };
+    }
+    try {
+      await firebaseApp.messaging().send({
+        token,
+        notification: { title, body },
+        data: data ?? {},
+        android: {
+          priority: 'high' as const,
+          notification: { channelId: 'appforge_default' },
+        },
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message ?? 'Unknown FCM error' };
+    }
+  }
+
+  /**
+   * Envía push a todos los dispositivos asociados a un AppUser concreto.
+   * Crea un registro PushNotification para auditoría con SENT/FAILED + counts.
+   * No lanza errores; siempre devuelve un resumen.
+   */
+  async sendToAppUser(
+    appId: string,
+    appUserId: string,
+    title: string,
+    body: string,
+    metadata: Record<string, any> = {},
+  ): Promise<{ notificationId: string; successCount: number; failureCount: number }> {
+    // 1. Crear registro de auditoría en estado DRAFT
+    const notification = await this.prisma.pushNotification.create({
+      data: {
+        appId,
+        title,
+        body,
+        data: metadata,
+        status: 'DRAFT',
+      },
+    });
+
+    // 2. Buscar todos los dispositivos del usuario
+    const devices = await this.prisma.pushDevice.findMany({
+      where: { appUserId },
+    });
+
+    if (devices.length === 0) {
+      await this.prisma.pushNotification.update({
+        where: { id: notification.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: 'No devices registered for user',
+          sentAt: new Date(),
+        },
+      });
+      return { notificationId: notification.id, successCount: 0, failureCount: 0 };
+    }
+
+    // 3. Enviar a cada dispositivo (data debe ser Record<string,string> para FCM)
+    let successCount = 0;
+    let failureCount = 0;
+    const errors: string[] = [];
+    const fcmData = Object.fromEntries(
+      Object.entries(metadata).map(([k, v]) => [k, String(v)]),
+    );
+
+    for (const device of devices) {
+      const result = await this.sendToToken(device.token, title, body, fcmData);
+      if (result.success) {
+        successCount++;
+      } else {
+        failureCount++;
+        if (result.error) errors.push(result.error);
+      }
+    }
+
+    // 4. Actualizar el registro con el outcome
+    await this.prisma.pushNotification.update({
+      where: { id: notification.id },
+      data: {
+        status: successCount > 0 ? 'SENT' : 'FAILED',
+        sentAt: new Date(),
+        successCount,
+        failureCount,
+        errorMessage: errors.length > 0 ? errors.slice(0, 3).join('; ') : null,
+      },
+    });
+
+    return { notificationId: notification.id, successCount, failureCount };
+  }
+
   /** Test Firebase connection by getting app info. */
   async testConnection(): Promise<{ ok: boolean; error?: string }> {
     try {

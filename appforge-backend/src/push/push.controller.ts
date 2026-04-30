@@ -18,22 +18,37 @@ import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { SendPushDto } from './dto/send-push.dto';
+import { OptionalAppUserAuthGuard } from './optional-app-user.guard';
 
 @Controller('apps/:appId/push')
 export class PushController {
   constructor(private readonly pushService: PushService) {}
 
-  /* ─── Public (end-user runtime — no auth) ─── */
+  /* ─── Public (end-user runtime — JWT optional for AppUser association) ─── */
 
   @Post('devices')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(ThrottlerGuard)
+  @UseGuards(OptionalAppUserAuthGuard, ThrottlerGuard)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   registerDevice(
     @Param('appId') appId: string,
     @Body() dto: RegisterDeviceDto,
+    @Request() req: any,
   ) {
-    return this.pushService.registerDevice(appId, dto);
+    // req.user contiene { appUserId, email, appId } si JWT válido del runtime, null si no
+    const appUserId = req.user?.appUserId ?? null;
+    return this.pushService.registerDevice(appId, dto, appUserId);
+  }
+
+  @Post('devices/detach')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  detachDevice(
+    @Param('appId') appId: string,
+    @Body() body: { token: string },
+  ) {
+    return this.pushService.detachDeviceFromUser(appId, body?.token);
   }
 
   @Delete('devices/:token')

@@ -1934,3 +1934,44 @@ export const getOrderStats = async (
   if (!response.ok) throw new Error('Error al obtener estadísticas de pedidos');
   return response.json();
 };
+
+// --- Public order tracking (no auth, requires tracking token) ---
+
+export interface PublicOrderData {
+  id: string;
+  shortCode: string;
+  status: 'PENDING' | 'CONFIRMED' | 'READY' | 'DELIVERED' | 'CANCELLED';
+  items: Array<{ name: string; quantity: number; price: number; collectionName?: string }>;
+  total: number | string;
+  customerName: string; // solo primer nombre
+  createdAt: string;
+  updatedAt: string;
+  app: { name: string };
+}
+
+export const getPublicOrder = async (
+  appId: string,
+  orderId: string,
+  trackingToken: string,
+): Promise<PublicOrderData> => {
+  const url = `${API_URL}/apps/${appId}/orders/public/${orderId}?t=${encodeURIComponent(trackingToken)}`;
+  const response = await fetch(url);
+  if (response.status === 404) throw new Error('Pedido no encontrado o enlace inválido');
+  if (!response.ok) throw new Error('Error al cargar el pedido');
+  return response.json();
+};
+
+// --- App SMTP config status (for catalog banner) ---
+
+export const getAppSmtpConfig = async (
+  appId: string,
+  token: string,
+): Promise<{ configured: boolean }> => {
+  // Re-uses the existing /apps/:appId/config endpoint and returns a boolean.
+  try {
+    const config = await getAppConfig(appId, token);
+    return { configured: !!config?.smtp?.host };
+  } catch {
+    return { configured: false };
+  }
+};

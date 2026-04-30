@@ -10,6 +10,7 @@ import {
 import {
   uploadFile,
   getCatalogCollections,
+  getAppSmtpConfig,
   createCatalogCollection,
   updateCatalogCollection,
   deleteCatalogCollection,
@@ -752,6 +753,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const [showVisual, setShowVisual] = useState(true);
   const [settingsTab, setSettingsTab] = useState<'products' | 'orders'>('products');
   const [pendingCount, setPendingCount] = useState(0);
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   // Collection editing
   const [editingColId, setEditingColId] = useState<string | null>(null);
@@ -778,6 +780,14 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   useEffect(() => {
     if (!data.appId || !token) return;
     getOrderStats(data.appId, token).then(s => setPendingCount(s.pendingCount)).catch(() => {});
+  }, [data.appId, token]);
+
+  // Check SMTP config to show warning banner
+  useEffect(() => {
+    if (!data.appId || !token) return;
+    getAppSmtpConfig(data.appId, token)
+      .then((r) => setSmtpConfigured(r.configured))
+      .catch(() => setSmtpConfigured(false));
   }, [data.appId, token]);
 
   const triggerRefresh = () => onChange({ ...data, _refreshKey: (data._refreshKey || 0) + 1 });
@@ -974,6 +984,25 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
         <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded flex items-center gap-1">
           <AlertTriangle size={12} /> {error}
           <button onClick={() => setError('')} className="ml-auto"><X size={10} /></button>
+        </div>
+      )}
+
+      {/* SMTP not configured banner */}
+      {data.appId && smtpConfigured === false && (
+        <div className="bg-amber-50 border border-amber-300 rounded-md p-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex-1 text-[11px]">
+            <p className="font-semibold text-amber-800">SMTP no configurado</p>
+            <p className="text-amber-700 mt-0.5">
+              Los pedidos se crearán pero no se enviarán emails de confirmación ni a ti ni a tu cliente.
+            </p>
+            <a
+              href={`/apps/${data.appId}/settings#smtp`}
+              className="inline-block mt-1 text-amber-900 underline font-medium"
+            >
+              Configurar ahora →
+            </a>
+          </div>
         </div>
       )}
 

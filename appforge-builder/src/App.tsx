@@ -19,6 +19,7 @@ import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
 import { PaymentCancelPage } from './pages/PaymentCancelPage';
 import { StampPage } from './pages/StampPage';
 import { RedeemCouponPage } from './pages/RedeemCouponPage';
+import { OrderTrackingPage } from './pages/OrderTrackingPage';
 
 const router = createBrowserRouter([
   // Public routes (auth)
@@ -65,6 +66,7 @@ const router = createBrowserRouter([
   // Public standalone pages
   { path: '/stamp/:appId', element: <StampPage /> },
   { path: '/redeem/:appId', element: <RedeemCouponPage /> },
+  { path: '/order/:appId/:orderId', element: <OrderTrackingPage /> },
 
   // Redirects
   { path: '/', element: <Navigate to="/dashboard" replace /> },
