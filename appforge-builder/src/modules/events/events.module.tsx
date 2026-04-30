@@ -8,7 +8,6 @@ import {
   Ticket, User, Mail, Share2, Tag, Check,
 } from 'lucide-react';
 import {
-  uploadFile,
   getEvents,
   createEvent,
   updateEvent,
@@ -17,6 +16,7 @@ import {
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 // --- Zod schema ---
 const EventsConfigSchema = z.object({
@@ -407,28 +407,12 @@ const EventForm: React.FC<{
   initial?: EventFormData;
   onSave: (data: EventFormData) => Promise<void>;
   onCancel: () => void;
-  token: string;
-}> = ({ initial, onSave, onCancel, token }) => {
+}> = ({ initial, onSave, onCancel }) => {
   const [form, setForm] = useState<EventFormData>(initial ?? { ...EMPTY_FORM, eventDate: nowLocalISO() });
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(
     !!(initial && (initial.price || initial.ticketUrl || initial.category || initial.organizer || initial.contactInfo))
   );
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setUploading(true);
-      const res = await uploadFile(file, token);
-      setForm(f => ({ ...f, imageUrl: res.url }));
-    } catch {
-      alert('Error al subir imagen');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!form.title.trim()) { alert('El título es requerido'); return; }
@@ -490,34 +474,16 @@ const EventForm: React.FC<{
       </div>
 
       {/* Image */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1">Imagen (opcional)</label>
-        {form.imageUrl && (
-          <div className="relative mb-2">
-            <img src={resolveAssetUrl(form.imageUrl)} alt="" className="w-full aspect-video object-cover rounded-md" />
-            <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5">
-              <X size={12} />
-            </button>
-          </div>
-        )}
-        <input
-          type="url"
-          value={form.imageUrl}
-          onChange={(e) => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-          placeholder="https://ejemplo.com/imagen.jpg"
-          className="w-full mb-2 px-2 py-1.5 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-        />
-        {uploading ? (
-          <p className="text-xs text-teal-600 py-2">Subiendo imagen...</p>
-        ) : (
-          <>
-            <p className="text-[10px] text-gray-400 mb-1">o sube un archivo:</p>
-            <input type="file" accept="image/*" onChange={handleImageUpload}
-              className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-teal-100 file:text-teal-700 hover:file:bg-teal-200 cursor-pointer"
-            />
-          </>
-        )}
-      </div>
+      <ImageInputField
+        value={form.imageUrl}
+        onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
+        accentColor="teal"
+        shape="video"
+        previewSize="lg"
+        label="Imagen (opcional)"
+        urlPlaceholder="https://ejemplo.com/imagen.jpg"
+        maxSizeMB={10}
+      />
 
       {/* Advanced options toggle */}
       <button
@@ -760,7 +726,7 @@ const SettingsPanel: React.FC<{ data: EventsConfig; onChange: (data: EventsConfi
             )}
 
             {showForm && token && (
-              <EventForm onSave={handleCreate} onCancel={() => setShowForm(false)} token={token} />
+              <EventForm onSave={handleCreate} onCancel={() => setShowForm(false)} />
             )}
 
             {loading ? (
@@ -790,7 +756,6 @@ const SettingsPanel: React.FC<{ data: EventsConfig; onChange: (data: EventsConfi
                           }}
                           onSave={formData => handleUpdate(event.id, formData)}
                           onCancel={() => setEditingId(null)}
-                          token={token}
                         />
                       </div>
                     ) : (
