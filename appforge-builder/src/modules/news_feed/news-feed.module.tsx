@@ -9,7 +9,6 @@ import {
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import {
-  uploadFile,
   getNewsArticles,
   createNewsArticle,
   updateNewsArticle,
@@ -18,6 +17,7 @@ import {
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 // --- Zod schema: configuración visual (se guarda en el JSON del canvas) ---
 const NewsFeedConfigSchema = z.object({
@@ -321,28 +321,11 @@ const ArticleForm: React.FC<{
   initial?: ArticleFormData;
   onSave: (data: ArticleFormData) => Promise<void>;
   onCancel: () => void;
-  token: string;
-}> = ({ initial, onSave, onCancel, token }) => {
+}> = ({ initial, onSave, onCancel }) => {
   const [form, setForm] = useState<ArticleFormData>(
     initial ?? { title: '', content: '', imageUrl: '', videoUrl: '' },
   );
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      setUploading(true);
-      const res = await uploadFile(file, token);
-      setForm(f => ({ ...f, imageUrl: res.url }));
-    } catch (err) {
-      console.error(err);
-      alert('Error al subir imagen');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!form.title.trim()) {
@@ -394,30 +377,16 @@ const ArticleForm: React.FC<{
       </div>
 
       {/* Imagen */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1">Imagen de portada (opcional)</label>
-        {form.imageUrl && (
-          <div className="relative mb-2">
-            <img src={resolveAssetUrl(form.imageUrl)} alt="" className="w-full aspect-video object-cover rounded-md" />
-            <button
-              onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        )}
-        {uploading ? (
-          <p className="text-xs text-blue-600 py-2">Subiendo imagen...</p>
-        ) : (
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer"
-          />
-        )}
-      </div>
+      <ImageInputField
+        value={form.imageUrl}
+        onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
+        accentColor="blue"
+        shape="video"
+        previewSize="lg"
+        label="Imagen de portada (opcional)"
+        urlPlaceholder="URL de imagen (opcional)"
+        maxSizeMB={10}
+      />
 
       {/* Video */}
       <div>
@@ -625,7 +594,6 @@ const SettingsPanel: React.FC<{ data: NewsFeedConfig; onChange: (data: NewsFeedC
               <ArticleForm
                 onSave={handleCreate}
                 onCancel={() => setShowForm(false)}
-                token={token}
               />
             )}
 
@@ -649,7 +617,6 @@ const SettingsPanel: React.FC<{ data: NewsFeedConfig; onChange: (data: NewsFeedC
                           }}
                           onSave={formData => handleUpdate(article.id, formData)}
                           onCancel={() => setEditingId(null)}
-                          token={token}
                         />
                       </div>
                     ) : (
