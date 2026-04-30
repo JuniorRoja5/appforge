@@ -265,3 +265,27 @@ Detected: 2026-04-30 during Copy Fail incident response.
 Effort: 2-3 hours initial setup + ongoing monitoring of alerts.
 **Priority: medium** — not bloqueante but reduces incident response time
 from hours to minutes.
+
+---
+
+## 12. E2E cleanup pattern not applied to orders/coupons — OPEN
+
+Bookings E2E got defensive cleanup at start (Prisma `deleteMany` of test
+bookings + appUsers matching `TEST_EMAILS`, with a fixed `APP_USER_EMAIL`
+constant so cleanup can locate prior-run residue). Orders and coupons
+still use the old pattern that fails on second run if rows from a
+previous run exist.
+
+Apply same pattern: hardcode `TEST_EMAILS` constant per script, fix the
+test user email (no `Date.now()`), run `prisma.deleteMany` at script
+start before the auth block. Reference: commit 085b934 on bookings.
+
+**Why proactive:** a flaky E2E is more dangerous than a failing one —
+green-with-asterisk results force 10-minute "is this a real bug or
+residue from last run?" investigations every time. Defensive cleanup
+makes red = real bug, every time.
+
+Detected: 2026-04-30 during bookings E2E flakiness fix.
+Effort: 15 min per script (orders + coupons = 30 min total).
+**Priority: low** — not bloqueante but pays dividends every time we
+touch those modules.
