@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import { Image as ImageIcon } from 'lucide-react';
-import { uploadFile } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
-import { useAuthStore } from '../../store/useAuthStore';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 const ImageSchema = z.object({
-  url: z.string().url(),
+  url: z.string().refine(
+    (v) => v === '' || v.startsWith('http') || v.startsWith('/'),
+    'URL inválida (debe ser http(s) o ruta relativa)',
+  ),
   alt: z.string(),
   objectFit: z.enum(['cover', 'contain', 'fill']),
   radius: z.string(),
@@ -47,59 +49,18 @@ const RuntimeComponent: React.FC<{ data: ImageModuleData }> = ({ data }) => {
 };
 
 const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageModuleData) => void }> = ({ data, onChange }) => {
-  const token = useAuthStore((s) => s.token);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 100 * 1024 * 1024) {
-        alert('El archivo es demasiado grande. Por favor, elige uno menor a 100MB.');
-        return;
-      }
-      if (!token) {
-        alert('No hay sesión activa. Por favor, inicia sesión.');
-        return;
-      }
-      try {
-        setIsUploading(true);
-        const res = await uploadFile(file, token);
-        onChange({ ...data, url: res.url });
-      } catch (error: any) {
-        console.error(error);
-        alert(error.message || 'Error al subir la imagen.');
-      } finally {
-        setIsUploading(false);
-      }
-    }
-  };
-
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Imagen (URL o Subir)</label>
-        <div className="space-y-2">
-          <input 
-            type="text"
-            className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-            value={data.url}
-            onChange={(e) => onChange({ ...data, url: e.target.value })}
-            placeholder="https://ejemplo.com/imagen.jpg"
-          />
-          <div className="relative">
-            {isUploading ? (
-              <div className="text-sm text-blue-600 font-medium py-2">Subiendo imagen... por favor espera.</div>
-            ) : (
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleFileUpload}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" 
-              />
-            )}
-          </div>
-        </div>
-      </div>
+      <ImageInputField
+        value={data.url}
+        onChange={(url) => onChange({ ...data, url })}
+        accentColor="blue"
+        shape="video"
+        previewSize="lg"
+        label="Imagen"
+        urlPlaceholder="https://ejemplo.com/imagen.jpg"
+        maxSizeMB={10}
+      />
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Texto alternativo (Alt)</label>
         <input 
