@@ -8,6 +8,7 @@ Reusable smoke tests for the coupon merchant validation flow.
 - A user account exists (default: `prueba@cavernatecnologica.com` / `123456`)
 - That account has at least one App, or this script will create one
 - Docker (PostgreSQL + Redis) up
+- `DATABASE_URL` reachable (read from `appforge-backend/.env` automatically) — required by the defensive cleanup that runs at the start of each invocation. Redis host/port are read from `REDIS_HOST` / `REDIS_PORT` env vars, defaulting to `127.0.0.1:6379`.
 
 ## Running
 
@@ -38,15 +39,13 @@ node appforge-backend/scripts/e2e/coupons/merchant-flow.mjs
 
 If any step fails, the script exits with code 1.
 
-## After running
+## Idempotency
 
-The brute-force test (step 15) leaves a Redis lockout entry that expires
-automatically after ~15 minutes. To clear immediately:
-
-```bash
-APPID="<your-app-id>"
-docker exec appforge-redis redis-cli DEL coupon:lockout:$APPID coupon:fails:$APPID
-```
+The script runs a **defensive cleanup at the start** that deletes test
+coupons (`code` starting with `TEST`) and clears the Redis lockout keys
+(`coupon:lockout:<appId>`, `coupon:fails:<appId>`) left by step 15.
+This makes immediate re-runs safe — no need to wait for the 15-min
+lockout TTL to expire, and no need for manual `redis-cli DEL`.
 
 ## Adding new cases
 

@@ -22,6 +22,8 @@
  * apuntando a Mailtrap (sandbox.smtp.mailtrap.io) y revisa la bandeja
  * manualmente. Eso es paso del checklist pre-deploy, no del E2E automatizado.
  */
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
 import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
 
@@ -29,8 +31,12 @@ const API_URL = process.env.API_URL || 'http://127.0.0.1:3000';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const APP_ID = process.env.APP_ID;
-const APP_USER_EMAIL = process.env.APP_USER_EMAIL || `e2e-orders-${Date.now()}@test.com`;
+// Fixed email so defensive cleanup at start can locate prior runs deterministically
+const APP_USER_EMAIL = process.env.APP_USER_EMAIL || 'e2e-orders@test.com';
 const APP_USER_PASSWORD = process.env.APP_USER_PASSWORD || 'test1234';
+const TEST_EMAILS = [APP_USER_EMAIL, 'anon@test.com'];
+
+const prisma = new PrismaClient();
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
@@ -67,12 +73,31 @@ async function countPushNotifications(adminToken, orderId) {
   }).length;
 }
 
+// Defensive cleanup: removes residue from prior runs (crashed mid-flow or otherwise).
+// Runs at the START so a partial DB never blocks the next attempt.
+async function cleanup() {
+  // PushDevice first (FK to AppUser is SetNull, but we want to remove fake tokens too)
+  const d = await prisma.pushDevice.deleteMany({
+    where: { appId: APP_ID, token: { startsWith: 'fake-fcm-token-' } },
+  });
+  // Orders by test customer emails — covers both authenticated and anonymous test orders
+  const o = await prisma.order.deleteMany({
+    where: { appId: APP_ID, customerEmail: { in: TEST_EMAILS } },
+  });
+  const u = await prisma.appUser.deleteMany({
+    where: { appId: APP_ID, email: APP_USER_EMAIL },
+  });
+  console.log(c('cyan', `[pre] Cleanup: ${o.count} orders, ${d.count} pushDevices, ${u.count} appUsers removed`));
+}
+
 async function main() {
   console.log(c('bold', '\n━━━ E2E: Order Notifications Flow ━━━\n'));
 
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !APP_ID) {
     fail('Missing ADMIN_EMAIL / ADMIN_PASSWORD / APP_ID');
   }
+
+  await cleanup();
 
   // ─── Step 1: Login admin ───
   step('Login admin');
@@ -365,8 +390,10 @@ async function main() {
   console.log(c('green', '\n━━━ All 17 steps passed ✓ ━━━\n'));
 }
 
-main().catch((err) => {
-  console.error(c('red', `\n✗ ${err.message}\n`));
-  console.error(err.stack);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(c('red', `\n✗ ${err.message}\n`));
+    console.error(err.stack);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

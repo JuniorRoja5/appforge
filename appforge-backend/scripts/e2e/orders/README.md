@@ -14,6 +14,11 @@ Tests the full lifecycle of order notifications:
 - Backend running at `http://localhost:3000`
 - Docker stack up (PostgreSQL + Redis)
 - An app with **at least one product in stock** (open the app in the builder, add a catalog collection + product)
+- `DATABASE_URL` reachable (read from `appforge-backend/.env` automatically) — required by the defensive cleanup that runs at the start of each invocation
+
+## Idempotency
+
+The script runs a **defensive cleanup at the start** (Prisma `deleteMany` of test orders, push devices, and the test app user) so a previous crashed run never blocks the next invocation. `APP_USER_EMAIL` is fixed (`e2e-orders@test.com`) so the cleanup can locate prior-run residue deterministically.
 
 ## Usage
 

@@ -1,9 +1,22 @@
 // E2E test for coupon merchant validation flow.
-// Run with: node test-coupon-flow.mjs
+// Run with: node scripts/e2e/coupons/merchant-flow.mjs
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
+import IORedis from 'ioredis';
 import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
 
-const API = 'http://127.0.0.1:3000';
+const API = process.env.API_URL || 'http://127.0.0.1:3000';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'prueba@cavernatecnologica.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
+
+const prisma = new PrismaClient();
+const redis = new IORedis({
+  host: process.env.REDIS_HOST || '127.0.0.1',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+});
 
 async function req(path, opts = {}) {
   const res = await fetch(API + path, opts);
@@ -13,12 +26,24 @@ async function req(path, opts = {}) {
   return { status: res.status, body };
 }
 
+// Defensive cleanup: removes residue from prior runs (crashed mid-flow or otherwise).
+// Runs at the START so a partial DB / stale Redis lockout never blocks the next attempt.
+async function cleanup(appId) {
+  const c = await prisma.discountCoupon.deleteMany({
+    where: { appId, code: { startsWith: 'TEST' } },
+  });
+  // Step 15 leaves a 15-min brute-force lockout in Redis — clear it so an immediate
+  // re-run does not trip 429 on subsequent merchant-redeem calls
+  const lockoutDeleted = await redis.del(`coupon:lockout:${appId}`, `coupon:fails:${appId}`);
+  console.log(`[pre] Cleanup: ${c.count} coupons, ${lockoutDeleted} redis lockout keys removed`);
+}
+
 async function main() {
   console.log('━━━ STEP 1: Login ━━━');
   const login = await req('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'prueba@cavernatecnologica.com', password: '123456' }),
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
   });
   if (login.status !== 200 && login.status !== 201) {
     throw new Error('Login failed: ' + JSON.stringify(login));
@@ -42,6 +67,9 @@ async function main() {
     console.log('  ✓ Using existing app:', app.id, '—', app.name);
   }
   const appId = app.id;
+
+  console.log('\n━━━ Defensive cleanup ━━━');
+  await cleanup(appId);
 
   console.log('\n━━━ STEP 3: Initial merchant config status ━━━');
   const status1 = await req('/apps/' + appId + '/coupons/merchant-config', {
@@ -164,9 +192,8 @@ async function main() {
   const got429 = bfResults.includes(429);
   console.log('  lockout triggered (429 seen):', got429);
   if (!got429) throw new Error('Expected 429 lockout but never saw it');
-  // Lockout is intentionally NOT cleared here — it expires automatically (~15min TTL).
-  // To clear manually:
-  //   docker exec appforge-redis redis-cli DEL coupon:lockout:<appId> coupon:fails:<appId>
+  // The defensive cleanup at the start of the script clears coupon:lockout:<appId>
+  // and coupon:fails:<appId> on the next run, so an immediate re-run is safe.
 
   console.log('\n━━━ STEP 16: Cleanup test coupon ━━━');
   await req('/apps/' + appId + '/coupons/' + coupon.id, {
@@ -178,8 +205,13 @@ async function main() {
   console.log('\n✅ ALL TESTS PASSED');
 }
 
-main().catch((e) => {
-  console.error('\n❌ TEST FAILED:', e.message);
-  console.error(e.stack);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error('\n❌ TEST FAILED:', e.message);
+    console.error(e.stack);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    redis.disconnect();
+  });
