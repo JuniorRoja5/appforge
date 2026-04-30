@@ -3,11 +3,10 @@ import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
   UtensilsCrossed, Plus, Pencil, Trash2, Save, X,
-  Image as ImageIcon, ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp,
   ArrowUp, ArrowDown, AlertTriangle,
 } from 'lucide-react';
 import {
-  uploadFile,
   getMenuCategories,
   createMenuCategory,
   updateMenuCategory,
@@ -20,6 +19,7 @@ import {
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 import type { MenuCategory, MenuItemAPI } from '../../lib/api';
 
 // ===== CONFIG =====
@@ -337,7 +337,6 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(emptyItemForm());
   const [addingItemToCat, setAddingItemToCat] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [showVisual, setShowVisual] = useState(true);
 
@@ -457,15 +456,6 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
     } catch { setError('Error al reordenar'); }
   };
 
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true);
-    try {
-      const res = await uploadFile(file, token);
-      setItemForm(prev => ({ ...prev, imageUrl: res.url }));
-    } catch { setError('Error al subir imagen'); }
-    setUploadingImage(false);
-  };
-
   const toggleAllergen = (a: string) => {
     setItemForm(prev => ({
       ...prev,
@@ -510,14 +500,17 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
         </div>
       </div>
       {/* Image upload */}
-      <div className="flex items-center gap-2">
-        <label className="text-[10px] text-gray-500 flex items-center gap-1 cursor-pointer hover:text-blue-600">
-          <ImageIcon size={12} /> {itemForm.imageUrl ? 'Cambiar imagen' : 'Subir imagen'}
-          <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleImageUpload(e.target.files[0])} />
-        </label>
-        {uploadingImage && <span className="text-[10px] text-gray-400">Subiendo...</span>}
-        {itemForm.imageUrl && <img src={resolveAssetUrl(itemForm.imageUrl)} alt="" className="w-8 h-8 rounded object-cover" />}
-      </div>
+      <ImageInputField
+        value={itemForm.imageUrl}
+        onChange={(url) => setItemForm(prev => ({ ...prev, imageUrl: url }))}
+        accentColor="blue"
+        shape="square"
+        previewSize="sm"
+        label="Imagen del plato"
+        urlPlaceholder="URL (opcional)"
+        maxSizeMB={10}
+        onError={(msg) => setError(msg)}
+      />
       {/* Available toggle */}
       <label className="flex items-center gap-1.5 text-[10px] text-gray-600">
         <input
