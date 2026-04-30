@@ -229,3 +229,39 @@ Backups created:
 Marked RESOLVED — but follow-ups #6, #7, #8 remain OPEN to prevent recurrence.
 
 Detected and resolved: 2026-04-30.
+
+---
+
+## 10. Copy Fail (CVE-2026-31431) mitigated and patched — RESOLVED 2026-04-30
+
+Linux kernel privilege escalation vulnerability disclosed 2026-04-29.
+Affected all kernels 4.14+ via algif_aead AEAD template logic flaw.
+Allowed unprivileged local users to gain root via 732-byte Python script.
+Container escape primitive — relevant for any future containerized
+client workloads.
+
+Action taken on both production VPS (srv1616198 AppForge, srv564100):
+1. Module blocked: `/etc/modprobe.d/disable-algif.conf` with
+   `install algif_aead /bin/false`
+2. Verified non-loadable: modprobe returns Invalid argument
+3. `apt upgrade -y` to kernel 6.8.0-110-generic (package 6.8.0-110.110)
+4. Reboot — PM2 auto-recovered both services without manual intervention
+
+Detected via Hostinger security advisory. Resolved same day.
+No customer-facing downtime (only ~60s reboot in non-traffic window).
+
+---
+
+## 11. No automated security patch monitoring — OPEN
+
+Both VPS rely on manual responses to provider advisories
+(Hostinger in this case). For a production SaaS, consider:
+- `unattended-upgrades` for security-only patches (auto-apply)
+- vulnerability scanner like Lynis or Trivy run weekly via cron
+- subscription to Ubuntu Security Notice mailing list
+- automated reboot scheduler for kernel updates with PM2 graceful restart
+
+Detected: 2026-04-30 during Copy Fail incident response.
+Effort: 2-3 hours initial setup + ongoing monitoring of alerts.
+**Priority: medium** — not bloqueante but reduces incident response time
+from hours to minutes.
