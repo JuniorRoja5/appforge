@@ -285,3 +285,35 @@ and coupons followed the same day:
   for ~15 min.
 
 All three E2Es verified idempotent across consecutive runs.
+
+---
+
+## 13. discount_coupon: imageUrl declared but no upload UI in builder — OPEN
+
+The `discount_coupon` module declares `imageUrl` in its schema, DTO,
+mock data, and runtime, but the builder's `SettingsPanel` does not
+expose any control for the merchant to upload or paste a URL. The
+field is reachable only by manually editing the canvas JSON.
+
+Detected during the image-upload audit on 2026-04-30 that produced
+the `<ImageInputField>` shared component. Now that the component
+exists, this is a ~5-line fix:
+
+```tsx
+import { ImageInputField } from '../../components/shared/ImageInputField';
+
+<ImageInputField
+  value={data.imageUrl ?? ''}
+  onChange={(url) => onChange({ ...data, imageUrl: url })}
+  accentColor="rose"
+  shape="video"
+  previewSize="lg"
+  label="Imagen del cupón (opcional)"
+  maxSizeMB={10}
+/>
+```
+
+Effort: 15 min (find the right place in the SettingsPanel, paste,
+verify in the builder canvas).
+**Priority: medium** — feature gap, not a bug. Customers cannot
+attach images to their coupons until this lands.
