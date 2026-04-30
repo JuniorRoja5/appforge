@@ -83,3 +83,30 @@ exists into the new column.
 Detected: 2026-04-30 while implementing `feat(coupons): merchant PIN flow`.
 Not blocking — both modules work correctly in isolation. Address when a
 third "merchant validation" module is added (would force the abstraction).
+
+---
+
+## 5. Residual TypeScript errors in runtime — OPEN
+
+`tsc --noEmit` in `appforge-runtime` reports 3 errors that Vite ignores
+(the build still succeeds):
+
+- `src/lib/manifest.ts:90` and `src/lib/platform/index.ts:9` — `Property
+  'env' does not exist on type 'ImportMeta'`. Missing
+  `/// <reference types="vite/client" />` in a global `.d.ts` so TS picks
+  up the Vite-injected `import.meta.env` types.
+- `src/modules/booking/BookingRuntime.tsx:104` — `createBooking` is called
+  with a `duration` field that does not exist in its DTO. Either add
+  `duration` to `CreateBookingDto` on the backend (and propagate through
+  the runtime API client), or remove it from the runtime call.
+
+**Why it matters:** `npm run build` passes because Vite uses esbuild
+under the hood (no full TS type-check). But CI that runs
+`npx tsc --noEmit` would flag these — meaning today we have no type-check
+gate on runtime code. A regression in types could ship to production
+without anyone noticing.
+
+**Effort:** ~30 min. Add `appforge-runtime/src/vite-env.d.ts` with the
+reference, decide on the booking duration field, fix the call site.
+
+Detected: 2026-04-30 during deploy of `feat(orders): notifications`.
