@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import type { ModuleDefinition } from '../base/module.interface';
-import { uploadFile, setupLoyalty, getLoyaltyConfig, getLoyaltyStats } from '../../lib/api';
+import { setupLoyalty, getLoyaltyConfig, getLoyaltyStats } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Loader2, Users, Stamp, Trophy, ChevronDown, ChevronUp, Link as LinkIcon } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+import { ImageInputField } from '../../components/shared/ImageInputField';
 
 /* ─── Schema ─── */
 
@@ -174,7 +175,6 @@ const RuntimeComponent: React.FC<{ data: LoyaltyCardConfig }> = () => (
 
 const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCardConfig) => void }> = ({ data, onChange }) => {
   const token = useAuthStore((s) => s.token);
-  const [uploading, setUploading] = useState(false);
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -229,24 +229,6 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
     } finally {
       setSaving(false);
       setTimeout(() => setSaveMsg(''), 3000);
-    }
-  };
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert('La imagen no debe superar 2 MB.');
-      return;
-    }
-    setUploading(true);
-    try {
-      const res = await uploadFile(file, token);
-      update('logoUrl', res.url);
-    } catch {
-      alert('Error al subir imagen.');
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -440,31 +422,16 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
             </div>
           </div>
 
-          <div>
-            <label className={labelCls}>Logo del negocio</label>
-            {data.logoUrl ? (
-              <div className="flex items-center gap-3">
-                <img src={resolveAssetUrl(data.logoUrl)} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
-                <div className="flex gap-2">
-                  <label className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer font-medium">
-                    Cambiar
-                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                  </label>
-                  <button type="button" onClick={() => update('logoUrl', '')} className="text-xs text-red-500 hover:text-red-600 font-medium">
-                    Quitar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <label className={`flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg py-4 cursor-pointer hover:border-gray-300 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                <div className="text-center">
-                  <svg className="w-6 h-6 text-gray-300 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <span className="text-xs text-gray-400">{uploading ? 'Subiendo...' : 'Subir logo (máx. 2 MB)'}</span>
-                </div>
-                <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-              </label>
-            )}
-          </div>
+          <ImageInputField
+            value={data.logoUrl}
+            onChange={(url) => update('logoUrl', url)}
+            accentColor="indigo"
+            shape="square"
+            previewSize="md"
+            label="Logo del negocio"
+            urlPlaceholder="URL del logo (opcional)"
+            maxSizeMB={2}
+          />
         </div>
       </section>
 
