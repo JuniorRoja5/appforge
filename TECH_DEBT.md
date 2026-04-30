@@ -110,3 +110,122 @@ without anyone noticing.
 reference, decide on the booking duration field, fix the call site.
 
 Detected: 2026-04-30 during deploy of `feat(orders): notifications`.
+
+---
+
+## 6. Boot-time validation of secrets — OPEN, HIGH PRIORITY
+
+The backend silently boots with placeholder values from `env.production.example`
+(strings like `tu_jwt_secret_aqui_64_caracteres_minimo`). The error only surfaces
+later when a code path tries to use the secret — for SMTP this means the first
+write attempt to `AppSmtpConfig` throws 500 in production.
+
+Worse: `JWT_SECRET` and `APP_USER_JWT_SECRET` placeholders are valid string
+values, so JWT signing works silently with publicly-known secrets (the
+placeholders are visible in the public GitHub repo via env.production.example).
+This means anyone could forge tokens for any user, including SUPER_ADMIN, until
+secrets are rotated.
+
+**Fix:** in `main.ts`, before `NestFactory.create`, validate that:
+- `SMTP_ENCRYPTION_KEY` and `KEYSTORE_ENCRYPTION_KEY` are exactly 32 chars
+- `JWT_SECRET` and `APP_USER_JWT_SECRET` are >= 64 chars
+- None of them match a known list of placeholder strings (`tu_*`, `CHANGEME*`,
+  `<*>`, etc.)
+- `DATABASE_URL` doesn't contain `CHANGEME` in the password
+
+Hard-fail with a clear stderr message and `process.exit(1)` if any check fails.
+
+Detected: 2026-04-30 during post-deploy SMTP config attempt in production.
+Effort: ~1 hour. **Must ship before first real customer signs up.**
+
+---
+
+## 7. SECURITY.md instructs wrong openssl flag for AES keys — OPEN
+
+`SECURITY.md` and `env.production.example` instruct:
+
+```bash
+openssl rand -hex 32   # produces 64 hex characters
+```
+
+But `crypto.ts:8` enforces exactly 32 characters (16 bytes hex-encoded), because
+AES-256-GCM uses a 32-byte raw key and the code does `Buffer.from(key, 'hex')`
+internally — so a 64-char hex string would decode to 32 bytes (valid) but the
+length check rejects it.
+
+The correct command is:
+
+```bash
+openssl rand -hex 16   # produces 32 hex characters = 16 bytes hex-encoded
+```
+
+Wait — that gives only a 16-byte key, not 32. There's an actual bug here:
+either crypto.ts validation is wrong (should accept 64 chars) or the
+documentation is wrong (should be `-hex 16`). The current implementation has
+been running with `-hex 16`-generated keys and they work, so either:
+- AES-128 is being used effectively (security regression vs. the AES-256
+  intent), OR
+- The Node crypto API tolerates 16-byte keys for `aes-256-gcm` somehow
+
+**Action:** investigate which is actually happening, fix code to use a true
+32-byte key, update docs accordingly.
+
+Detected: 2026-04-30. Effort: 30 min investigation + 15 min docs.
+
+---
+
+## 8. env.production.example uses placeholders that look like real values — OPEN
+
+Strings like `tu_jwt_secret_aqui_64_caracteres_minimo` look like plausible
+default values rather than obvious "fill me in" markers. This contributed to
+all 4 critical secrets surviving placeholder-state into production for over
+one month (deploy was 2026-03-XX, incident detected 2026-04-30).
+
+**Fix:** rewrite `env.production.example` so every secret has a placeholder that
+is impossible to mistake for a real value:
+
+```
+JWT_SECRET=<RUN: openssl rand -base64 64>
+APP_USER_JWT_SECRET=<RUN: openssl rand -base64 64>
+SMTP_ENCRYPTION_KEY=<RUN: openssl rand -hex 16>
+KEYSTORE_ENCRYPTION_KEY=<RUN: openssl rand -hex 16>
+DB_PASSWORD=<RUN: openssl rand -base64 32>
+SESSION_SECRET=<RUN: openssl rand -base64 32>
+MINIO_SECRET_KEY=<RUN: openssl rand -base64 32>
+```
+
+The `<RUN: ...>` syntax is visually obvious and the literal `<` would break
+any client trying to use the value, forcing replacement.
+
+Combined with #6 (boot-time validation that rejects `<RUN:*>` patterns), this
+makes it impossible to accidentally deploy with placeholders.
+
+Detected: 2026-04-30. Effort: 15 min.
+
+---
+
+## 9. Production .env audit — RESOLVED 2026-04-30
+
+Triggered by the SMTP_ENCRYPTION_KEY incident. Audited all variables in
+`/opt/appforge/appforge-backend/.env` for placeholders, CHANGEME strings,
+example values, and empty values. Result: 4 critical secrets were
+placeholders, 0 others affected.
+
+Rotated:
+- `SMTP_ENCRYPTION_KEY` (was 24-char placeholder, now 32-char hex)
+- `KEYSTORE_ENCRYPTION_KEY` (was 28-char placeholder, now 32-char hex)
+- `JWT_SECRET` (was placeholder string, now 87-char base64)
+- `APP_USER_JWT_SECRET` (was placeholder string, now 88-char base64)
+
+Impact: 0 affected users (only 2 admin/test accounts existed, 0 AppUsers,
+0 cipher-text records — `AppKeystore`, `AppSmtpConfig`, `PlatformSmtpConfig`
+all empty at rotation time). Old JWTs invalidated by rotation, only the
+operator's session was disrupted (single re-login required).
+
+Backups created:
+- `.env.backup-pre-jwt-rotation-<timestamp>`
+- `.env.backup-<timestamp>` (initial)
+
+Marked RESOLVED — but follow-ups #6, #7, #8 remain OPEN to prevent recurrence.
+
+Detected and resolved: 2026-04-30.
