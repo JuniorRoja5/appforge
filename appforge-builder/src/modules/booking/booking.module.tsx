@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight,
   User, Mail, Phone, FileText,
   CheckCircle, XCircle, Loader2,
+  AlertTriangle, Bell, MapPin,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
@@ -13,6 +14,7 @@ import {
   getAvailableSlots,
   updateBookingStatus,
   deleteBooking,
+  getAppSmtpConfig,
   type BookingRecord,
 } from '../../lib/api';
 
@@ -34,6 +36,13 @@ const BookingConfigSchema = z.object({
   slotDuration: z.number(),
   fields: z.array(BookingFieldSchema),
   submitButtonText: z.string(),
+  cancellationDeadlineHours: z.number().min(1).max(72).optional(),
+  reminder24hEnabled: z.boolean().optional(),
+  reminder2hEnabled: z.boolean().optional(),
+  availableWeekdays: z.array(z.number().min(0).max(6)).optional(),
+  bookingHorizonDays: z.number().min(1).max(365).optional(),
+  blockedDates: z.array(z.string()).optional(),
+  businessAddress: z.string().optional(),
   appId: z.string().optional(),
   _refreshKey: z.number().optional(),
 });
@@ -312,6 +321,10 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
   // Section toggles
   const [showConfig, setShowConfig] = useState(true);
   const [showBookings, setShowBookings] = useState(true);
+  const [showAvailability, setShowAvailability] = useState(false);
+
+  // SMTP banner state
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   // Bookings state
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -344,6 +357,28 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
   useEffect(() => {
     loadBookings();
   }, [loadBookings]);
+
+  // Check SMTP config to show warning banner
+  useEffect(() => {
+    if (!data.appId || !token) return;
+    getAppSmtpConfig(data.appId, token)
+      .then((r) => setSmtpConfigured(r.configured))
+      .catch(() => setSmtpConfigured(false));
+  }, [data.appId, token]);
+
+  // Validations / warnings on the fields config
+  const hasEmailField = data.fields.some((f) => f.type === 'email');
+  const hasNameField = data.fields.some((f) => f.type === 'text');
+  const emailField = data.fields.find((f) => f.type === 'email');
+  const emailIsRequired = emailField?.required === true;
+
+  // Confirm before removing email field or making it optional
+  const confirmDestructiveEmailChange = (action: () => void) => {
+    const ok = window.confirm(
+      'Sin email obligatorio, tus clientes no recibirán confirmación ni recordatorios. ¿Continuar?',
+    );
+    if (ok) action();
+  };
 
   const handleStatusChange = async (bookingId: string, status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED') => {
     if (!data.appId || !token) return;
@@ -383,14 +418,28 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
 
   const saveEditField = () => {
     if (!editingFieldId || !editFieldLabel.trim()) return;
-    onChange({
-      ...data,
-      fields: data.fields.map((f) =>
-        f.id === editingFieldId
-          ? { ...f, type: editFieldType, label: editFieldLabel.trim(), required: editFieldRequired }
-          : f,
-      ),
-    });
+    const target = data.fields.find((f) => f.id === editingFieldId);
+    const apply = () => {
+      onChange({
+        ...data,
+        fields: data.fields.map((f) =>
+          f.id === editingFieldId
+            ? { ...f, type: editFieldType, label: editFieldLabel.trim(), required: editFieldRequired }
+            : f,
+        ),
+      });
+      setEditingFieldId(null);
+    };
+    // Detect destructive change: email field going from required to optional
+    const wasRequiredEmail = target?.type === 'email' && target.required;
+    const isStillRequiredEmail = editFieldType === 'email' && editFieldRequired;
+    if (wasRequiredEmail && !isStillRequiredEmail) {
+      confirmDestructiveEmailChange(apply);
+      return;
+    }
+    apply();
+    return;
+    // Unreachable original cleanup; legacy below retained for editor compat
     setEditingFieldId(null);
   };
 
@@ -412,7 +461,13 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
   };
 
   const removeField = (id: string) => {
-    onChange({ ...data, fields: data.fields.filter((f) => f.id !== id) });
+    const target = data.fields.find((f) => f.id === id);
+    const apply = () => onChange({ ...data, fields: data.fields.filter((f) => f.id !== id) });
+    if (target?.type === 'email' && target.required) {
+      confirmDestructiveEmailChange(apply);
+    } else {
+      apply();
+    }
   };
 
   const addTimeSlot = () => {
@@ -433,6 +488,192 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
 
   return (
     <div className="space-y-4">
+      {/* ─── SMTP not configured banner ─── */}
+      {data.appId && smtpConfigured === false && (
+        <div className="bg-amber-50 border border-amber-300 rounded-md p-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+          <div className="flex-1 text-[11px]">
+            <p className="font-semibold text-amber-800">SMTP no configurado</p>
+            <p className="text-amber-700 mt-0.5">
+              Las reservas se crearán pero no se enviarán emails de confirmación, recordatorios ni cancelación.
+            </p>
+            <a
+              href={`/apps/${data.appId}/settings#smtp`}
+              className="inline-block mt-1 text-amber-900 underline font-medium"
+            >
+              Configurar ahora →
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Field warnings (defense in depth) ─── */}
+      {!hasEmailField && (
+        <div className="bg-amber-50 border border-amber-300 rounded-md p-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+          <p className="flex-1 text-[11px] text-amber-800">
+            Sin campo email, tus clientes no recibirán confirmación, recordatorios ni podrán cancelar fácilmente.
+            Añade un campo de tipo <strong>Email</strong> en la sección de configuración.
+          </p>
+        </div>
+      )}
+      {!hasNameField && (
+        <div className="bg-amber-50 border border-amber-300 rounded-md p-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+          <p className="flex-1 text-[11px] text-amber-800">
+            Sin campo de nombre, los emails llegarán sin personalización.
+            Añade un campo de tipo <strong>Texto</strong>.
+          </p>
+        </div>
+      )}
+      {hasEmailField && !emailIsRequired && (
+        <div className="bg-amber-50 border border-amber-300 rounded-md p-3 flex items-start gap-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-600" />
+          <p className="flex-1 text-[11px] text-amber-800">
+            El campo email no es obligatorio. Sin email, ese cliente no recibirá confirmación ni recordatorios.
+          </p>
+        </div>
+      )}
+
+      {/* ─── Availability & reminders section ─── */}
+      <div>
+        <div className={sectionHeaderCls} onClick={() => setShowAvailability(!showAvailability)}>
+          <h3 className={sectionTitleCls}>
+            <Bell size={14} className="inline mr-1 text-teal-600" /> Disponibilidad y recordatorios
+          </h3>
+          <ChevronRight
+            size={14}
+            className={`text-gray-400 transition-transform ${showAvailability ? 'rotate-90' : ''}`}
+          />
+        </div>
+
+        {showAvailability && (
+          <div className="space-y-3 mt-2 pl-1">
+            <label className="flex items-start gap-2 text-[12px]">
+              <input
+                type="checkbox"
+                checked={data.reminder24hEnabled !== false}
+                onChange={(e) => onChange({ ...data, reminder24hEnabled: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Recordatorio 24h antes</strong>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Email + push 24 horas antes de la cita.
+                </p>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-[12px]">
+              <input
+                type="checkbox"
+                checked={data.reminder2hEnabled !== false}
+                onChange={(e) => onChange({ ...data, reminder2hEnabled: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Recordatorio 2h antes</strong>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Reduce significativamente los no-shows. Desactívalo si tus clientes lo perciben como excesivo o
+                  tus citas son típicamente con días de antelación.
+                </p>
+              </span>
+            </label>
+
+            <div>
+              <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                Tiempo límite para cancelar (horas antes de la cita)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={72}
+                step={1}
+                value={data.cancellationDeadlineHours ?? 4}
+                onChange={(e) =>
+                  onChange({
+                    ...data,
+                    cancellationDeadlineHours: Math.max(1, Math.min(72, parseInt(e.target.value, 10) || 4)),
+                  })
+                }
+                className="w-24 px-2 py-1 text-[12px] border border-gray-300 rounded"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Tus clientes no podrán cancelar dentro de esta ventana antes de la cita. Rango 1-72 horas.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                Días disponibles
+              </label>
+              <div className="flex gap-1">
+                {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((d, i) => {
+                  const enabled = (data.availableWeekdays ?? [1, 2, 3, 4, 5]).includes(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        const current = data.availableWeekdays ?? [1, 2, 3, 4, 5];
+                        const next = enabled ? current.filter((x) => x !== i) : [...current, i].sort();
+                        onChange({ ...data, availableWeekdays: next });
+                      }}
+                      className={`w-7 h-7 text-[11px] font-semibold rounded ${
+                        enabled
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                Horizonte de reservas (días)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                value={data.bookingHorizonDays ?? 30}
+                onChange={(e) =>
+                  onChange({
+                    ...data,
+                    bookingHorizonDays: Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 30)),
+                  })
+                }
+                className="w-24 px-2 py-1 text-[12px] border border-gray-300 rounded"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Cuántos días en adelante se pueden reservar.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                <MapPin size={11} className="inline mr-1" /> Dirección del negocio (opcional)
+              </label>
+              <input
+                type="text"
+                value={data.businessAddress ?? ''}
+                onChange={(e) => onChange({ ...data, businessAddress: e.target.value })}
+                placeholder="Calle Mayor 23, Madrid"
+                className="w-full px-2 py-1 text-[12px] border border-gray-300 rounded"
+              />
+              <p className="text-[10px] text-gray-500 mt-1">
+                Aparece en los emails y en la página pública de la reserva.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ─── Configuration Section ─── */}
       <div>
         <div className={sectionHeaderCls} onClick={() => setShowConfig(!showConfig)}>
@@ -646,7 +887,12 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                         {/* Header row */}
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {(booking as BookingRecord & { shortCode?: string }).shortCode && (
+                                <span className="text-[10px] font-mono font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
+                                  {(booking as BookingRecord & { shortCode?: string }).shortCode}
+                                </span>
+                              )}
                               <Calendar size={12} className="text-gray-400" />
                               <span className="text-xs font-semibold text-gray-800">
                                 {new Date(booking.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -655,9 +901,21 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                               <Clock size={12} className="text-gray-400" />
                               <span className="text-xs font-medium text-gray-700">{booking.timeSlot}</span>
                             </div>
-                            <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${sc.cls}`}>
-                              {sc.label}
-                            </span>
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border ${sc.cls}`}>
+                                {sc.label}
+                              </span>
+                              {(booking as BookingRecord & { cancelledBy?: string }).cancelledBy === 'CUSTOMER' && (
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                                  por cliente
+                                </span>
+                              )}
+                              {(booking as BookingRecord & { cancelledBy?: string }).cancelledBy === 'MERCHANT' && (
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+                                  por ti
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <span className="text-[9px] text-gray-400">{booking.duration} min</span>
                         </div>
@@ -756,6 +1014,13 @@ export const BookingModule: ModuleDefinition<BookingConfig> = {
       { id: '4', type: 'textarea', label: 'Notas adicionales', required: false },
     ],
     submitButtonText: 'Confirmar Reserva',
+    cancellationDeadlineHours: 4,
+    reminder24hEnabled: true,
+    reminder2hEnabled: true,
+    availableWeekdays: [1, 2, 3, 4, 5],
+    bookingHorizonDays: 30,
+    blockedDates: [],
+    businessAddress: '',
   },
   PreviewComponent,
   RuntimeComponent,

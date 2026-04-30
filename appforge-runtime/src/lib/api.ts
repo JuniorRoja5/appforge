@@ -69,10 +69,13 @@ export const getAvailableSlots = (date: string) =>
   apiFetch<string[]>(`/apps/${getAppId()}/bookings/available?date=${date}`);
 
 export const createBooking = (data: { date: string; timeSlot: string; formData: Record<string, string> }) =>
-  apiFetch<{ id: string }>(`/apps/${getAppId()}/bookings`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+  apiFetch<{ id: string; shortCode: string; trackingToken: string; date: string; timeSlot: string }>(
+    `/apps/${getAppId()}/bookings`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    },
+  );
 
 // ─── Contact ───────────────────────────────────────────
 export const getCaptcha = () =>

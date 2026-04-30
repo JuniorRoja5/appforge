@@ -45,6 +45,11 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   const submitButtonText = (data.submitButtonText as string) ?? 'Confirmar Reserva';
   const fields = normalizeFields(data.fields ?? data.formFields);
 
+  // New config fields with safe defaults
+  const availableWeekdays = (data.availableWeekdays as number[]) ?? [1, 2, 3, 4, 5];
+  const bookingHorizonDays = (data.bookingHorizonDays as number) ?? 30;
+  const blockedDates = new Set((data.blockedDates as string[]) ?? []);
+
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -56,16 +61,23 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   const [status, setStatus] = useState<'select' | 'form' | 'sending' | 'success' | 'error'>('select');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmedBooking, setConfirmedBooking] = useState<{
+    id: string;
+    shortCode: string;
+    trackingToken: string;
+  } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Determine available days for the calendar (next 30 days, skip weekends)
+  // Determine available days for the calendar (next bookingHorizonDays, respecting weekdays + blocked)
   const availableDays = new Set<string>();
-  for (let i = 0; i <= 30; i++) {
+  const weekdaySet = new Set(availableWeekdays);
+  for (let i = 0; i <= bookingHorizonDays; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
     const day = d.getDay();
-    if (day !== 0 && day !== 6) {
-      availableDays.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (weekdaySet.has(day) && !blockedDates.has(iso)) {
+      availableDays.add(iso);
     }
   }
 
@@ -101,7 +113,8 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     setStatus('sending');
     setError('');
     try {
-      await createBooking({ date: selectedDate, timeSlot: selectedSlot, duration: slotDuration, formData });
+      const result = await createBooking({ date: selectedDate, timeSlot: selectedSlot, formData });
+      setConfirmedBooking({ id: result.id, shortCode: result.shortCode, trackingToken: result.trackingToken });
       setStatus('success');
     } catch (err: any) {
       setError(err?.message || 'Error al reservar. Intenta otro horario.');
@@ -128,19 +141,50 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
 
   // ── Success view ──
   if (status === 'success') {
+    const trackingUrl = confirmedBooking
+      ? `${window.location.origin}/booking/${(data.appId as string) ?? ''}/${confirmedBooking.id}?t=${confirmedBooking.trackingToken}`
+      : null;
     return (
       <div className="text-center p-8" style={{ borderRadius: 'var(--radius-card)', backgroundColor: 'var(--color-surface-card)' }}>
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ backgroundColor: 'var(--color-feedback-success, #22c55e)20' }}>
           <Check size={28} style={{ color: 'var(--color-feedback-success, #22c55e)' }} />
         </div>
         <h4 className="font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>Reserva confirmada</h4>
+        {confirmedBooking && (
+          <p className="text-xs font-mono font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
+            {confirmedBooking.shortCode}
+          </p>
+        )}
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{selectedDate} a las {selectedSlot}</p>
         <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-          Tu reserva ha sido recibida. El negocio se pondrá en contacto contigo para confirmar.
+          Te hemos enviado los detalles por email.
         </p>
-        <button onClick={() => { setStatus('select'); setSelectedSlot(''); setSelectedDate(''); setFormData({}); }} className="mt-4 text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
-          Nueva reserva
-        </button>
+        {trackingUrl && (
+          <a
+            href={trackingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-3 text-sm font-medium underline"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Ver mi reserva →
+          </a>
+        )}
+        <div>
+          <button
+            onClick={() => {
+              setStatus('select');
+              setSelectedSlot('');
+              setSelectedDate('');
+              setFormData({});
+              setConfirmedBooking(null);
+            }}
+            className="mt-4 text-sm font-medium"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Nueva reserva
+          </button>
+        </div>
       </div>
     );
   }

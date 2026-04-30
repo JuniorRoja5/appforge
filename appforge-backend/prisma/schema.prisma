@@ -279,23 +279,41 @@ enum BookingStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+  NO_SHOW
 }
 
 model Booking {
   id        String        @id @default(uuid())
   appId     String
   app       App           @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appUserId String?
+  appUser   AppUser?      @relation("BookingAppUser", fields: [appUserId], references: [id], onDelete: SetNull)
   date      DateTime      @db.Date
   timeSlot  String
   duration  Int
   status    BookingStatus @default(CONFIRMED)
   formData  Json
+
+  shortCode         String                              // BKG-XXXXXX, único por app
+  trackingToken     String   @default(uuid())          // anti-enumeration en URL pública
+  customerName      String?                             // extraído de formData en createBooking
+  customerEmail     String?
+  customerPhone     String?
+  customerNotes     String?
+  cancelledAt       DateTime?
+  cancelledBy       String?                             // 'CUSTOMER' | 'MERCHANT'
+  reminder24hSentAt DateTime?
+  reminder2hSentAt  DateTime?
+
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
   @@unique([appId, date, timeSlot])
+  @@unique([appId, shortCode])
   @@index([appId])
   @@index([appId, date])
+  @@index([appId, trackingToken])
+  @@index([appUserId])
 }
 
 // --- Menu Restaurant ---
@@ -482,6 +500,7 @@ model AppUser {
   loyaltyRedemptions  LoyaltyRedemption[]  @relation("LoyaltyRedemptionUser")
   couponRedemptions   CouponRedemption[]   @relation("CouponRedemptionUser")
   orders              Order[]              @relation("OrderUser")
+  bookings            Booking[]            @relation("BookingAppUser")
   pushDevices         PushDevice[]         @relation("AppUserDevices")
 
   @@unique([appId, email])

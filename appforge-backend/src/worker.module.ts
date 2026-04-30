@@ -2,13 +2,16 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { BuildProcessor } from './build/build.processor';
 import { KeystoreService } from './build/keystore.service';
+import { BookingService } from './booking/booking.service';
+import { BookingRemindersProcessor } from './booking/booking-reminders.processor';
 import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { PlatformModule } from './platform/platform.module';
+import { PushModule } from './push/push.module';
 
 /**
  * Minimal module for the standalone BullMQ worker process.
- * Only imports what BuildProcessor needs — no HTTP controllers, no auth, no admin.
+ * Only imports what processors need — no HTTP controllers, no auth, no admin.
  * This runs in a separate process from the NestJS HTTP server.
  */
 @Module({
@@ -21,12 +24,19 @@ import { PlatformModule } from './platform/platform.module';
       },
     }),
     BullModule.registerQueue({ name: 'app-build' }),
+    BullModule.registerQueue({ name: 'booking-reminders' }),
 
-    // Dependencies required by BuildProcessor
+    // Dependencies required by processors
     PrismaModule,
     StorageModule,
     PlatformModule,
+    PushModule,
   ],
-  providers: [BuildProcessor, KeystoreService],
+  providers: [
+    BuildProcessor,
+    KeystoreService,
+    BookingService,
+    BookingRemindersProcessor,
+  ],
 })
 export class WorkerModule {}

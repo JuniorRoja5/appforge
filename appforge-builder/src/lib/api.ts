@@ -1129,6 +1129,51 @@ export const deleteBooking = async (appId: string, bookingId: string, token: str
   if (!response.ok) throw new Error('Error al eliminar reserva');
 };
 
+// --- Public booking tracking (no auth, requires tracking token) ---
+
+export interface PublicBookingData {
+  id: string;
+  shortCode: string;
+  date: string;
+  timeSlot: string;
+  duration: number;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  customerName: string | null; // solo primer nombre
+  cancelledAt: string | null;
+  cancelledBy: 'CUSTOMER' | 'MERCHANT' | null;
+  createdAt: string;
+  updatedAt: string;
+  app: { name: string };
+  businessAddress?: string;
+  cancellationDeadlineHours: number;
+}
+
+export const getPublicBooking = async (
+  appId: string,
+  bookingId: string,
+  trackingToken: string,
+): Promise<PublicBookingData> => {
+  const url = `${API_URL}/apps/${appId}/bookings/public/${bookingId}?t=${encodeURIComponent(trackingToken)}`;
+  const response = await fetch(url);
+  if (response.status === 404) throw new Error('Reserva no encontrada o enlace inválido');
+  if (!response.ok) throw new Error('Error al cargar la reserva');
+  return response.json();
+};
+
+export const cancelPublicBooking = async (
+  appId: string,
+  bookingId: string,
+  trackingToken: string,
+): Promise<{ ok: boolean; status: string }> => {
+  const url = `${API_URL}/apps/${appId}/bookings/public/${bookingId}/cancel?t=${encodeURIComponent(trackingToken)}`;
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al cancelar la reserva');
+  }
+  return response.json();
+};
+
 // ─── Builds ────────────────────────────────────────────────────────────────────
 
 export interface AppBuild {

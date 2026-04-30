@@ -20,6 +20,7 @@ import { PaymentCancelPage } from './pages/PaymentCancelPage';
 import { StampPage } from './pages/StampPage';
 import { RedeemCouponPage } from './pages/RedeemCouponPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
+import { BookingTrackingPage } from './pages/BookingTrackingPage';
 
 const router = createBrowserRouter([
   // Public routes (auth)
@@ -67,6 +68,7 @@ const router = createBrowserRouter([
   { path: '/stamp/:appId', element: <StampPage /> },
   { path: '/redeem/:appId', element: <RedeemCouponPage /> },
   { path: '/order/:appId/:orderId', element: <OrderTrackingPage /> },
+  { path: '/booking/:appId/:bookingId', element: <BookingTrackingPage /> },
 
   // Redirects
   { path: '/', element: <Navigate to="/dashboard" replace /> },
