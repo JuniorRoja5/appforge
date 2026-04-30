@@ -18,6 +18,7 @@ Tests the full lifecycle of booking notifications:
 - Backend running at `http://localhost:3000`
 - Docker stack up (PostgreSQL + Redis)
 - An app with the **booking module configured** (timeSlots + fields)
+- `DATABASE_URL` reachable (read from `appforge-backend/.env` automatically) — required by the defensive cleanup that runs at the start of each invocation
 
 ## Usage
 
@@ -67,12 +68,13 @@ For full reminder verification:
 
 ## Cleanup
 
-The test attempts cleanup automatically. Manual SQL fallback:
+The script runs a **defensive cleanup at the start** (Prisma `deleteMany` of bookings + appUsers matching the fixed test emails) so a previous crashed run never blocks the next invocation. Step 18 is a best-effort end-of-run cleanup via API.
+
+Manual SQL fallback (run from inside the `appforge-db` container):
 
 ```sql
 DELETE FROM "Booking" WHERE "customerEmail" IN (
-  'anon@booking.test', 'first@conflict.test', 'soon@booking.test'
-) OR "customerEmail" LIKE 'e2e-bookings-%@test.com';
-
-DELETE FROM "AppUser" WHERE email LIKE 'e2e-bookings-%@test.com';
+  'e2e-bookings@test.com', 'anon@booking.test', 'first@conflict.test', 'soon@booking.test'
+);
+DELETE FROM "AppUser" WHERE email = 'e2e-bookings@test.com';
 ```

@@ -11,6 +11,8 @@
  *   APP_ID=<uuid de una app con módulo booking> \
  *   node scripts/e2e/bookings/notifications-flow.mjs
  */
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
 import { setDefaultResultOrder } from 'node:dns';
 setDefaultResultOrder('ipv4first');
 
@@ -18,8 +20,12 @@ const API_URL = process.env.API_URL || 'http://127.0.0.1:3000';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const APP_ID = process.env.APP_ID;
-const APP_USER_EMAIL = process.env.APP_USER_EMAIL || `e2e-bookings-${Date.now()}@test.com`;
+// Fixed email so defensive cleanup at start can locate prior runs deterministically
+const APP_USER_EMAIL = process.env.APP_USER_EMAIL || 'e2e-bookings@test.com';
 const APP_USER_PASSWORD = process.env.APP_USER_PASSWORD || 'test1234';
+const TEST_EMAILS = [APP_USER_EMAIL, 'anon@booking.test', 'first@conflict.test', 'soon@booking.test'];
+
+const prisma = new PrismaClient();
 
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m',
@@ -50,12 +56,26 @@ function dateOffsetIso(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Defensive cleanup: removes residue from prior runs (crashed mid-flow or otherwise).
+// Runs at the START so a partial DB never blocks the next attempt.
+async function cleanup() {
+  const b = await prisma.booking.deleteMany({
+    where: { appId: APP_ID, customerEmail: { in: TEST_EMAILS } },
+  });
+  const u = await prisma.appUser.deleteMany({
+    where: { appId: APP_ID, email: APP_USER_EMAIL },
+  });
+  console.log(c('cyan', `[pre] Cleanup: ${b.count} bookings, ${u.count} appUsers removed`));
+}
+
 async function main() {
   console.log(c('bold', '\n━━━ E2E: Booking Notifications Flow ━━━\n'));
 
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !APP_ID) {
     fail('Missing ADMIN_EMAIL / ADMIN_PASSWORD / APP_ID');
   }
+
+  await cleanup();
 
   // ─── Step 1: Login admin ───
   step('Login admin');
@@ -350,8 +370,10 @@ async function main() {
   console.log(c('green', '\n━━━ All 18 steps passed ✓ ━━━\n'));
 }
 
-main().catch((err) => {
-  console.error(c('red', `\n✗ ${err.message}\n`));
-  console.error(err.stack);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(c('red', `\n✗ ${err.message}\n`));
+    console.error(err.stack);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
