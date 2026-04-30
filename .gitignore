@@ -10,6 +10,10 @@ dist/
 .env
 .env.local
 .env.production
+*.env.bak*
+*.env.backup-*
+.env.bak-*
+.env.backup-*
 
 # IDE
 .vscode/
@@ -59,3 +63,7 @@ templates/
 seed-error.txt
 *-error.txt
 *-error.log
+
+# VPS-specific config (per-environment, may contain secrets)
+ecosystem.prod.config.js
+docker-compose-simple.yml
