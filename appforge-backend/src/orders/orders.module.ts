@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
-import { PushModule } from '../push/push.module';
+import { FcmModule } from '../push/fcm.module';
+import { OptionalAppUserAuthGuard } from '../push/optional-app-user.guard';
 
 @Module({
-  imports: [PushModule], // exposes FcmService and OptionalAppUserAuthGuard
+  imports: [FcmModule], // exposes FcmService only — no HTTP, no Throttler
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, OptionalAppUserAuthGuard],
 })
 export class OrdersModule {}

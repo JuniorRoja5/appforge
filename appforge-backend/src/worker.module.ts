@@ -7,7 +7,7 @@ import { BookingRemindersProcessor } from './booking/booking-reminders.processor
 import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { PlatformModule } from './platform/platform.module';
-import { PushModule } from './push/push.module';
+import { FcmModule } from './push/fcm.module';
 
 /**
  * Minimal module for the standalone BullMQ worker process.
@@ -30,7 +30,7 @@ import { PushModule } from './push/push.module';
     PrismaModule,
     StorageModule,
     PlatformModule,
-    PushModule,
+    FcmModule,
   ],
   providers: [
     BuildProcessor,
