@@ -21,39 +21,48 @@ export const AppIconTab: React.FC = () => {
   const validateAndUpload = async (file: File) => {
     setError(null);
 
+    // Use a local variable rather than reading the `error` state — setError is
+    // asynchronous, so `if (error) return;` after a setError call would read
+    // the stale closure value (the initial render's null) and let an invalid
+    // icon proceed to upload silently.
+    let validationError: string | null = null;
+
     // Validate type
     if (file.type !== 'image/png') {
-      setError('Solo se permiten archivos PNG');
-      return;
+      validationError = 'Solo se permiten archivos PNG';
     }
 
     // Validate size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('El archivo no debe superar 5MB');
-      return;
+    if (!validationError && file.size > 5 * 1024 * 1024) {
+      validationError = 'El archivo no debe superar 5MB';
     }
 
     // Validate dimensions
-    const img = new window.Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.src = objectUrl;
+    if (!validationError) {
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
 
-    await new Promise<void>((resolve) => {
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        if (img.width !== 1024 || img.height !== 1024) {
-          setError(`Las dimensiones deben ser 1024×1024px. Tu imagen es ${img.width}×${img.height}px`);
-        }
-        resolve();
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        setError('No se pudo leer la imagen');
-        resolve();
-      };
-    });
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          if (img.width !== 1024 || img.height !== 1024) {
+            validationError = `Las dimensiones deben ser 1024×1024px. Tu imagen es ${img.width}×${img.height}px`;
+          }
+          resolve();
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          validationError = 'No se pudo leer la imagen';
+          resolve();
+        };
+      });
+    }
 
-    if (error) return;
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     // Upload
     if (!appId || !token) return;
