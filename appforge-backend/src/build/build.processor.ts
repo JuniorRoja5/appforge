@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import { spawn } from 'child_process';
+import * as plist from 'plist';
 
 const RUNTIME_TEMPLATE_DIR = path.resolve(
   process.cwd(),
@@ -705,21 +706,25 @@ export default config;
   ) {
     const plistPath = path.join(buildDir, 'ios', 'App', 'App', 'Info.plist');
     try {
-      let content = await fs.readFile(plistPath, 'utf-8');
-      const entries = Object.entries(permissions)
-        .filter(([, desc]) => desc && desc.trim())
-        .map(([key, desc]) => {
-          const expanded = desc.replace(/#APP_NAME/g, appName);
-          return `\t<key>${key}</key>\n\t<string>${expanded}</string>`;
-        })
-        .join('\n');
+      const raw = await fs.readFile(plistPath, 'utf-8');
+      // Cast to a mutable record — plist.PlistObject is `readonly [x: string]: PlistValue`,
+      // which the parse() result satisfies but blocks our key assignment below.
+      const parsed = plist.parse(raw) as unknown as Record<string, plist.PlistValue>;
 
-      if (entries) {
-        content = content.replace('</dict>', `${entries}\n</dict>`);
-        await fs.writeFile(plistPath, content);
+      let mutated = false;
+      for (const [key, desc] of Object.entries(permissions)) {
+        if (desc && desc.trim()) {
+          parsed[key] = desc.replace(/#APP_NAME/g, appName);
+          mutated = true;
+        }
       }
-    } catch {
-      this.logger.warn('Could not inject iOS permissions');
+
+      if (mutated) {
+        const serialized = plist.build(parsed);
+        await fs.writeFile(plistPath, serialized);
+      }
+    } catch (err) {
+      this.logger.warn(`Could not inject iOS permissions: ${(err as Error).message}`);
     }
   }
 
