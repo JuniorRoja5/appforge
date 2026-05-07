@@ -521,3 +521,64 @@ hay que `git checkout --` el lockfile antes de cada `git pull`.
 Recomendación: ambas. (a) elimina el ruido inicial; (b) previene futuras
 divergencias.
 **Prioridad**: baja (operacional, no afecta producción).
+
+---
+
+## Sesión 2026-05-07 (PM) — Bugs área de planes (cierre Bug 1-5 + zombie seed)
+
+PR `bfcf4bd..6a6e99a` (6 commits) cierra los 5 bugs detectados en el flujo
+de subscription / planes / billing. Tres pendientes derivados:
+
+### #29 — Endpoint para "abandonar keystore" (liberar slot tras soft-delete)
+**Estado**: OPEN HIGH PRIORITY
+**Origen**: Sesión 2026-05-07 PM, derivado del fix Bug 1+3 (commit `6a6e99a`).
+**Descripción**: Tras la nueva regla "apps con keystore siguen contando contra
+el plan", un cliente que quiera bajar de plan o liberar slots ocupados por
+apps borradas no tiene UI. El mensaje de error de `changePlan` lo redirige
+explícitamente a soporte. Para escalas pequeñas (1-2 downgrades/semana) está
+bien; para escalas mayores el inbox de soporte se llena.
+**Impacto**: cuello de botella operacional. Cada downgrade con keystore
+soft-deleted requiere intervención manual del super-admin.
+**Esfuerzo**: medio. Endpoint `POST /apps/:id/abandon-keystore` con doble
+confirmación que elimina el `AppKeystore` row y libera el slot. UI en el
+modal de borrado (cuando `hasKeystore === true`) con un toggle "abandonar
+firma de stores (no podré actualizar la app en Play Store / App Store)".
+**Prioridad**: alta — convertir en issue de GitHub con etiqueta `next-sprint`
+cuando empiece el ramp-up de clientes pagos.
+
+### #30 — Cleanup periódico de artifacts huérfanos en MinIO
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-07 PM, derivado del fix Bug 5 (commit `44bdfc5`).
+**Descripción**: El fix de Bug 5 hace que las aggregates de Prisma dejen de
+contar bytes de apps soft-deleted, pero los archivos físicos siguen en MinIO.
+La factura de storage de Hostinger sigue creciendo aunque el cliente vea su
+contador a cero.
+**Impacto**: invisible para el cliente (no le afecta su plan), pero crece
+silenciosamente la factura del proveedor.
+**Esfuerzo**: medio. Cron job semanal que: (1) lista builds COMPLETED con
+`app.deletedAt != null`, (2) borra el objeto del bucket vía StorageService,
+(3) marca `appBuild.artifactSize = null` o borra el row. Respetar apps con
+keystore que conservan slot — sus artifacts también pueden borrarse del
+bucket porque el cliente no los va a descargar (los slots son lógicos, no
+contenido).
+**Prioridad**: baja — backlog. Activar cuando el storage de MinIO supere
+los 50 GB o cuando aparezca como ítem visible en la factura del proveedor.
+
+### #31 — Admin endpoint `getTenantDetail` no expone `hasKeystore` en sus apps
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-07 PM, derivado del Commit 3 (`365338d`) del
+mismo PR.
+**Descripción**: `apps.service.findAll` y `findOne` ahora devuelven
+`hasKeystore: boolean`, consumido por el modal del builder. Pero
+`admin.service.getTenantDetail` (línea 122-146) tiene su propio query con
+`include: { apps: { include: { builds } } }` que NO incluye `keystore`.
+Resultado: el super-admin viendo una app de un tenant ajeno no puede
+distinguir si está firmada para stores. Hoy no rompe nada porque admin
+no consume el flag, pero el día que se quiera mostrar un badge "firmada"
+o construir el endpoint del #29, hace falta.
+**Impacto**: inconsistencia de superficie API. No bug, no rompe TS strict
+en builder admin (su `TenantApp` interface declara solo lo que ya recibe).
+**Esfuerzo**: trivial. Añadir `keystore: { select: { id: true } }` al
+`include` y mappear en la respuesta a `hasKeystore: !!keystore` para cada
+app del array.
+**Prioridad**: baja, sube a media cuando se aborde #29 (es prerequisito).
