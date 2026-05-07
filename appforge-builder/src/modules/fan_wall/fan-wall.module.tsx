@@ -66,7 +66,14 @@ const PreviewComponent: React.FC<{ data: FanWallConfig; isSelected: boolean }> =
         )}
       </div>
 
-      <div className="flex-1 overflow-hidden p-1.5" style={{ backgroundColor: data.backgroundColor || '#f9fafb' }}>
+      <div className="flex-1 overflow-hidden p-1.5 relative" style={{ backgroundColor: data.backgroundColor || '#f9fafb' }}>
+        {/* Banda informativa: aclara que el contenido es generado por end-users */}
+        <div className="absolute inset-x-1.5 top-1.5 z-10 bg-white/85 backdrop-blur-[2px] border border-gray-200 rounded-md px-2 py-1.5 shadow-sm">
+          <p className="text-[9px] text-gray-700 leading-tight text-center">
+            <span className="font-semibold">Vista previa.</span> Los usuarios de tu app subirán fotos aquí.
+          </p>
+        </div>
+
         <div className="grid grid-cols-2 gap-1.5 h-full">
           {MOCK_PHOTOS.map((photo, i) => (
             <div key={i} className={`${photo.color} rounded-lg relative flex items-end justify-start p-1.5`}>
