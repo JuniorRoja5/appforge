@@ -9,7 +9,10 @@ interface Props {
 
 export const SplashScreen: React.FC<Props> = ({ config, onFinish }) => {
   const [fadeOut, setFadeOut] = useState(false);
-  const duration = config?.duration ?? 2000;
+  // SplashScreenTab persists duration in seconds (slider 1-5). Multiply to ms.
+  // Without this conversion, a saved value of 2 produced a 2 ms splash —
+  // the ?? fallback only fires on null/undefined, not on a finite number.
+  const duration = (config?.duration ?? 2) * 1000;
 
   useEffect(() => {
     const fadeTimer = setTimeout(() => setFadeOut(true), duration);
