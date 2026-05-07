@@ -1,4 +1,4 @@
-import { Matches, ValidateNested, IsOptional, IsString, IsNumber } from 'class-validator';
+import { Matches, ValidateNested, IsOptional, IsString, IsNumber, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // SECURITY: Strict regex to prevent template injection in Capacitor config.
@@ -20,7 +20,15 @@ class AndroidConfigDto {
 }
 
 export class UpdateAppConfigDto {
+  // NOTE: nested object shapes are intentionally validated as plain objects (@IsObject)
+  // rather than nested DTOs — these fields are persisted as JSON in App.appConfig and
+  // their inner shape evolves frequently. Server-side guarantees that matter live in
+  // the service (e.g. extractCustomerFields, sanitizeHtmlContent — see TECH_DEBT #9).
+
+  @IsOptional() @IsObject()
   icon?: { url: string };
+
+  @IsOptional() @IsObject()
   splash?: {
     enabled: boolean;
     type: 'color' | 'image';
@@ -29,6 +37,8 @@ export class UpdateAppConfigDto {
     logoUrl?: string;
     duration: number;
   };
+
+  @IsOptional() @IsObject()
   onboarding?: {
     enabled: boolean;
     slides: Array<{
@@ -39,7 +49,11 @@ export class UpdateAppConfigDto {
       order: number;
     }>;
   };
+
+  @IsOptional() @IsObject()
   terms?: { content: string };
+
+  @IsOptional() @IsObject()
   iosPermissions?: Record<string, string>;
 
   @IsOptional()
@@ -47,6 +61,7 @@ export class UpdateAppConfigDto {
   @Type(() => AndroidConfigDto)
   androidConfig?: AndroidConfigDto;
 
+  @IsOptional() @IsObject()
   androidPermissions?: Record<string, boolean>;
 }
 

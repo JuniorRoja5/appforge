@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json, urlencoded, raw } from 'express';
 
@@ -14,6 +15,22 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule);
+
+  // SECURITY: validate request bodies against DTOs.
+  // - whitelist: strip props not declared on the DTO (silent — does not reject).
+  // - forbidNonWhitelisted: false until every controller in the backend has been
+  //   audited and migrated to a real DTO (today some still use Record<string, unknown>
+  //   or inline interface types). Tracked in TECH_DEBT.
+  // - transform: cast primitives ("8080" → 8080) and instantiate DTO classes so
+  //   class-validator decorators run.
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
 
   const isProduction = process.env.NODE_ENV === 'production';
 

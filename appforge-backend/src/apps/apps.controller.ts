@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role, Prisma } from '@prisma/client';
+import { UpdateAppConfigDto, UpdateSmtpConfigDto } from './dto/update-app-config.dto';
 
 @Controller('apps')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -81,17 +82,19 @@ export class AppsController {
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   updateConfig(
     @Param('id') id: string,
-    @Body() body: Record<string, unknown>,
+    @Body() body: UpdateAppConfigDto,
     @Request() req,
   ) {
-    return this.appsService.updateConfig(id, body, req.user.tenantId, req.user.role);
+    // Cast: service expects a plain Record for JSON merging. The DTO has been
+    // validated by ValidationPipe before reaching this point.
+    return this.appsService.updateConfig(id, body as unknown as Record<string, unknown>, req.user.tenantId, req.user.role);
   }
 
   @Put(':id/config/smtp')
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   updateSmtp(
     @Param('id') id: string,
-    @Body() body: { host: string; port: number; secure: boolean; username: string; password: string; fromEmail: string; fromName: string },
+    @Body() body: UpdateSmtpConfigDto,
     @Request() req,
   ) {
     return this.appsService.updateSmtp(id, body, req.user.tenantId, req.user.role);
