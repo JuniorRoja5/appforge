@@ -7,6 +7,7 @@ interface AppData {
   name: string;
   slug: string;
   status: 'DRAFT' | 'PUBLISHED' | 'BUILDING';
+  hasKeystore?: boolean;
   createdAt: string;
   updatedAt: string;
   appConfig?: Record<string, any> | null;
@@ -123,7 +124,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
       {/* Delete confirmation modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => { setShowDeleteModal(false); setDeleteConfirmed(false); }}>
-          <div className="bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90vw] p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[440px] max-w-[90vw] p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                 <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
@@ -135,14 +136,29 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
             </div>
 
             <div className="space-y-2 bg-red-50 rounded-lg p-3">
-              <p className="text-[12px] text-red-800 flex items-start gap-2">
-                <span className="shrink-0 mt-0.5">&#9888;</span>
-                <span>Esta app <strong>seguirá contando</strong> contra el límite de tu plan.</span>
-              </p>
-              <p className="text-[12px] text-red-800 flex items-start gap-2">
-                <span className="shrink-0 mt-0.5">&#9888;</span>
-                <span>Si fue publicada con un keystore, <strong>no podrás actualizar</strong> esa app en Play Store.</span>
-              </p>
+              {app.hasKeystore ? (
+                <>
+                  <p className="text-[12px] text-red-900">
+                    Esta app tiene un <strong>keystore vinculado</strong> para actualizar
+                    su firma en Play Store / App Store. Al borrarla:
+                  </p>
+                  <ul className="text-[12px] text-red-800 list-disc pl-4 space-y-1">
+                    <li>El slot <strong>seguirá ocupado</strong> en tu plan (la identidad de firma se preserva).</li>
+                    <li>Los bytes de los artifacts <strong>se liberan</strong> del storage.</li>
+                    <li>Los archivos del keystore se conservan para futuras restauraciones.</li>
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <p className="text-[12px] text-red-900">
+                    Esta app no tiene firma de stores asociada. Al borrarla:
+                  </p>
+                  <ul className="text-[12px] text-red-800 list-disc pl-4 space-y-1">
+                    <li>El slot del plan <strong>se libera</strong>.</li>
+                    <li>Los bytes de storage <strong>se liberan</strong>.</li>
+                  </ul>
+                </>
+              )}
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer select-none">

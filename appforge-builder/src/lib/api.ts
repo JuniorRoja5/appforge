@@ -115,6 +115,7 @@ export interface AppInfo {
   appConfig: Record<string, any> | null;
   needsRebuild: boolean;
   status: 'DRAFT' | 'PUBLISHED' | 'BUILDING';
+  hasKeystore: boolean;
   createdAt: string;
   updatedAt: string;
 }
