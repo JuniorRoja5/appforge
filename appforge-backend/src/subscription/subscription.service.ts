@@ -8,9 +8,47 @@ export interface UsageStats {
   storageBytes: number;
 }
 
+interface BillableBreakdown {
+  /** Apps en uso normal: deletedAt null. */
+  active: number;
+  /** Apps soft-deleted que conservan AppKeystore: ocupan slot por la
+   *  identidad de firma en Play Store / App Store. */
+  deletedWithKeystore: number;
+  /** Suma — total de slots consumidos del plan. */
+  total: number;
+}
+
 @Injectable()
 export class SubscriptionService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Returns the breakdown of slots the tenant occupies. Active apps plus
+   * soft-deleted apps that retain an AppKeystore — those keystores are the
+   * merchant's identity for publishing updates on Play Store / App Store, so
+   * "deleting" the app at SaaS level cannot release the slot without
+   * abandoning that identity.
+   */
+  private async getBillableBreakdown(tenantId: string): Promise<BillableBreakdown> {
+    const active = await this.prisma.app.count({
+      where: { tenantId, deletedAt: null },
+    });
+    const deletedWithKeystore = await this.prisma.app.count({
+      where: {
+        tenantId,
+        deletedAt: { not: null },
+        keystore: { isNot: null },
+      },
+    });
+    return { active, deletedWithKeystore, total: active + deletedWithKeystore };
+  }
+
+  /** Convenience: total only. Used by getTenantUsage where the breakdown
+   *  is not surfaced to the client. */
+  private async countBillableApps(tenantId: string): Promise<number> {
+    const { total } = await this.getBillableBreakdown(tenantId);
+    return total;
+  }
 
   /**
    * Ensure a tenant has at least a FREE subscription. Self-healing for tenants
@@ -55,9 +93,9 @@ export class SubscriptionService {
     return { subscription, usage };
   }
 
-  /** Calculate current usage for a tenant (active apps only for display) */
+  /** Calculate current usage for a tenant (billable slots: active + soft-deleted-with-keystore) */
   async getTenantUsage(tenantId: string): Promise<UsageStats> {
-    const appsCount = await this.prisma.app.count({ where: { tenantId, deletedAt: null } });
+    const appsCount = await this.countBillableApps(tenantId);
 
     // Builds this calendar month
     const now = new Date();
@@ -117,8 +155,18 @@ export class SubscriptionService {
       return { allowed: false, reason: 'Tu suscripción ha expirado. Tu plan ha sido cambiado a Free.' };
     }
 
-    const appsCount = await this.prisma.app.count({ where: { tenantId } });
-    if (appsCount >= subscription.plan.maxApps) {
+    const billable = await this.getBillableBreakdown(tenantId);
+    if (billable.total >= subscription.plan.maxApps) {
+      // Decisión consciente: cuando el cliente tiene apps activas Y borradas-con-keystore
+      // ocupando slots simultáneamente, prevalece el mensaje estándar. Primero hay que
+      // resolver lo que el cliente sí puede resolver solo (borrar apps activas) antes de
+      // mostrarle el problema más complejo del keystore que requiere soporte.
+      if (billable.deletedWithKeystore > 0 && billable.active < subscription.plan.maxApps) {
+        return {
+          allowed: false,
+          reason: `Tu plan ${subscription.plan.name} permite ${subscription.plan.maxApps} app(s). Tienes ${billable.active} activa(s) y ${billable.deletedWithKeystore} publicada(s) en stores que sigue(n) ocupando slot (las apps con firma de Play Store / App Store no liberan el slot al borrarse). Actualiza tu plan o contacta soporte si necesitas liberar la firma.`,
+        };
+      }
       return {
         allowed: false,
         reason: `Has alcanzado el límite de ${subscription.plan.maxApps} app(s) en tu plan ${subscription.plan.name}. Actualiza tu plan para crear más apps.`,
@@ -230,13 +278,16 @@ export class SubscriptionService {
       throw new NotFoundException('Tenant not found');
     }
 
-    // Prevent downgrade if tenant has more active apps than the new plan allows
+    // Prevent downgrade if tenant has more billable slots than the new plan allows.
+    // When the excess is caused by deleted-with-keystore apps, the client cannot
+    // resolve it self-service (no UI to abandon a keystore) — redirect to support.
     if (!force) {
-      const activeApps = await this.prisma.app.count({ where: { tenantId, deletedAt: null } });
-      if (activeApps > plan.maxApps) {
-        throw new ForbiddenException(
-          `Tienes ${activeApps} apps activas. El plan ${plan.name} solo permite ${plan.maxApps}. Elimina ${activeApps - plan.maxApps} app(s) antes de cambiar de plan.`,
-        );
+      const billable = await this.getBillableBreakdown(tenantId);
+      if (billable.total > plan.maxApps) {
+        const msg = billable.deletedWithKeystore > 0
+          ? `Tienes ${billable.active} app(s) activa(s) y ${billable.deletedWithKeystore} publicada(s) en stores que conservan su firma. El plan ${plan.name} solo permite ${plan.maxApps} slot(s) en total. Para liberar las firmas y bajar de plan, contacta soporte — el procedimiento requiere revisión manual porque abandonar un keystore implica perder la posibilidad de actualizar esas apps en Play Store / App Store.`
+          : `Tienes ${billable.active} apps activas. El plan ${plan.name} solo permite ${plan.maxApps}. Elimina ${billable.active - plan.maxApps} app(s) antes de cambiar de plan.`;
+        throw new ForbiddenException(msg);
       }
     }
 
