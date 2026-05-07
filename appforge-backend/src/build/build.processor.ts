@@ -474,7 +474,7 @@ export default config;
 
     // Inject iOS permissions
     const iosPermissions = (appConfig.iosPermissions as Record<string, string>) ?? {};
-    await this.injectIosPermissions(buildDir, iosPermissions);
+    await this.injectIosPermissions(buildDir, iosPermissions, app.name);
     log('iOS permissions injected');
 
     // ZIP the ios/ directory
@@ -698,13 +698,20 @@ export default config;
     }
   }
 
-  private async injectIosPermissions(buildDir: string, permissions: Record<string, string>) {
+  private async injectIosPermissions(
+    buildDir: string,
+    permissions: Record<string, string>,
+    appName: string,
+  ) {
     const plistPath = path.join(buildDir, 'ios', 'App', 'App', 'Info.plist');
     try {
       let content = await fs.readFile(plistPath, 'utf-8');
       const entries = Object.entries(permissions)
         .filter(([, desc]) => desc && desc.trim())
-        .map(([key, desc]) => `\t<key>${key}</key>\n\t<string>${desc}</string>`)
+        .map(([key, desc]) => {
+          const expanded = desc.replace(/#APP_NAME/g, appName);
+          return `\t<key>${key}</key>\n\t<string>${expanded}</string>`;
+        })
         .join('\n');
 
       if (entries) {
