@@ -9,7 +9,11 @@ interface Props {
 
 export const OnboardingScreen: React.FC<Props> = ({ config, onFinish }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const slides = config.slides.sort((a, b) => a.order - b.order);
+  // Copy before sorting — Array.prototype.sort mutates in place, and the
+  // source array is part of the prop tree (and ultimately the Zustand
+  // appConfig). Mutating it would re-trigger renders and persist a
+  // reordered config back to the manifest on subsequent saves.
+  const slides = [...config.slides].sort((a, b) => a.order - b.order);
 
   const handleNext = () => {
     if (currentSlide < slides.length - 1) {
