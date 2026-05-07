@@ -53,14 +53,26 @@ export class AppsService {
   async findAll(tenantId?: string) {
     const where: Prisma.AppWhereInput = { deletedAt: null };
     if (tenantId) where.tenantId = tenantId;
-    return this.prisma.app.findMany({
+    const apps = await this.prisma.app.findMany({
       where,
       orderBy: { updatedAt: 'desc' },
+      include: { keystore: { select: { id: true } } },
     });
+    return apps.map(({ keystore, ...rest }) => ({
+      ...rest,
+      hasKeystore: !!keystore,
+    }));
   }
 
   async findOne(id: string, tenantId?: string, role?: string) {
-    return this.ensureOwnership(id, tenantId, role);
+    await this.ensureOwnership(id, tenantId, role);
+    const app = await this.prisma.app.findUnique({
+      where: { id },
+      include: { keystore: { select: { id: true } } },
+    });
+    if (!app) throw new NotFoundException('App not found');
+    const { keystore, ...rest } = app;
+    return { ...rest, hasKeystore: !!keystore };
   }
 
   async updateSchema(id: string, schema: unknown, designTokens?: unknown, tenantId?: string, role?: string) {
