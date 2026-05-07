@@ -317,3 +317,207 @@ Effort: 15 min (find the right place in the SettingsPanel, paste,
 verify in the builder canvas).
 **Priority: medium** — feature gap, not a bug. Customers cannot
 attach images to their coupons until this lands.
+
+---
+
+## Sesión 2026-05-07 — Auditoría Configuración → Ajustes (cierre H1-H7+H14)
+
+PR principal `c626fef` (críticos H1-H5) y PR-2 `025c9b3` (triviales H6/H7/H14)
+mergeados y desplegados. De los 21 hallazgos de la auditoría, 8 quedan resueltos
+y los 13 siguientes pasan a esta sección como TECH_DEBT trackable.
+
+### #14 — Splash native Android customizado (~100-200ms flash blanco)
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H18.
+**Descripción**: Capacitor muestra su splash blanco nativo durante 100-200ms
+antes de que el JS pinte el `<SplashScreen>` configurado por el cliente.
+Aceptado en sesiones previas como comportamiento inherente al WebView.
+**Impacto**: cosmético; el cliente ve un flash blanco brevísimo entre el icono
+del launcher y el splash configurado.
+**Esfuerzo**: medio. Requiere generar el splash native desde el icono/imagen
+configurada y configurar `colors.xml`/`styles.xml` Android. Capacitor tiene
+plugin `@capacitor/splash-screen` con configuración `androidSplashResourceName`.
+**Prioridad**: baja.
+
+### #15 — Backend valida `slides.length <= 10`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H19.
+**Descripción**: El frontend (`OnboardingTab.tsx`) limita a 5 slides máximo,
+pero `UpdateAppConfigDto` no valida el array. Un curl puede guardar 50 slides;
+no rompe nada pero es inconsistencia.
+**Impacto**: defensa en profundidad ausente. Cliente malicioso o bug en frontend
+podría inflar `appConfig` JSON.
+**Esfuerzo**: trivial. `@ArrayMaxSize(10)` en el DTO.
+**Prioridad**: baja.
+
+### #16 — Forzar INTERNET y ACCESS_NETWORK_STATE desde backend
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H20.
+**Descripción**: El frontend marca `INTERNET` y `ACCESS_NETWORK_STATE` como
+`alwaysOn`, pero el backend no los fuerza. Hoy funciona porque la plantilla
+Capacitor base ya los incluye en `AndroidManifest.xml`, pero depender de la
+plantilla externa es frágil.
+**Impacto**: si Capacitor cambia su plantilla en una versión futura, las apps
+generadas pueden salir sin INTERNET y crashear.
+**Esfuerzo**: trivial. Añadir ambos al merge en `build.processor.ts` siempre.
+**Prioridad**: media.
+
+### #17 — Input editable para `CFBundleDisplayName` independiente de appName
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H21.
+**Descripción**: Hoy el nombre que aparece bajo el icono en iOS es el `appName`
+del builder. Algunos clientes querrán "MiApp" en stores y "App de Juan" bajo el
+icono — son dos campos distintos en iOS.
+**Impacto**: restricción de UX, no bug.
+**Esfuerzo**: bajo. Campo nuevo en `appConfig.iosConfig.displayName`, inyectar
+en `Info.plist` vía `plist.build()` (commit 2 del PR de hoy ya parsea el plist).
+**Prioridad**: baja.
+
+### #18 — Filtrar `iosPermissions`/`androidConfig`/`androidPermissions` del manifest PWA
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H16.
+**Descripción**: El `app-manifest.json` que se sirve a la PWA contiene campos
+irrelevantes para PWA (permisos nativos, packageName Android). No rompe nada
+pero infla el JSON inicial y filtra detalles de configuración nativa al cliente
+web.
+**Impacto**: ~2KB de JSON innecesario en cada carga de PWA.
+**Esfuerzo**: trivial. Whitelist de campos en `buildPwa()`.
+**Prioridad**: baja.
+
+### #19 — Escape completo de `app.name` al inyectar en `capacitor.config.ts`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H17.
+**Descripción**: Hoy solo se escapa `'` con `replace(/'/g, "\\'")`. Caracteres
+como backtick, `${`, newlines o `\` rompen la generación del template literal.
+**Impacto**: cliente con nombre `My ${cool} App` rompe el build silenciosamente.
+**Esfuerzo**: trivial. Función `escapeJsTemplateString(str)` que cubra `'`, `` ` ``,
+`\\`, `${`, `\n`, `\r`.
+**Prioridad**: media (es una superficie de "configuración del cliente puede
+romper builds que no se esperan").
+
+### #20 — Versionar `terms.content` con hash e invalidar `localStorage`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H15.
+**Descripción**: Cuando el cliente actualiza los términos, los end-users que
+ya los aceptaron no vuelven a ser preguntados (la flag `appforge_terms_accepted`
+en `localStorage` no se invalida).
+**Impacto**: legal — un cambio sustantivo en términos no obtiene nuevo
+consentimiento del usuario.
+**Esfuerzo**: medio. Calcular `terms.versionHash = sha256(content)` server-side
+en `apps.service.updateConfig`, exponer en manifest, runtime compara hash
+guardado en `localStorage` con el del manifest y re-pide si difiere.
+**Prioridad**: media (sube a alta antes de aceptar primer cliente real).
+
+### #21 — Endpoint `/upload/splash-image` con límite 5MB y validación de dimensiones
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H12.
+**Descripción**: `splash.backgroundImageUrl` y `splash.logoUrl` se suben por
+`POST /upload/image` que acepta hasta 100MB. Una imagen splash de 50MB carga
+al runtime y bloquea el WebView en arranque.
+**Impacto**: cliente malicioso o ingenuo puede degradar performance de su
+propia app a niveles inusables.
+**Esfuerzo**: bajo. Endpoint nuevo análogo a `/upload/app-icon` con límite
+5MB y validación de dimensiones recomendadas (1080×1920 portrait).
+**Prioridad**: media.
+
+### #22 — Endpoint `PATCH /apps/:id` con `name` editable
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H10.
+**Descripción**: Hoy el `app.name` solo se puede establecer al crear la app
+(`POST /apps`). No hay forma de renombrar después. El `slug` debe seguir
+inmutable (entra a `pwaUrl`, rutas), pero el `name` no tiene esa restricción.
+**Impacto**: restricción de UX innecesaria.
+**Esfuerzo**: bajo. Endpoint nuevo con DTO `UpdateAppDto { @IsString @MaxLength(60) name }`.
+**Prioridad**: media.
+
+### #23 — Tab "Identidad" del builder inconsistente con su label
+**Estado**: OPEN (consume #22)
+**Origen**: Auditoría 2026-05-07, hallazgo H11.
+**Descripción**: El tab "Identidad" del modal de configuración solo contiene el
+icono. El nombre y la descripción de la app no están ahí (el nombre se fija en
+creación; la descripción no existe como campo).
+**Impacto**: el cliente busca dónde editar el nombre y no lo encuentra.
+**Esfuerzo**: bajo, depende de #22. Una vez resuelto #22, ampliar el tab con
+`name` editable; opcionalmente `description` (campo nuevo en `appConfig`).
+**Prioridad**: media.
+
+### #24 — Sanitización HTML server-side al guardar `terms.content`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H9.
+**Descripción**: `apps.service.updateConfig` guarda el HTML del editor Quill
+sin sanitizar. El runtime sanitiza al renderizar (DOMPurify), pero la defensa
+en profundidad pide sanitizar también server-side. La utilidad ya existe
+(`lib/sanitize-html.ts`) y se aplica en `news.service.ts`.
+**Impacto**: si en el futuro el HTML de `terms.content` se renderiza en otro
+contexto sin DOMPurify (admin panel preview, exportación, email), es vector XSS.
+**Esfuerzo**: trivial. Una llamada en `updateConfig` antes del merge.
+**Prioridad**: media.
+
+### #25 — Separar `terms.content` de `privacyPolicyUrl`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgo H8.
+**Descripción**: Stores exigen URL pública separada de Política de Privacidad.
+Hoy el tab "Legal" unifica todo en un único blob HTML (`terms.content`).
+Play Console y App Store Connect piden la URL en su consola.
+**Impacto**: bloqueante para submission a stores cuando llegue ese momento.
+Workaround actual: el cliente puede meter un link a su privacy externa dentro
+del HTML, pero la URL pura es lo que las consolas piden.
+**Esfuerzo**: medio. Campo nuevo `appConfig.privacyPolicyUrl: string` (URL
+validada), tab Legal con dos secciones.
+**Prioridad**: alta antes de submission a stores.
+
+### #26 — Validación de dimensiones de icono robusta + chequeo server-side
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-07, hallazgos H1+H2 del icono (no confundir con
+H1+H2 globales de la auditoría — son los sub-puntos del icono dentro de la
+sección 1 "Identidad").
+**Descripción**: PR-2 (commit `6bd708f`) arregló la closure stale del state
+en frontend. Pero el backend sigue sin validar dimensiones — solo verifica
+PNG + 5MB. Un curl puede subir un PNG de 64×64 y se acepta, sharp lo escala
+arriba con calidad mala al inyectarlo en `mipmap-*`.
+**Impacto**: APKs con icono de baja calidad si el cliente sube por API directa.
+**Esfuerzo**: bajo. `sharp(file).metadata()` en `upload.controller.ts:uploadAppIcon`
+y rechazar si `width !== 1024 || height !== 1024`.
+**Prioridad**: baja.
+
+### #27 — Auditoría DTO completa + flip `forbidNonWhitelisted: true`
+**Estado**: OPEN HIGH PRIORITY
+**Origen**: Auditoría 2026-05-07, decisión #5 del plan H1-H5.
+**Descripción**: PR `c626fef` activó `useGlobalPipes` con `whitelist: true,
+forbidNonWhitelisted: false, transform: true`. El `forbidNonWhitelisted: false`
+es deliberado: rompería los ~28 controllers del backend si alguno tiene
+`@Body() body: SomeInterface` (interfaces no llevan metadata) o un DTO al que
+le falta declarar un campo opcional que el frontend ya envía. Hoy los campos
+desconocidos se descartan silenciosamente; en el futuro queremos rechazo
+explícito con 400.
+**Impacto**: defensa en profundidad parcial. Validadores `@Matches` y
+`@IsString` SÍ se ejecutan donde están declarados, pero no se rechaza ruido
+del frontend o de clientes maliciosos.
+**Esfuerzo**: alto. Auditar uno por uno los controllers de: `auth`, `news`,
+`events`, `booking`, `catalog`, `orders`, `push`, `social-wall`, `fan-wall`,
+`loyalty`, `contact`, `coupons`, `analytics`, `app-users`, `gallery`, `menu`,
+`platform`, `stripe`, `subscription`, `tenants`, `upload`, `users`, `admin`.
+Cada controller debe usar DTO real con decoradores. Tras migrar todos,
+flippear el flag a `true`.
+**Esfuerzo estimado**: 8-12 horas distribuidas en sprints temáticos
+(auth + users primero, después módulos de contenido, después admin/platform).
+**Prioridad**: alta antes de aceptar primer cliente real.
+
+### #28 — `npm install` en VPS toca `package-lock.json` (`hasInstallScript: true`)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-07, observado durante deploy del PR-2.
+**Descripción**: Cuando el VPS hace `npm install` (necesario en deploys que
+añaden dependencias), npm añade la línea `"hasInstallScript": true` al
+lockfile del builder porque el `package.json` tiene hooks (`postinstall`/
+`predev`/`prebuild` para `copy-shared.mjs`). El lockfile commiteado no tiene
+esa línea porque quien lo generó usó una versión de npm que no la calcula.
+**Impacto**: cada deploy con `npm install` deja el working tree dirty;
+hay que `git checkout --` el lockfile antes de cada `git pull`.
+**Esfuerzo**: trivial. Dos opciones:
+  (a) regenerar el lockfile commiteado con `npm install --package-lock-only`
+      desde un entorno con npm reciente y commitear la línea correcta;
+  (b) cambiar la secuencia de deploy en VPS de `npm install` a `npm ci` —
+      `npm ci` respeta el lockfile sin modificarlo y es más rápido.
+Recomendación: ambas. (a) elimina el ruido inicial; (b) previene futuras
+divergencias.
+**Prioridad**: baja (operacional, no afecta producción).
