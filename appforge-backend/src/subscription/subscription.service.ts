@@ -108,10 +108,14 @@ export class SubscriptionService {
       },
     });
 
-    // Storage: sum artifactSize of all completed builds for this tenant
+    // Storage: sum artifactSize of all completed builds for this tenant.
+    // Soft-deleted apps are excluded — once the merchant deletes an app,
+    // those bytes stop counting against the plan's storage cap. The slot
+    // can stay occupied (keystore rule) but the storage is a separate
+    // resource that does free up.
     const storageResult = await this.prisma.appBuild.aggregate({
       where: {
-        app: { tenantId },
+        app: { tenantId, deletedAt: null },
         status: 'COMPLETED',
         artifactSize: { not: null },
       },
@@ -234,10 +238,12 @@ export class SubscriptionService {
       };
     }
 
-    // Check storage limit
+    // Check storage limit — exclude soft-deleted apps, paralleling getTenantUsage.
+    // The merchant should not be blocked from a new build because of bytes from
+    // an app they have already deleted.
     const storageResult = await this.prisma.appBuild.aggregate({
       where: {
-        app: { tenantId },
+        app: { tenantId, deletedAt: null },
         status: 'COMPLETED',
         artifactSize: { not: null },
       },
