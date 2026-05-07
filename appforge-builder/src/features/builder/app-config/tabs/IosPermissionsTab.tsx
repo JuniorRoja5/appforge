@@ -2,78 +2,32 @@ import React from 'react';
 import { useAppConfigStore } from '../../../../store/useAppConfigStore';
 import { useBuilderStore } from '../../../../store/useBuilderStore';
 import { Wand2 } from 'lucide-react';
+import modulePermissions from '../../../../lib/module-permissions.json';
 
-/** Maps moduleId → iOS permission keys that module requires */
-const MODULE_IOS_PERMISSION_MAP: Record<string, string[]> = {
-  photo_gallery: ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription', 'NSPhotoLibraryAddUsageDescription'],
-  social_wall: ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription'],
-  fan_wall: ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription'],
-  contact: ['NSLocationWhenInUseUsageDescription'],
-  events: ['NSCalendarsUsageDescription'],
-  push_notification: [], // iOS handles push permissions at runtime, not in Info.plist
-  loyalty_card: ['NSCameraUsageDescription'], // QR scanning
-  discount_coupon: ['NSCameraUsageDescription'],
-  user_profile: ['NSFaceIDUsageDescription'],
-  booking: ['NSLocationWhenInUseUsageDescription'],
-};
+/** Maps moduleId → iOS permission keys that module requires.
+ *  Single source of truth: appforge-backend/src/build/module-permissions.json
+ *  (mirrored here by appforge-builder/scripts/copy-shared.mjs on prebuild/predev). */
+const MODULE_IOS_PERMISSION_MAP = modulePermissions.ios as Record<string, string[]>;
+
+const iosDescriptions = modulePermissions.iosDescriptions as Record<string, string>;
 
 const IOS_PERMISSIONS = [
-  {
-    key: 'NSCameraUsageDescription',
-    label: 'Cámara',
-    defaultText: '#APP_NAME necesita acceder a tu cámara para tomar fotos y videos.',
-  },
-  {
-    key: 'NSPhotoLibraryUsageDescription',
-    label: 'Galería de fotos',
-    defaultText: '#APP_NAME necesita acceder a tu galería para seleccionar imágenes.',
-  },
-  {
-    key: 'NSPhotoLibraryAddUsageDescription',
-    label: 'Guardar en galería',
-    defaultText: '#APP_NAME necesita permiso para guardar imágenes en tu galería.',
-  },
-  {
-    key: 'NSLocationWhenInUseUsageDescription',
-    label: 'Ubicación (en uso)',
-    defaultText: '#APP_NAME necesita tu ubicación para mostrarte contenido relevante cerca de ti.',
-  },
-  {
-    key: 'NSLocationAlwaysAndWhenInUseUsageDescription',
-    label: 'Ubicación (siempre)',
-    defaultText: '#APP_NAME necesita acceder a tu ubicación en segundo plano para enviarte notificaciones basadas en tu proximidad.',
-  },
-  {
-    key: 'NSMicrophoneUsageDescription',
-    label: 'Micrófono',
-    defaultText: '#APP_NAME necesita acceder a tu micrófono para grabar audio.',
-  },
-  {
-    key: 'NSContactsUsageDescription',
-    label: 'Contactos',
-    defaultText: '#APP_NAME necesita acceder a tus contactos para facilitar el envío de invitaciones.',
-  },
-  {
-    key: 'NSCalendarsUsageDescription',
-    label: 'Calendarios',
-    defaultText: '#APP_NAME necesita acceder a tu calendario para agregar eventos.',
-  },
-  {
-    key: 'NSFaceIDUsageDescription',
-    label: 'Face ID',
-    defaultText: '#APP_NAME utiliza Face ID para autenticación segura.',
-  },
-  {
-    key: 'NSBluetoothAlwaysUsageDescription',
-    label: 'Bluetooth',
-    defaultText: '#APP_NAME necesita acceder a Bluetooth para conectarse con dispositivos cercanos.',
-  },
-  {
-    key: 'NSMotionUsageDescription',
-    label: 'Sensores de movimiento',
-    defaultText: '#APP_NAME necesita acceder a los sensores de movimiento para funcionalidades de actividad física.',
-  },
-];
+  { key: 'NSCameraUsageDescription',                       label: 'Cámara' },
+  { key: 'NSPhotoLibraryUsageDescription',                 label: 'Galería de fotos' },
+  { key: 'NSPhotoLibraryAddUsageDescription',              label: 'Guardar en galería' },
+  { key: 'NSLocationWhenInUseUsageDescription',            label: 'Ubicación (en uso)' },
+  { key: 'NSLocationAlwaysAndWhenInUseUsageDescription',   label: 'Ubicación (siempre)' },
+  { key: 'NSMicrophoneUsageDescription',                   label: 'Micrófono' },
+  { key: 'NSContactsUsageDescription',                     label: 'Contactos' },
+  { key: 'NSCalendarsUsageDescription',                    label: 'Calendarios' },
+  { key: 'NSFaceIDUsageDescription',                       label: 'Face ID' },
+  { key: 'NSBluetoothAlwaysUsageDescription',              label: 'Bluetooth' },
+  { key: 'NSMotionUsageDescription',                       label: 'Sensores de movimiento' },
+].map((p) => ({
+  ...p,
+  // defaultText is read from the shared JSON to avoid a second source of truth.
+  defaultText: iosDescriptions[p.key] ?? '',
+}));
 
 /** Analyzes canvas modules and suggests iOS permissions with default texts */
 const IosAutoDetectButton: React.FC<{

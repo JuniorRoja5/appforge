@@ -12,6 +12,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import { spawn } from 'child_process';
 import * as plist from 'plist';
+import modulePermissions from './module-permissions.json';
 
 const RUNTIME_TEMPLATE_DIR = path.resolve(
   process.cwd(),
@@ -272,7 +273,6 @@ export default config;
     includePushPlugin: boolean,
   ) {
     const schema = Array.isArray(app.schema) ? (app.schema as any[]) : [];
-    const hasPushModule = schema.some((el: any) => el.moduleId === 'push_notification');
     let fcmInjected = false;
 
     // Add Android platform
@@ -329,17 +329,19 @@ export default config;
       log('Firebase Gradle plugin injected');
     }
 
-    // Inject permissions
-    const androidPermissions = (appConfig.androidPermissions as Record<string, boolean>) ?? {};
-    if (hasPushModule) {
-      androidPermissions['POST_NOTIFICATIONS'] = true;
-    }
-    // Auto-enable CAMERA + storage for modules with image upload
-    const uploadModules = ['fan_wall', 'social_wall', 'user_profile'];
-    const hasUploadModule = schema.some((el: any) => uploadModules.includes(el.moduleId));
-    if (hasUploadModule) {
-      androidPermissions['CAMERA'] = true;
-      androidPermissions['READ_MEDIA_IMAGES'] = true;
+    // Inject permissions — union of explicit appConfig + module-implied
+    // (single source of truth: appforge-backend/src/build/module-permissions.json,
+    // mirrored in appforge-builder/src/lib/ via copy-shared.mjs)
+    const moduleIds: string[] = schema.map((el: any) => el.moduleId);
+
+    const androidPermissions: Record<string, boolean> = {
+      ...((appConfig.androidPermissions as Record<string, boolean>) ?? {}),
+    };
+    for (const moduleId of moduleIds) {
+      const required = (modulePermissions.android as Record<string, string[]>)[moduleId] ?? [];
+      for (const perm of required) {
+        androidPermissions[perm] = true;
+      }
     }
     await this.injectAndroidPermissions(buildDir, androidPermissions);
     log('Android permissions injected');
@@ -473,8 +475,24 @@ export default config;
     await this.exec('npx cap sync ios', buildDir);
     log('iOS sync complete');
 
-    // Inject iOS permissions
-    const iosPermissions = (appConfig.iosPermissions as Record<string, string>) ?? {};
+    // Inject iOS permissions — explicit descriptions WIN; module-required keys
+    // missing an explicit description fall back to iosDescriptions defaults.
+    // The #APP_NAME placeholder is resolved inside injectIosPermissions.
+    const iosSchema = Array.isArray(app.schema) ? (app.schema as any[]) : [];
+    const iosModuleIds: string[] = iosSchema.map((el: any) => el.moduleId);
+    const iosPermissions: Record<string, string> = {
+      ...((appConfig.iosPermissions as Record<string, string>) ?? {}),
+    };
+    for (const moduleId of iosModuleIds) {
+      const requiredKeys =
+        (modulePermissions.ios as Record<string, string[]>)[moduleId] ?? [];
+      for (const key of requiredKeys) {
+        if (!iosPermissions[key]?.trim()) {
+          const fallback = (modulePermissions.iosDescriptions as Record<string, string>)[key];
+          if (fallback) iosPermissions[key] = fallback;
+        }
+      }
+    }
     await this.injectIosPermissions(buildDir, iosPermissions, app.name);
     log('iOS permissions injected');
 

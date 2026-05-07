@@ -2,21 +2,12 @@ import React, { useMemo } from 'react';
 import { useAppConfigStore } from '../../../../store/useAppConfigStore';
 import { useBuilderStore } from '../../../../store/useBuilderStore';
 import { Wand2 } from 'lucide-react';
+import modulePermissions from '../../../../lib/module-permissions.json';
 
-/** Maps moduleId → Android permissions that module requires */
-const MODULE_PERMISSION_MAP: Record<string, string[]> = {
-  photo_gallery: ['CAMERA', 'READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO'],
-  social_wall: ['CAMERA', 'READ_MEDIA_IMAGES'],
-  fan_wall: ['CAMERA', 'READ_MEDIA_IMAGES'],
-  contact: ['ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
-  booking: ['VIBRATE'],
-  events: ['WRITE_CALENDAR', 'READ_CALENDAR'],
-  push_notification: ['POST_NOTIFICATIONS', 'VIBRATE', 'RECEIVE_BOOT_COMPLETED'],
-  loyalty_card: ['CAMERA'], // QR scanning
-  catalog: ['VIBRATE'], // order notifications
-  discount_coupon: ['CAMERA'], // QR scanning
-  user_profile: ['USE_BIOMETRIC'],
-};
+/** Maps moduleId → Android permissions that module requires.
+ *  Single source of truth: appforge-backend/src/build/module-permissions.json
+ *  (mirrored here by appforge-builder/scripts/copy-shared.mjs on prebuild/predev). */
+const MODULE_PERMISSION_MAP = modulePermissions.android as Record<string, string[]>;
 
 // Common Android permissions with descriptions
 const ANDROID_PERMISSIONS = [

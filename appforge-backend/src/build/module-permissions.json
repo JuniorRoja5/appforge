@@ -1,0 +1,40 @@
+{
+  "android": {
+    "photo_gallery":     ["CAMERA", "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO"],
+    "social_wall":       ["CAMERA", "READ_MEDIA_IMAGES"],
+    "fan_wall":          ["CAMERA", "READ_MEDIA_IMAGES"],
+    "contact":           ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+    "booking":           ["VIBRATE"],
+    "events":            ["WRITE_CALENDAR", "READ_CALENDAR"],
+    "push_notification": ["POST_NOTIFICATIONS", "VIBRATE", "RECEIVE_BOOT_COMPLETED"],
+    "loyalty_card":      ["CAMERA"],
+    "catalog":           ["VIBRATE"],
+    "discount_coupon":   ["CAMERA"],
+    "user_profile":      ["USE_BIOMETRIC"]
+  },
+  "ios": {
+    "photo_gallery":     ["NSCameraUsageDescription", "NSPhotoLibraryUsageDescription", "NSPhotoLibraryAddUsageDescription"],
+    "social_wall":       ["NSCameraUsageDescription", "NSPhotoLibraryUsageDescription"],
+    "fan_wall":          ["NSCameraUsageDescription", "NSPhotoLibraryUsageDescription"],
+    "contact":           ["NSLocationWhenInUseUsageDescription"],
+    "events":            ["NSCalendarsUsageDescription"],
+    "push_notification": [],
+    "loyalty_card":      ["NSCameraUsageDescription"],
+    "discount_coupon":   ["NSCameraUsageDescription"],
+    "user_profile":      ["NSFaceIDUsageDescription"],
+    "booking":           ["NSLocationWhenInUseUsageDescription"]
+  },
+  "iosDescriptions": {
+    "NSCameraUsageDescription":               "#APP_NAME necesita acceder a tu cámara para tomar fotos y videos.",
+    "NSPhotoLibraryUsageDescription":         "#APP_NAME necesita acceder a tu galería para seleccionar imágenes.",
+    "NSPhotoLibraryAddUsageDescription":      "#APP_NAME necesita permiso para guardar imágenes en tu galería.",
+    "NSLocationWhenInUseUsageDescription":    "#APP_NAME necesita tu ubicación para mostrarte contenido relevante cerca de ti.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "#APP_NAME necesita acceder a tu ubicación en segundo plano para enviarte notificaciones basadas en tu proximidad.",
+    "NSMicrophoneUsageDescription":           "#APP_NAME necesita acceder a tu micrófono para grabar audio.",
+    "NSContactsUsageDescription":             "#APP_NAME necesita acceder a tus contactos para facilitar el envío de invitaciones.",
+    "NSCalendarsUsageDescription":            "#APP_NAME necesita acceder a tu calendario para agregar eventos.",
+    "NSFaceIDUsageDescription":               "#APP_NAME utiliza Face ID para autenticación segura.",
+    "NSBluetoothAlwaysUsageDescription":      "#APP_NAME necesita acceder a Bluetooth para conectarse con dispositivos cercanos.",
+    "NSMotionUsageDescription":               "#APP_NAME necesita acceder a los sensores de movimiento para funcionalidades de actividad física."
+  }
+}
