@@ -151,11 +151,18 @@ const PreviewComponent: React.FC<{ data: SocialWallConfig; isSelected: boolean }
       )}
 
       <div
-        className={`flex-1 overflow-hidden ${
+        className={`flex-1 overflow-y-auto relative ${
           layout === 'compact' ? '' : isFullWidth ? 'px-0 py-1' : 'p-2'
         } ${layout === 'cards' ? 'space-y-3' : layout === 'compact' ? '' : 'space-y-2'}`}
         style={{ backgroundColor: data.backgroundColor || '#f9fafb' }}
       >
+        {/* Banda informativa: aclara que el contenido es generado por end-users */}
+        <div className="sticky top-1.5 mx-1.5 z-10 bg-white/85 backdrop-blur-[2px] border border-gray-200 rounded-md px-2 py-1.5 shadow-sm mb-1.5">
+          <p className="text-[9px] text-gray-700 leading-tight text-center">
+            <span className="font-semibold">Vista previa.</span> Los usuarios de tu app publicarán aquí.
+          </p>
+        </div>
+
         {MOCK_POSTS.map(renderPost)}
       </div>
     </div>
