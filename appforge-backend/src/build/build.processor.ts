@@ -416,13 +416,18 @@ export default config;
     // If upload had failed, the exception would skip this block entirely,
     // preventing versionCode gaps that cause Play Store rejections.
     const appUpdateData: Record<string, unknown> = {
-      status: 'PUBLISHED',
       needsRebuild: false,
       lastBuiltSchema: app.schema as any,
       lastBuiltAt: new Date(),
     };
 
+    // Only RELEASE/AAB transition the app to PUBLISHED — those are the
+    // signed builds destined for stores. DEBUG / PWA / IOS_EXPORT are
+    // intermediate artifacts (preview, side-load, manual signing) and
+    // must not flip the published flag the merchant sees in the UI.
     if (buildType === BuildType.RELEASE || buildType === BuildType.AAB) {
+      appUpdateData.status = 'PUBLISHED';
+
       const currentAppConfig = (app.appConfig as Record<string, unknown>) ?? {};
       const currentAndroidConfig = (currentAppConfig.androidConfig as Record<string, unknown>) ?? {};
       const currentVersionCode = (currentAndroidConfig.versionCode as number) ?? 1;
