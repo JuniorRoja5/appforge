@@ -1,4 +1,7 @@
-import { Matches, ValidateNested, IsOptional, IsString, IsNumber, IsObject } from 'class-validator';
+import {
+  Matches, ValidateNested, IsOptional, IsString, IsNumber, IsObject,
+  IsNotEmpty, IsInt, Min, Max, IsBoolean, IsEmail, MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // SECURITY: Strict regex to prevent template injection in Capacitor config.
@@ -66,11 +69,28 @@ export class UpdateAppConfigDto {
 }
 
 export class UpdateSmtpConfigDto {
+  @IsString() @IsNotEmpty() @MaxLength(255)
   host: string;
+
+  @IsInt() @Min(1) @Max(65535)
   port: number;
+
+  @IsBoolean()
   secure: boolean;
+
+  @IsString() @MaxLength(255)
   username: string;
-  password: string;
+
+  // Optional + nullable: empty value means "preserve existing encrypted password"
+  // (apps.service.updateSmtp:162-174 reads from DB when !dto.password). @IsNotEmpty
+  // would 400 the legitimate UI flow where the placeholder reads "Ya hay una
+  // contraseña guardada. Deja vacío para mantenerla." in SmtpTab.tsx.
+  @IsOptional() @IsString() @MaxLength(255)
+  password?: string;
+
+  @IsEmail() @MaxLength(320)
   fromEmail: string;
+
+  @IsString() @MaxLength(255)
   fromName: string;
 }
