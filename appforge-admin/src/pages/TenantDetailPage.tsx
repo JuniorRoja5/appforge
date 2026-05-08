@@ -23,6 +23,7 @@ export const TenantDetailPage: React.FC = () => {
   const [confirmAction, setConfirmAction] = useState<'suspend' | 'reactivate' | 'delete' | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<PlanType | null>(null);
 
   const fetchTenant = async () => {
     if (!id) return;
@@ -69,16 +70,29 @@ export const TenantDetailPage: React.FC = () => {
     }
   };
 
-  const handlePlanChange = async (planType: PlanType) => {
+  // Open confirm dialog instead of changing immediately. The <select>'s
+  // onChange now only stages the choice; the actual mutation runs after
+  // the user confirms.
+  const handlePlanChange = (planType: PlanType) => {
     if (!id) return;
+    if (planType === tenant?.subscription?.plan?.planType) return; // no-op
+    setPendingPlan(planType);
+  };
+
+  const confirmPlanChange = async () => {
+    if (!id || !pendingPlan) return;
     setChangingPlan(true);
     try {
-      await changeTenantPlan(token, id, planType);
+      await changeTenantPlan(token, id, pendingPlan);
       await fetchTenant();
+      // Sin toast.success aquí: la decisión del PR es "solo errores".
+      // Toast de éxito en operaciones críticas (plan / suspend / delete /
+      // reactivate) queda para TECH_DEBT #33, aplicado uniformemente a las 4.
     } catch (err: any) {
       toast.error(err?.message ?? 'Error al cambiar plan');
     } finally {
       setChangingPlan(false);
+      setPendingPlan(null);
     }
   };
 
@@ -338,6 +352,16 @@ export const TenantDetailPage: React.FC = () => {
         onConfirm={handleDelete}
         onCancel={() => setConfirmAction(null)}
         loading={actionLoading}
+      />
+      <ConfirmDialog
+        open={pendingPlan !== null}
+        title="Cambiar plan del tenant"
+        message={`Cambiar de ${tenant.subscription?.plan?.planType ?? 'sin plan'} a ${pendingPlan}.\n\nAfectará los límites de apps, builds y storage del tenant. ¿Continuar?`}
+        confirmLabel="Cambiar plan"
+        variant="warning"
+        onConfirm={confirmPlanChange}
+        onCancel={() => setPendingPlan(null)}
+        loading={changingPlan}
       />
     </div>
   );
