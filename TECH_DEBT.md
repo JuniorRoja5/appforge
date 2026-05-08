@@ -582,3 +582,112 @@ en builder admin (su `TenantApp` interface declara solo lo que ya recibe).
 `include` y mappear en la respuesta a `hasKeystore: !!keystore` para cada
 app del array.
 **Prioridad**: baja, sube a media cuando se aborde #29 (es prerequisito).
+
+---
+
+## Sesión 2026-05-08 — Auditoría panel admin Fase 1 (cierre Bug #4, #5, #7, #8)
+
+PR `3f0faf6..ef12f9d` (5 commits) cierra los 4 bugs reales detectados en la
+auditoría del panel admin. Bug #6 (JWT no invalidado al suspender) descartado
+como falso positivo: `jwt.strategy.ts:24-46` ya implementa DB lookup + check
+de `User.status` y `Tenant.status` en cada request. Seis pendientes derivados:
+
+### #32 — Borrar `customer` en Stripe + webhook `customer.deleted`
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08, derivado del fix Bug #7 (commit `ef12f9d`).
+**Descripción**: `deleteTenant` ahora cancela la `subscription` en Stripe
+inmediatamente, pero NO borra el `customer`. Decisión consciente: conservar
+histórico de facturación. Resultado: el customer queda en Stripe con
+`subscription` en estado `canceled`. Si en el futuro quieres limpieza total
+del lado Stripe, hay que añadir `stripe.customers.del(customerId)` tras la
+cancelación + handler para webhook `customer.deleted` (hoy NO se procesa,
+ver `stripe.service.ts:116-118` que solo maneja `customer.subscription.deleted`
+y `payment_failed`).
+**Impacto**: invisible para el cliente (no afecta su plan ni su facturación).
+Acumulación silenciosa de "customers cancelados" en el dashboard de Stripe.
+Para auditoría fiscal, mantenerlos es correcto; para limpieza operativa, no.
+**Esfuerzo**: bajo. Después del `cancelSubscription` immediate, añadir el
+`stripe.customers.del`. El handler de webhook se añade aparte.
+**Prioridad**: baja. Activar cuando el dashboard de Stripe acumule >50
+customers cancelados o cuando legal pida purga.
+
+### #33 — Toast de éxito en operaciones críticas del admin
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08, derivado del fix Bug #4 (commit `0f0c8b6`)
+y Bug #8 (commit `d945537`).
+**Descripción**: El PR de hoy estableció `toast.error(err.message)` en cada
+catch del admin. Se decidió conscientemente NO añadir `toast.success` para
+mantener el scope acotado a "solo errores". Pero las 4 operaciones críticas
+del `TenantDetailPage` (suspend, reactivate, delete, change plan) siguen sin
+feedback de éxito — el usuario hace una acción crítica y la única señal de
+que pasó es que el `<select>` o el badge cambian. Para operaciones
+destructivas como `delete`, esto es ambiguo si la página redirige rápidamente.
+**Impacto**: UX inconsistente. El usuario duda si la operación pasó.
+**Esfuerzo**: trivial. `toast.success(message)` después de cada
+`fetchTenant()` o `navigate(...)` exitoso. Aplicar a las 4 acciones a la vez
+para no crear comportamiento heterogéneo.
+**Prioridad**: media. El sistema de toasts ya está montado; solo es completar
+el patrón.
+
+### #34 — Paginación de builds en `getTenantDetail`
+**Estado**: OPEN
+**Origen**: Auditoría 2026-05-08, hallazgo Bug #14 reportado pero out-of-scope
+del PR de Fase 1.
+**Descripción**: `admin.service.ts:getTenantDetail` línea 134 hace
+`apps: { include: { builds: { take: 5, orderBy: ... } } }`. Cada app en la
+respuesta trae solo sus 5 builds más recientes. Si una app tiene historial
+largo (50+ builds), el tab "Builds recientes" del frontend solo ve los
+últimos 5 — sin forma de paginación.
+**Impacto**: limitación de visibilidad para super-admin que quiere auditar
+historial completo de builds de un tenant.
+**Esfuerzo**: medio. Mantener `take: 5` para vista rápida en `getTenantDetail`
++ añadir endpoint dedicado `GET /admin/tenants/:id/builds?page=N&limit=20`.
+UI: link "Ver todos los builds" en el tab que abre la lista paginada.
+**Prioridad**: baja. Solo molesta a super-admin con clientes pesados.
+
+### #35 — Variante Bug #5: dos listas separadas (active + deletedWithKeystore)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08, variante del fix Bug #5 (commit `3f0faf6`).
+**Descripción**: El fix mínimo del PR filtra apps soft-deleted del
+`getTenantDetail`. Pero hay un caso intermedio que se vuelve invisible:
+apps borradas-con-keystore (que siguen ocupando slot del plan, regla
+introducida en commit `6a6e99a`). El admin no las ve aunque el `usage`
+las cuente — descuadre opuesto al original. Solución más informativa:
+devolver `apps` separado en `activeApps` (visibles en el tab) y
+`deletedAppsWithKeystore` (con badge gris "Slot ocupado por firma de
+stores").
+**Impacto**: en Fase 2 cuando se aborde #29 (endpoint abandonar keystore),
+el admin necesitará ver qué apps borradas-con-keystore puede abandonar.
+**Esfuerzo**: medio. Cambio de tipo en `TenantApp` interface + nueva UI
+de badges. Bloquea cuando se construya la UI de #29.
+**Prioridad**: baja, sube a media cuando #29 se planifique.
+
+### #36 — Test unitario para `deleteTenant` con mock de Stripe
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08, derivado del fix Bug #7 (commit `ef12f9d`).
+**Descripción**: La nueva lógica de `deleteTenant` tiene 4 escenarios
+distintos (sin `stripeCustomerId`, con customer pero sin subscription,
+con ambos happy path, Stripe falla). Solo el primero es smoke-testeable
+hoy en producción (los 3 tenants no tienen Stripe). Un test unitario que
+mockee `stripeService.cancelSubscription` y verifique los 4 caminos vale
+~30 líneas de Jest y previene regresiones futuras del fallback silencioso.
+**Impacto**: defensa contra regresiones cuando se refactore el flujo
+delete-tenant en el futuro (especialmente si llega #29 y se entrelaza con
+keystores).
+**Esfuerzo**: bajo, ~30 líneas. Stripe mockeable con el mismo patrón que
+ya usan otros tests del backend.
+**Prioridad**: media. No bloqueante para producción pero accesible.
+
+### #37 — Refactor de `cancelSubscription`: separar Stripe API de update BD
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08, derivado del fix Bug #7 (commit `ef12f9d`).
+**Descripción**: La firma actual `cancelSubscription(tenantId, options)`
+con flag `skipBdUpdate` resuelve el caso `deleteTenant` pragmáticamente,
+pero acopla dos responsabilidades en un mismo método (Stripe call + Prisma
+update). Cuando el método tenga 3+ call sites, conviene separarlas:
+`cancelStripeSubscription(tenantId, immediate)` solo toca Stripe;
+quien le llama hace su propio `prisma.subscription.update` si lo necesita.
+**Impacto**: deuda de diseño, no bug. La solución actual funciona.
+**Esfuerzo**: medio. Refactor controlado con tests del portal flow.
+**Prioridad**: baja. Activar cuando llegue el tercer call site
+(probablemente la próxima vez que se toque el flujo de billing).
