@@ -778,3 +778,67 @@ que comparte filosofía pero NO sustituye a este — son tablas distintas
 porque las semánticas son distintas.
 **Prioridad**: alta antes de aceptar primer cliente real (cumplimiento
 + defensa en disputas).
+
+---
+
+## Sesión 2026-05-08 (PR-C cierre) — Riesgos de impersonación post-deploy
+
+PR-C (commits `c61839f..1a4e40e`) implementa la impersonación con
+`ImpersonationLog`. Dos riesgos de seguridad operativa quedan abiertos
+y aceptados conscientemente, NO como "mejoras futuras" sino como
+posición de seguridad documentada.
+
+### #43 — TTL configurable + revocación server-side de impersonación
+**Estado**: OPEN HIGH PRIORITY (riesgo de seguridad operativa)
+**Origen**: Sesión 2026-05-08 PM, PR-C commit `fda7df0`.
+**Descripción**: el TTL del JWT impersonado está hardcoded a `1h` en
+`auth.service.ts:74` (`expiresIn: '1h'`). Sin kill switch server-side:
+- Si el super-admin descubre que su token está comprometido a mitad
+  de una sesión de impersonación, no puede cortar la sesión activa
+  del atacante; el JWT sigue siendo válido el resto de su TTL.
+- "Salir de la suplantación" en `ImpersonationBanner.tsx` solo borra
+  el JWT del localStorage del builder. Si alguien copió el token
+  antes (extensión maliciosa, dump de devtools), puede seguir
+  actuando hasta `expiresAt`.
+**Mitigación actual aceptada**: `ImpersonationLog` registra
+`startedAt` + `expiresAt` para forensics post-incidente. Una disputa
+puede contestarse con la tabla aunque no se pueda cortar la sesión
+en vivo.
+**Fix completo**:
+1. TTL leído de env var `IMPERSONATION_TTL_MINUTES` con default 60.
+2. JwtStrategy chequea contra la BD (`impersonationLogId`) en cada
+   request — si la fila tiene un campo `revokedAt` no-null, rechaza.
+3. Endpoint `POST /admin/impersonation/:logId/revoke` que setea
+   `revokedAt = now()`. Coste: una query Prisma extra por request
+   en sesiones impersonadas (no afecta tráfico normal).
+4. Migration añade `revokedAt: DateTime?` a `ImpersonationLog`.
+**Esfuerzo**: medio (~2-3h con tests).
+**Prioridad**: alta antes de aceptar primer cliente real, sobre
+todo si ese cliente paga y opera datos sensibles.
+
+### #44 — Tokens de password reset NO deben loggearse en stdout cuando SMTP no está configurado
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08 PM, observación durante PR-B
+(`platform-email.service.ts:114`).
+**Descripción**: cuando SMTP plataforma no está configurado, el
+método `sendPasswordResetEmail` actualmente hace
+`this.logger.warn('No SMTP configured. Reset token for ${email}: ${token}')`
+y devuelve OK silenciosamente. El usuario que pidió reset cree que
+recibirá el email, no llega, y el token está expuesto en logs de PM2.
+Si esos logs van a un sistema externo (Loki / Datadog / cualquier
+agregador), los tokens viajan también.
+**Impacto**: vector de leak de tokens vía logs + UX rota (usuario
+nunca recibe el email pero la API responde 200).
+**Fix**:
+1. Si SMTP no está configurado, lanzar `ServiceUnavailableException`
+   con mensaje "El servicio de email no está disponible. Contacta
+   con soporte." en lugar de generar el token sin enviarlo.
+2. Quitar el log con el token plano. Si se quiere debug, loggear
+   solo el email (no el token).
+3. Aplicar el mismo patrón a `sendPasswordChangedEmail` y otros
+   métodos de email crítico.
+**Esfuerzo**: bajo (~30 min).
+**Prioridad**: media. Afecta cuando SMTP plataforma no está
+configurado (estado actual de producción) — entonces forgot-password
+del admin queda mal de UX. Subir a alta cuando se configure SMTP
+plataforma porque el log con tokens pasa a producción real.
