@@ -1,6 +1,6 @@
 import {
   Controller, Get, Put, Delete, Post,
-  Param, ParseUUIDPipe, Query, Body, UseGuards,
+  Param, ParseUUIDPipe, Query, Body, Request, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -92,5 +92,17 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN)
   retryBuild(@Param('buildId', ParseUUIDPipe) buildId: string) {
     return this.adminService.retryBuild(buildId);
+  }
+
+  // ─── Impersonation ────────────────────────────────────────
+
+  @Post('tenants/:tenantId/users/:userId/impersonate')
+  @Roles(Role.SUPER_ADMIN)
+  impersonate(
+    @Param('tenantId', ParseUUIDPipe) tenantId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Request() req: any,
+  ) {
+    return this.adminService.impersonateUser(req.user.userId, tenantId, userId);
   }
 }

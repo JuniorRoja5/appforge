@@ -12,6 +12,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { StorageService } from '../storage/storage.service';
 import { StripeService } from '../stripe/stripe.service';
 import { TenantStatus, UserStatus, BuildStatus, PlanType, Role } from '@prisma/client';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class AdminService {
@@ -20,6 +21,7 @@ export class AdminService {
     private subscriptionService: SubscriptionService,
     private storage: StorageService,
     private stripeService: StripeService,
+    private authService: AuthService,
     @InjectQueue('app-build') private buildQueue: Queue,
   ) {}
 
@@ -648,5 +650,82 @@ export class AdminService {
     }
 
     return result;
+  }
+
+  // ─── Impersonation ──────────────────────────────────────────
+
+  /**
+   * Issue an impersonation token to act as `userId` belonging to `tenantId`.
+   * The super-admin's existing JWT stays valid in parallel — the admin UI
+   * is responsible for swapping tokens and offering a "back to admin"
+   * action. Server-side does not invalidate any token.
+   *
+   * Guards:
+   *  - target user belongs to tenantId
+   *  - target user is not SUPER_ADMIN (no admin-on-admin)
+   *  - target user is not SUSPENDED nor PENDING_DELETION
+   *  - target tenant is not SUSPENDED (would also be blocked by JwtStrategy
+   *    on next request, but we fail early with a clearer message)
+   */
+  async impersonateUser(
+    superAdminId: string,
+    tenantId: string,
+    targetUserId: string,
+  ) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { tenant: { select: { id: true, status: true } } },
+    });
+    if (!target) throw new NotFoundException('Usuario no encontrado.');
+
+    if (target.tenantId !== tenantId) {
+      throw new ForbiddenException('El usuario no pertenece a este tenant.');
+    }
+    if (target.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('No se puede suplantar a otro SUPER_ADMIN.');
+    }
+    if (target.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException(
+        'El usuario no está activo. No se puede suplantar usuarios suspendidos o pendientes de eliminación.',
+      );
+    }
+    if (target.tenant?.status === TenantStatus.SUSPENDED) {
+      throw new ForbiddenException(
+        'El tenant está suspendido. Reactiva el tenant antes de suplantar a sus usuarios.',
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+    const log = await this.prisma.impersonationLog.create({
+      data: {
+        superAdminId,
+        impersonatedUserId: target.id,
+        expiresAt,
+      },
+    });
+
+    const access_token = this.authService.signImpersonationToken(
+      {
+        id: target.id,
+        email: target.email,
+        role: target.role,
+        tenantId: target.tenantId,
+      },
+      superAdminId,
+      log.id,
+    );
+
+    return {
+      access_token,
+      expiresAt: expiresAt.toISOString(),
+      impersonatedUser: {
+        id: target.id,
+        email: target.email,
+        firstName: target.firstName,
+        lastName: target.lastName,
+        role: target.role,
+        tenantId: target.tenantId,
+      },
+    };
   }
 }

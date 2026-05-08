@@ -49,6 +49,31 @@ export class AuthService {
     };
   }
 
+  /**
+   * Sign a short-lived (1h) JWT with an `impersonatedBy` flag.
+   * Used by admin.service.impersonate. The payload carries the IMPERSONATED
+   * user's id/email/role/tenantId — JwtStrategy.validate runs against that
+   * user (not the super-admin), so guards like User.status / Tenant.status
+   * still apply to the impersonated identity. The `impersonatedBy` field
+   * is metadata: it surfaces in req.user for UI banners ("Estás suplantando
+   * a X") and audit, but does not change auth semantics.
+   */
+  signImpersonationToken(
+    impersonatedUser: { id: string; email: string; role: string; tenantId: string | null },
+    superAdminId: string,
+    impersonationLogId: string,
+  ): string {
+    const payload = {
+      email: impersonatedUser.email,
+      sub: impersonatedUser.id,
+      role: impersonatedUser.role,
+      tenantId: impersonatedUser.tenantId,
+      impersonatedBy: superAdminId,
+      impersonationLogId,
+    };
+    return this.jwtService.sign(payload, { expiresIn: '1h' });
+  }
+
   async register(data: Prisma.UserCreateInput) {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 

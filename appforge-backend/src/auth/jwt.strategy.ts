@@ -41,7 +41,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    // Always use current DB values, not stale JWT payload
-    return { userId: user.id, email: user.email, role: user.role, tenantId: user.tenantId };
+    // Always use current DB values, not stale JWT payload.
+    // Pass through impersonation flags untouched — they live in the
+    // signed payload and identify the super-admin who initiated the
+    // session. UI banners and audit reads use these.
+    return {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      impersonatedBy: payload.impersonatedBy ?? null,
+      impersonationLogId: payload.impersonationLogId ?? null,
+    };
   }
 }
