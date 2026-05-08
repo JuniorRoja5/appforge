@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { listTenants, getTenantDetail } from '../lib/api';
 import type { TenantListItem } from '../lib/api';
@@ -37,8 +38,8 @@ export const ResellersPage: React.FC = () => {
 
       setResellers(merged);
       setTotal(starterRes.total + proRes.total);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cargar resellers');
     } finally {
       setLoading(false);
     }
@@ -68,8 +69,8 @@ export const ResellersPage: React.FC = () => {
           clientNotes: a.clientNotes,
         })),
       );
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cargar detalle del reseller');
     }
   };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { listTenants } from '../lib/api';
 import type { TenantListItem, PaginatedResponse } from '../lib/api';
@@ -52,8 +53,8 @@ export const TenantsPage: React.FC = () => {
         limit: 20,
       });
       setResult(res);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cargar tenants');
     } finally {
       setLoading(false);
     }

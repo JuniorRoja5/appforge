@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { listBuilds, retryBuild } from '../lib/api';
 import type { AppBuild, PaginatedResponse } from '../lib/api';
@@ -60,8 +61,8 @@ export const BuildsPage: React.FC = () => {
         limit: 20,
       });
       setResult(res);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cargar builds');
     } finally {
       setLoading(false);
     }

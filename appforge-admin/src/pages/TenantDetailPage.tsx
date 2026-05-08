@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import {
   getTenantDetail, updateTenantStatus, deleteTenant, changeTenantPlan,
@@ -28,8 +29,8 @@ export const TenantDetailPage: React.FC = () => {
     try {
       const data = await getTenantDetail(token, id);
       setTenant(data);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cargar tenant');
     } finally {
       setLoading(false);
     }
@@ -46,8 +47,8 @@ export const TenantDetailPage: React.FC = () => {
       const newStatus = tenant.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
       await updateTenantStatus(token, id, newStatus);
       await fetchTenant();
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cambiar estado del tenant');
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -60,8 +61,8 @@ export const TenantDetailPage: React.FC = () => {
     try {
       await deleteTenant(token, id);
       navigate('/tenants', { replace: true });
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al eliminar tenant');
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -74,8 +75,8 @@ export const TenantDetailPage: React.FC = () => {
     try {
       await changeTenantPlan(token, id, planType);
       await fetchTenant();
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al cambiar plan');
     } finally {
       setChangingPlan(false);
     }

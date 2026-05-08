@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { listPlans, updatePlan, listTenants } from '../lib/api';
 import type { SubscriptionPlan, PlanType } from '../lib/api';
@@ -85,8 +86,8 @@ export const PlansPage: React.FC = () => {
       setPlans((prev) => prev.map((p) => (p.planType === planType ? updated : p)));
       setEditing(null);
       setConfirmData(null);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al guardar plan');
     } finally {
       setSaving(false);
     }

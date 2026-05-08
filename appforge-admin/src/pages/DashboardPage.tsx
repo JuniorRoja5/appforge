@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { getAnalytics, retryBuild } from '../lib/api';
 import type { AnalyticsData } from '../lib/api';
@@ -44,8 +45,8 @@ export const DashboardPage: React.FC = () => {
       // Refresh analytics
       const fresh = await getAnalytics(token);
       setData(fresh);
-    } catch {
-      // silently fail — build page has better error handling
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al reintentar build');
     } finally {
       setRetrying(null);
     }

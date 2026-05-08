@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import { getSmtpConfig, updateSmtpConfig, testSmtp, getFcmConfig, updateFcmConfig, testFcm } from '../lib/api';
 import type { SmtpConfig, FcmConfig } from '../lib/api';
@@ -62,8 +63,8 @@ export const SettingsPage: React.FC = () => {
       }
       await updateSmtpConfig(token, data);
       setSaveSuccess(true);
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al guardar configuración SMTP');
     } finally {
       setSaving(false);
     }
