@@ -38,7 +38,17 @@ export class AdminService {
 
     const where: Record<string, unknown> = {};
     if (query.search) {
-      where.name = { contains: query.search, mode: 'insensitive' };
+      // Buscar por nombre del tenant, branding (resellers), o email de
+      // cualquier usuario asociado. Útil para soporte: el cliente
+      // típicamente da su email; antes solo se podía encontrar por
+      // tenant.name que ni siquiera el cliente conoce.
+      const term = query.search;
+      where.OR = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { brandName: { contains: term, mode: 'insensitive' } },
+        { brandDomain: { contains: term, mode: 'insensitive' } },
+        { users: { some: { email: { contains: term, mode: 'insensitive' } } } },
+      ];
     }
     if (query.status) {
       where.status = query.status;
