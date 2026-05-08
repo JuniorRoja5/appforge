@@ -691,3 +691,90 @@ quien le llama hace su propio `prisma.subscription.update` si lo necesita.
 **Esfuerzo**: medio. Refactor controlado con tests del portal flow.
 **Prioridad**: baja. Activar cuando llegue el tercer call site
 (probablemente la próxima vez que se toque el flujo de billing).
+
+---
+
+## Sesión 2026-05-08 (continuación) — Auditoría panel admin Fase 2 (cierre Bug #9-#13)
+
+PR `67229b4..b3ecf67` (5 commits) cierra los 5 bugs detectados en la Fase 2
+de la auditoría del panel admin. Bug #14 ya estaba apuntado como #34. Cinco
+gaps funcionales detectados quedan apuntados aquí; GAP #1 (reset password)
+y GAP #5 (impersonación) se atacan en PRs separados (PR-B y PR-C).
+
+### #38 — Paginación de `users` en `getTenantDetail` (Bug #15)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08 PM, Bug #15 reportado pero out-of-scope
+del PR de Fase 2.
+**Descripción**: `admin.service.ts:getTenantDetail` línea 127-133 incluye
+todos los users del tenant sin paginación. Para tenants con cientos de
+users CLIENT, el payload se infla y la tabla del frontend se renderiza sin
+virtualización. Hoy con 1 user por tenant no se nota.
+**Impacto**: visible solo cuando crezca el número de users por tenant
+(reseller con su propia cartera).
+**Esfuerzo**: medio. Mantener `take: 20` para vista rápida + endpoint
+dedicado `GET /admin/tenants/:id/users?page=N&limit=20`. Decisión consciente:
+NO filtrar `PENDING_DELETION` por defecto — el super-admin necesita verlos
+como información de auditoría.
+**Prioridad**: baja, sube a media cuando aparezca el primer reseller real
+con >50 users.
+
+### #39 — Página `/users` en admin para gestión cross-tenant (GAP #2)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08 PM, hallazgo curioso: backend tiene
+`listUsers`, `toggleUserSuspension`, `permanentDeleteUser` operativos y
+`appforge-admin/src/lib/api.ts` tiene los wrappers, pero NO existe la
+ruta `/users` en `App.tsx`. Endpoints orphans.
+**Descripción**: para gestionar un usuario individual hoy hay que entrar
+al detalle del tenant — desde ahí no hay acciones por usuario. Una página
+`UsersPage` con `DataTable` cross-tenant + filtros (status, role) +
+acciones inline (suspender/eliminar) cierra la deuda. Reutiliza
+`DataTable` + `StatusBadge` que ya existen.
+**Impacto**: gestión de usuarios individuales requiere SQL hoy.
+**Esfuerzo**: medio (~2h). UI greenfield pero todos los componentes
+y endpoints ya existen.
+**Prioridad**: media. Bloquea soporte cuando llegue el primer ticket
+de "este usuario debería estar suspendido".
+
+### #40 — Editar datos básicos de tenant desde admin (GAP #3)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08 PM, hallazgo durante auditoría.
+**Descripción**: el admin solo puede suspender / reactivar / eliminar /
+cambiar plan. NO puede editar `name`, `brandName`, `brandLogoUrl`,
+`brandDomain`, `brandColors` aunque las columnas existan en BD. Si un
+reseller se equivoca configurando su branding, el super-admin tiene que
+tocar SQL.
+**Impacto**: cualquier corrección de branding requiere intervención
+manual del DBA.
+**Esfuerzo**: medio (~3h). Endpoint `PUT /admin/tenants/:id` con DTO
++ formulario en TenantDetailPage.
+**Prioridad**: media, sube a alta cuando haya resellers reales.
+
+### #41 — Crear tenant manual desde admin (GAP #4)
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-08 PM, hallazgo durante auditoría.
+**Descripción**: tenants solo se crean por registro autoservicio. Para
+casos enterprise (cliente que paga por adelantado y se le da de alta
+directamente), no hay endpoint admin de creación.
+**Impacto**: imposibilita venta enterprise sin tocar SQL.
+**Esfuerzo**: medio (~2h). Endpoint `POST /admin/tenants` con DTO
+(`name`, `email del primer user`, `planType`, opcional `brandName`)
++ formulario en TenantsPage.
+**Prioridad**: baja, sube a alta cuando aparezca el primer enterprise.
+
+### #42 — Audit log de operaciones admin destructivas (GAP #6)
+**Estado**: OPEN HIGH PRIORITY
+**Origen**: Sesión 2026-05-08 PM, hallazgo durante auditoría.
+**Descripción**: ninguna acción destructiva del admin (eliminar tenant,
+cambiar plan, suspender, eliminar user) queda registrada. Si mañana
+hay disputa sobre quién cambió qué cuándo, no hay log.
+**Impacto**: cero trazabilidad. Para cumplimiento (GDPR, auditoría
+fiscal en algunos países) es bloqueante.
+**Esfuerzo**: alto (~1-2 días). Schema nuevo `AdminActionLog` con
+`actorId`, `action` (enum), `targetType` (enum: TENANT|USER|PLAN),
+`targetId`, `metadata` (JSON con before/after), `createdAt`. Hooks en
+cada operación destructiva. UI dedicada con filtros para ver el log.
+PR-C (impersonación) ya añade un schema mínimo (`ImpersonationLog`)
+que comparte filosofía pero NO sustituye a este — son tablas distintas
+porque las semánticas son distintas.
+**Prioridad**: alta antes de aceptar primer cliente real (cumplimiento
++ defensa en disputas).
