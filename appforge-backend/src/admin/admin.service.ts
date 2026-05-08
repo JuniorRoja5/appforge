@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { StorageService } from '../storage/storage.service';
 import { StripeService } from '../stripe/stripe.service';
-import { TenantStatus, UserStatus, BuildStatus, PlanType } from '@prisma/client';
+import { TenantStatus, UserStatus, BuildStatus, PlanType, Role } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -185,9 +185,25 @@ export class AdminService {
   async deleteTenant(id: string) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
-      include: { users: { select: { status: true } }, apps: { select: { id: true } } },
+      include: {
+        users: { select: { status: true, role: true } },
+        apps: { select: { id: true } },
+      },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    // SAFETY: never delete a tenant that contains a SUPER_ADMIN user.
+    // The seed-admin-tenant ships with admin@appforge.com (SUPER_ADMIN);
+    // even if some SQL surgery moves that user to PENDING_DELETION, the
+    // existing PENDING_DELETION guard would let the delete proceed and
+    // wipe the only super-admin from the platform. This guard makes
+    // self-lockout impossible regardless of the user.status path taken.
+    const hasSuperAdmin = tenant.users.some((u) => u.role === Role.SUPER_ADMIN);
+    if (hasSuperAdmin) {
+      throw new ForbiddenException(
+        'No se puede eliminar un tenant que contiene usuarios SUPER_ADMIN.',
+      );
+    }
 
     const hasNonDeletionUsers = tenant.users.some(
       (u) => u.status !== UserStatus.PENDING_DELETION,
