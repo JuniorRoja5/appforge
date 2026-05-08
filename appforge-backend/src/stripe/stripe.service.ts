@@ -126,8 +126,25 @@ export class StripeService {
     }
   }
 
-  /** Cancel subscription at end of current period */
-  async cancelSubscription(tenantId: string): Promise<void> {
+  /**
+   * Cancel a tenant's Stripe subscription.
+   *
+   * - `immediate: false` (default) — cancel at period end. Used by the
+   *   Stripe Customer Portal flow where the merchant retains access
+   *   until their billing period closes.
+   * - `immediate: true` — cancel right now via stripe.subscriptions.cancel.
+   *   Used by deleteTenant to stop billing before the BD record disappears.
+   *
+   * - `skipBdUpdate: true` — skip the prisma.subscription.update that flips
+   *   `cancelAtPeriodEnd`. Pass this from callers that are about to delete
+   *   the Subscription row anyway (cascade from tenant.delete) — the inner
+   *   update would be redundant and creates phantom state if it failed
+   *   between the Stripe call and the cascade.
+   */
+  async cancelSubscription(
+    tenantId: string,
+    options: { immediate?: boolean; skipBdUpdate?: boolean } = {},
+  ): Promise<void> {
     const subscription = await this.prisma.subscription.findUnique({
       where: { tenantId },
     });
@@ -136,14 +153,20 @@ export class StripeService {
       throw new BadRequestException('No tienes una suscripción de Stripe activa.');
     }
 
-    await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
+    if (options.immediate) {
+      await this.stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
+    } else {
+      await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+    }
 
-    await this.prisma.subscription.update({
-      where: { tenantId },
-      data: { cancelAtPeriodEnd: true },
-    });
+    if (!options.skipBdUpdate) {
+      await this.prisma.subscription.update({
+        where: { tenantId },
+        data: { cancelAtPeriodEnd: !options.immediate },
+      });
+    }
   }
 
   /** Create a Stripe Customer Portal session */

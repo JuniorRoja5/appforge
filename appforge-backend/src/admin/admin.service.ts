@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -188,10 +189,14 @@ export class AdminService {
       );
     }
 
-    // Clean up storage artifacts before cascade delete
+    // STEP 1: storage cleanup. Per-artifact try/catch with continue —
+    // a single broken artifact (already deleted, missing key) must not
+    // abort the whole delete. Only abort if the phase itself throws an
+    // uncaught error (rare programming bug). Moved here from the bottom
+    // so that a catastrophic MinIO failure does not leave Stripe in an
+    // inconsistent state.
     for (const app of tenant.apps) {
       try {
-        // Delete build artifacts
         const builds = await this.prisma.appBuild.findMany({
           where: { appId: app.id, artifactUrl: { not: null } },
           select: { artifactUrl: true },
@@ -201,7 +206,6 @@ export class AdminService {
             try { await this.storage.delete(build.artifactUrl); } catch { /* ignore */ }
           }
         }
-        // Delete keystore
         const keystore = await this.prisma.appKeystore.findUnique({
           where: { appId: app.id },
           select: { keystorePath: true },
@@ -212,8 +216,50 @@ export class AdminService {
       } catch { /* continue with other apps */ }
     }
 
-    // Prisma cascade handles all DB records
-    await this.prisma.tenant.delete({ where: { id } });
+    // STEP 2: cancel Stripe subscription IMMEDIATELY. Only proceeds if
+    // storage passed. If Stripe fails, abort — preferable to "BD deleted +
+    // Stripe still billing" (the original Bug #7). Storage already deleted
+    // is idempotent: a future rebuild regenerates artifacts.
+    if (tenant.stripeCustomerId) {
+      const subscription = await this.prisma.subscription.findUnique({
+        where: { tenantId: id },
+      });
+      if (subscription?.stripeSubscriptionId) {
+        try {
+          // skipBdUpdate: la cascade de prisma.tenant.delete borra la
+          // Subscription completa en milisegundos; el update interno de
+          // cancelSubscription es redundante y crea estado fantasma si
+          // falla entre las dos llamadas.
+          await this.stripeService.cancelSubscription(id, {
+            immediate: true,
+            skipBdUpdate: true,
+          });
+        } catch (err: any) {
+          console.error('[STRIPE_CANCEL_FAILED]', { tenantId: id, error: err });
+          throw new InternalServerErrorException(
+            'No se pudo cancelar la suscripción de Stripe. El delete ha sido abortado para evitar cargos huérfanos. Reintenta en unos minutos.',
+          );
+        }
+      }
+    }
+
+    // STEP 3: cascade delete BD. Postgres local — failure here is
+    // improbable but possible (deadlock, connection drop). If it happens
+    // AFTER Stripe success, log a marker so the super-admin can reconcile
+    // manually (Stripe is canceled but tenant still exists in BD).
+    try {
+      await this.prisma.tenant.delete({ where: { id } });
+    } catch (err: any) {
+      console.error('[STRIPE_BD_INCONSISTENT]', {
+        tenantId: id,
+        stripeCustomerId: tenant.stripeCustomerId,
+        message: 'Stripe subscription canceled but tenant delete failed in DB. Reconcile manually.',
+        error: err,
+      });
+      throw new InternalServerErrorException(
+        'Error al eliminar el tenant en BD tras cancelar Stripe. Revisa los logs y contacta soporte para reconciliación manual.',
+      );
+    }
     return { deleted: true };
   }
 
