@@ -50,6 +50,35 @@ export const login = (email: string, password: string): Promise<LoginResponse> =
     body: JSON.stringify({ email, password }),
   }).then((r) => handleResponse<LoginResponse>(r));
 
+export const forgotPassword = (email: string): Promise<{ message: string }> =>
+  fetch(`${API_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  }).then((r) => handleResponse<{ message: string }>(r));
+
+export const resetPassword = (
+  email: string,
+  token: string,
+  newPassword: string,
+): Promise<{ message: string }> =>
+  fetch(`${API_URL}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, token, newPassword }),
+  }).then((r) => handleResponse<{ message: string }>(r));
+
+export const changePassword = (
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> =>
+  fetch(`${API_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  }).then((r) => handleResponse<{ message: string }>(r));
+
 // ─── Types ──────────────────────────────────────────────────
 
 export type TenantStatus = 'ACTIVE' | 'SUSPENDED';

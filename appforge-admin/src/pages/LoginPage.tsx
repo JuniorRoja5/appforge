@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { login } from '../lib/api';
+import { login, forgotPassword, resetPassword } from '../lib/api';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +10,63 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+
+  // Forgot password state — two-step modal: request token → submit token+new password
+  type ForgotStep = 'request' | 'reset' | null;
+  const [forgotStep, setForgotStep] = useState<ForgotStep>(null);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotToken, setForgotToken] = useState('');
+  const [forgotNewPwd, setForgotNewPwd] = useState('');
+  const [forgotConfirm, setForgotConfirm] = useState('');
+  const [forgotMsg, setForgotMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const closeForgot = () => {
+    setForgotStep(null);
+    setForgotEmail('');
+    setForgotToken('');
+    setForgotNewPwd('');
+    setForgotConfirm('');
+    setForgotMsg(null);
+  };
+
+  const handleForgotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotMsg(null);
+    try {
+      const res = await forgotPassword(forgotEmail);
+      setForgotMsg({ type: 'success', text: res.message });
+      setForgotStep('reset');
+    } catch (err: any) {
+      setForgotMsg({ type: 'error', text: err?.message ?? 'Error al solicitar reset' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (forgotNewPwd !== forgotConfirm) {
+      setForgotMsg({ type: 'error', text: 'Las contraseñas no coinciden.' });
+      return;
+    }
+    if (forgotNewPwd.length < 8) {
+      setForgotMsg({ type: 'error', text: 'La nueva contraseña debe tener al menos 8 caracteres.' });
+      return;
+    }
+    setForgotLoading(true);
+    setForgotMsg(null);
+    try {
+      await resetPassword(forgotEmail, forgotToken.trim(), forgotNewPwd);
+      setForgotMsg({ type: 'success', text: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+      setTimeout(() => closeForgot(), 1500);
+    } catch (err: any) {
+      setForgotMsg({ type: 'error', text: err?.message ?? 'Error al restablecer contraseña' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,11 +202,112 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
           
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => setForgotStep('request')}
+              className="text-[13px] text-gray-500 hover:text-orange-600 underline-offset-2 hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+
           <div className="mt-8 text-center">
             <p className="text-xs text-gray-400">Plataforma interna. Acceso logueado y monitorizado.</p>
           </div>
         </div>
       </div>
+
+      {/* Forgot password modal */}
+      {forgotStep !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeForgot}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900">
+              {forgotStep === 'request' ? 'Recuperar contraseña' : 'Introduce el código'}
+            </h3>
+
+            {forgotMsg && (
+              <div className={`p-3 rounded-lg text-sm ${forgotMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {forgotMsg.text}
+              </div>
+            )}
+
+            {forgotStep === 'request' ? (
+              <form onSubmit={handleForgotRequest} className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Introduce tu email y te enviaremos un código de 6 caracteres para restablecer la contraseña.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button type="button" onClick={closeForgot} disabled={forgotLoading} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50">Cancelar</button>
+                  <button type="submit" disabled={forgotLoading || !forgotEmail} className="px-4 py-2 text-sm text-white bg-orange-500 hover:bg-orange-600 rounded-lg disabled:opacity-50">
+                    {forgotLoading ? 'Enviando...' : 'Enviar código'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleForgotReset} className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Introduce el código que recibiste por email y tu nueva contraseña.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
+                  <input
+                    type="text"
+                    value={forgotToken}
+                    onChange={(e) => setForgotToken(e.target.value)}
+                    required
+                    autoComplete="one-time-code"
+                    autoFocus
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
+                  <input
+                    type="password"
+                    value={forgotNewPwd}
+                    onChange={(e) => setForgotNewPwd(e.target.value)}
+                    required
+                    minLength={8}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">Mínimo 8 caracteres.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
+                  <input
+                    type="password"
+                    value={forgotConfirm}
+                    onChange={(e) => setForgotConfirm(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button type="button" onClick={closeForgot} disabled={forgotLoading} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50">Cancelar</button>
+                  <button type="submit" disabled={forgotLoading || !forgotToken || !forgotNewPwd || !forgotConfirm} className="px-4 py-2 text-sm text-white bg-orange-500 hover:bg-orange-600 rounded-lg disabled:opacity-50">
+                    {forgotLoading ? 'Restableciendo...' : 'Restablecer contraseña'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
