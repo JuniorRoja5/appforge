@@ -72,8 +72,30 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  // Impersonation log relations (super-admin can impersonate users for support)
+  impersonationsAsActor  ImpersonationLog[] @relation("ImpersonationActor")
+  impersonationsAsTarget ImpersonationLog[] @relation("ImpersonationTarget")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Audit trail for super-admin impersonation events.
+/// Each row is one "login as" action — startedAt + expiresAt define
+/// the time window. Pulling this table answers "who impersonated whom
+/// and when?" — required for support disputes and compliance.
+model ImpersonationLog {
+  id                 String   @id @default(uuid())
+  superAdminId       String
+  superAdmin         User     @relation("ImpersonationActor", fields: [superAdminId], references: [id], onDelete: Cascade)
+  impersonatedUserId String
+  impersonatedUser   User     @relation("ImpersonationTarget", fields: [impersonatedUserId], references: [id], onDelete: Cascade)
+  startedAt          DateTime @default(now())
+  expiresAt          DateTime
+
+  @@index([superAdminId])
+  @@index([impersonatedUserId])
+  @@index([startedAt])
 }
 
 enum AppStatus {
