@@ -19,7 +19,7 @@ const planOptions = [
   { value: '', label: 'Todos los planes' },
   { value: 'FREE', label: 'Free' },
   { value: 'STARTER', label: 'Starter' },
-  { value: 'PROFESSIONAL', label: 'Professional' },
+  { value: 'PRO', label: 'Pro' },
   { value: 'RESELLER_STARTER', label: 'Reseller Starter' },
   { value: 'RESELLER_PRO', label: 'Reseller Pro' },
 ];

@@ -9,7 +9,7 @@ import { StatusBadge, tenantStatusVariant, userStatusVariant, buildStatusVariant
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ArrowLeft, Shield, ShieldOff, Trash2 } from 'lucide-react';
 
-const planTypes: PlanType[] = ['FREE', 'STARTER', 'PROFESSIONAL', 'RESELLER_STARTER', 'RESELLER_PRO'];
+const planTypes: PlanType[] = ['FREE', 'STARTER', 'PRO', 'RESELLER_STARTER', 'RESELLER_PRO'];
 
 export const TenantDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

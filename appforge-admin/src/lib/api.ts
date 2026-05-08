@@ -55,7 +55,7 @@ export const login = (email: string, password: string): Promise<LoginResponse> =
 export type TenantStatus = 'ACTIVE' | 'SUSPENDED';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING_DELETION';
 export type BuildStatus = 'QUEUED' | 'PREPARING' | 'BUILDING' | 'SIGNING' | 'COMPLETED' | 'FAILED';
-export type PlanType = 'FREE' | 'STARTER' | 'PROFESSIONAL' | 'RESELLER_STARTER' | 'RESELLER_PRO';
+export type PlanType = 'FREE' | 'STARTER' | 'PRO' | 'RESELLER_STARTER' | 'RESELLER_PRO';
 
 export interface SubscriptionPlan {
   id: string;
