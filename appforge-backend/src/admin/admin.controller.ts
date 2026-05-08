@@ -5,9 +5,12 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { Role, TenantStatus, UserStatus, BuildStatus, PlanType } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { UpdateTenantStatusDto } from './dto/update-tenant-status.dto';
+import { ListTenantsDto } from './dto/list-tenants.dto';
+import { ListUsersDto } from './dto/list-users.dto';
+import { ListBuildsDto } from './dto/list-builds.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,20 +35,8 @@ export class AdminController {
 
   @Get('tenants')
   @Roles(Role.SUPER_ADMIN)
-  listTenants(
-    @Query('search') search?: string,
-    @Query('planType') planType?: PlanType,
-    @Query('status') status?: TenantStatus,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.adminService.listTenants({
-      search,
-      planType,
-      status,
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
+  listTenants(@Query() dto: ListTenantsDto) {
+    return this.adminService.listTenants(dto);
   }
 
   @Get('tenants/:id')
@@ -73,18 +64,8 @@ export class AdminController {
 
   @Get('users')
   @Roles(Role.SUPER_ADMIN)
-  listUsers(
-    @Query('status') status?: UserStatus,
-    @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.adminService.listUsers({
-      status,
-      search,
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
+  listUsers(@Query() dto: ListUsersDto) {
+    return this.adminService.listUsers(dto);
   }
 
   @Put('users/:id/suspend')
@@ -103,24 +84,8 @@ export class AdminController {
 
   @Get('builds')
   @Roles(Role.SUPER_ADMIN)
-  listBuilds(
-    @Query('status') status?: BuildStatus,
-    @Query('tenantId') tenantId?: string,
-    @Query('appId') appId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.adminService.listBuilds({
-      status,
-      tenantId,
-      appId,
-      from,
-      to,
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
+  listBuilds(@Query() dto: ListBuildsDto) {
+    return this.adminService.listBuilds(dto);
   }
 
   @Post('builds/:buildId/retry')
