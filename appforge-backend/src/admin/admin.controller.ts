@@ -1,6 +1,6 @@
 import {
   Controller, Get, Put, Delete, Post,
-  Param, Query, Body, UseGuards,
+  Param, ParseUUIDPipe, Query, Body, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -41,14 +41,14 @@ export class AdminController {
 
   @Get('tenants/:id')
   @Roles(Role.SUPER_ADMIN)
-  getTenantDetail(@Param('id') id: string) {
+  getTenantDetail(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getTenantDetail(id);
   }
 
   @Put('tenants/:id/status')
   @Roles(Role.SUPER_ADMIN)
   updateTenantStatus(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTenantStatusDto,
   ) {
     return this.adminService.updateTenantStatus(id, dto.status);
@@ -56,7 +56,7 @@ export class AdminController {
 
   @Delete('tenants/:id')
   @Roles(Role.SUPER_ADMIN)
-  deleteTenant(@Param('id') id: string) {
+  deleteTenant(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.deleteTenant(id);
   }
 
@@ -70,13 +70,13 @@ export class AdminController {
 
   @Put('users/:id/suspend')
   @Roles(Role.SUPER_ADMIN)
-  toggleUserSuspension(@Param('id') id: string) {
+  toggleUserSuspension(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.toggleUserSuspension(id);
   }
 
   @Delete('users/:id/permanent')
   @Roles(Role.SUPER_ADMIN)
-  permanentDeleteUser(@Param('id') id: string) {
+  permanentDeleteUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.permanentDeleteUser(id);
   }
 
@@ -90,7 +90,7 @@ export class AdminController {
 
   @Post('builds/:buildId/retry')
   @Roles(Role.SUPER_ADMIN)
-  retryBuild(@Param('buildId') buildId: string) {
+  retryBuild(@Param('buildId', ParseUUIDPipe) buildId: string) {
     return this.adminService.retryBuild(buildId);
   }
 }
