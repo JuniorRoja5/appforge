@@ -132,6 +132,7 @@ export class AdminService {
           },
         },
         apps: {
+          where: { deletedAt: null },
           include: {
             builds: { take: 5, orderBy: { createdAt: 'desc' } },
           },
