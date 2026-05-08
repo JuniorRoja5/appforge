@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuthStore } from '../store/useAuthStore';
 import {
-  getTenantDetail, updateTenantStatus, deleteTenant, changeTenantPlan,
+  getTenantDetail, updateTenantStatus, deleteTenant, changeTenantPlan, impersonateUser,
 } from '../lib/api';
 import type { TenantDetail, PlanType } from '../lib/api';
 import { StatusBadge, tenantStatusVariant, userStatusVariant, buildStatusVariant } from '../components/StatusBadge';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ArrowLeft, Shield, ShieldOff, Trash2 } from 'lucide-react';
+import { ArrowLeft, Shield, ShieldOff, Trash2, UserCog } from 'lucide-react';
+
+const BUILDER_URL = import.meta.env.VITE_BUILDER_URL || 'http://localhost:5173';
 
 const planTypes: PlanType[] = ['FREE', 'STARTER', 'PRO', 'RESELLER_STARTER', 'RESELLER_PRO'];
 
@@ -24,6 +26,7 @@ export const TenantDetailPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [changingPlan, setChangingPlan] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<PlanType | null>(null);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
 
   const fetchTenant = async () => {
     if (!id) return;
@@ -93,6 +96,25 @@ export const TenantDetailPage: React.FC = () => {
     } finally {
       setChangingPlan(false);
       setPendingPlan(null);
+    }
+  };
+
+  const handleImpersonate = async (userId: string) => {
+    if (!id) return;
+    setImpersonatingId(userId);
+    try {
+      const res = await impersonateUser(token, id, userId);
+      // Open the builder in a new tab with the impersonation token in the
+      // hash (NOT the query string, since hashes don't end up in HTTP logs
+      // or referer headers). The builder reads it on mount, stores it in
+      // its own auth store, and clears the hash.
+      const url = `${BUILDER_URL}/?impersonate=${encodeURIComponent(res.access_token)}`;
+      window.open(url, '_blank', 'noopener');
+      toast.success(`Suplantando a ${res.impersonatedUser.email}. Sesión válida 1 hora.`);
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Error al iniciar suplantación');
+    } finally {
+      setImpersonatingId(null);
     }
   };
 
@@ -270,22 +292,42 @@ export const TenantDetailPage: React.FC = () => {
                 <th className="px-4 py-2 text-left">Rol</th>
                 <th className="px-4 py-2 text-left">Estado</th>
                 <th className="px-4 py-2 text-left">Registrado</th>
+                <th className="px-4 py-2 text-left">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {tenant.users.map((u) => (
-                <tr key={u.id} className="border-b border-gray-50">
-                  <td className="px-4 py-2.5 text-gray-900">{u.email}</td>
-                  <td className="px-4 py-2.5 text-gray-500">
-                    {u.firstName ? `${u.firstName} ${u.lastName ?? ''}`.trim() : '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs uppercase">{u.role}</td>
-                  <td className="px-4 py-2.5">
-                    <StatusBadge label={u.status} variant={userStatusVariant(u.status)} />
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-400">{new Date(u.createdAt).toLocaleDateString('es-ES')}</td>
-                </tr>
-              ))}
+              {tenant.users.map((u) => {
+                // Impersonation only available for ACTIVE non-SUPER_ADMIN users
+                const canImpersonate = u.role !== 'SUPER_ADMIN' && u.status === 'ACTIVE';
+                return (
+                  <tr key={u.id} className="border-b border-gray-50">
+                    <td className="px-4 py-2.5 text-gray-900">{u.email}</td>
+                    <td className="px-4 py-2.5 text-gray-500">
+                      {u.firstName ? `${u.firstName} ${u.lastName ?? ''}`.trim() : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500 text-xs uppercase">{u.role}</td>
+                    <td className="px-4 py-2.5">
+                      <StatusBadge label={u.status} variant={userStatusVariant(u.status)} />
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-400">{new Date(u.createdAt).toLocaleDateString('es-ES')}</td>
+                    <td className="px-4 py-2.5">
+                      {canImpersonate ? (
+                        <button
+                          onClick={() => handleImpersonate(u.id)}
+                          disabled={impersonatingId === u.id}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-md disabled:opacity-50"
+                          title="Abrir el builder suplantando a este usuario (sesión 1h)"
+                        >
+                          <UserCog className="w-3.5 h-3.5" />
+                          <span>{impersonatingId === u.id ? 'Abriendo...' : 'Login as'}</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

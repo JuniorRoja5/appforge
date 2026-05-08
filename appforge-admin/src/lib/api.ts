@@ -273,6 +273,29 @@ export const toggleUserSuspension = (token: string, id: string): Promise<unknown
     headers: authHeaders(token),
   }).then((r) => handleResponse(r));
 
+export interface ImpersonateResponse {
+  access_token: string;
+  expiresAt: string;
+  impersonatedUser: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    role: string;
+    tenantId: string | null;
+  };
+}
+
+export const impersonateUser = (
+  token: string,
+  tenantId: string,
+  userId: string,
+): Promise<ImpersonateResponse> =>
+  fetch(`${API_URL}/admin/tenants/${tenantId}/users/${userId}/impersonate`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  }).then((r) => handleResponse<ImpersonateResponse>(r));
+
 export const permanentDeleteUser = (token: string, id: string): Promise<{ deleted: boolean }> =>
   fetch(`${API_URL}/admin/users/${id}/permanent`, {
     method: 'DELETE',
