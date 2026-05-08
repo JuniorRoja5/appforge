@@ -231,4 +231,35 @@ export class AuthService {
 
     return { message: 'Contraseña actualizada correctamente.' };
   }
+
+  // --- Change Password (authenticated, current → new) ---
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException('Usuario no encontrado.');
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new BadRequestException('La contraseña actual es incorrecta.');
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual.');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    // Notify the user that their password was changed (best-effort).
+    // No throw if SMTP is not configured — the change itself succeeded.
+    this.emailService.sendPasswordChangedEmail(
+      user.email,
+      user.firstName ?? user.email,
+    ).catch(() => { /* ignore — email is informational */ });
+
+    return { message: 'Contraseña actualizada correctamente.' };
+  }
 }
