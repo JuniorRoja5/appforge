@@ -21,6 +21,8 @@ import { StampPage } from './pages/StampPage';
 import { RedeemCouponPage } from './pages/RedeemCouponPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { ImpersonationBootstrap } from './components/ImpersonationBootstrap';
+import { ImpersonationBanner } from './components/ImpersonationBanner';
 
 const router = createBrowserRouter([
   // Public routes (auth)
@@ -76,7 +78,15 @@ const router = createBrowserRouter([
 ]);
 
 const App: React.FC = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      {/* Picks up `?impersonate=<token>` on initial load and primes the auth store. */}
+      <ImpersonationBootstrap />
+      {/* Persistent red banner only visible while in an impersonated session. */}
+      <ImpersonationBanner />
+      <RouterProvider router={router} />
+    </>
+  );
 };
 
 export default App;
