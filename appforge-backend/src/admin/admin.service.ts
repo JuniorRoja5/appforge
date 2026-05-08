@@ -151,21 +151,30 @@ export class AdminService {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    await this.prisma.tenant.update({ where: { id }, data: { status } });
-
-    if (status === 'SUSPENDED') {
-      // Only suspend currently ACTIVE users (don't touch PENDING_DELETION)
-      await this.prisma.user.updateMany({
-        where: { tenantId: id, status: UserStatus.ACTIVE },
-        data: { status: UserStatus.SUSPENDED },
-      });
-    } else if (status === 'ACTIVE') {
-      // Only reactivate SUSPENDED users (don't touch PENDING_DELETION)
-      await this.prisma.user.updateMany({
-        where: { tenantId: id, status: UserStatus.SUSPENDED },
-        data: { status: UserStatus.ACTIVE },
-      });
-    }
+    // Tenant + cascading user status update wrapped in a single transaction.
+    // Without it, a deadlock or timeout on the second call would leave the
+    // tenant SUSPENDED while users stay ACTIVE (or vice versa) — partial
+    // suspension. The transaction either applies both writes or rolls back.
+    await this.prisma.$transaction([
+      this.prisma.tenant.update({ where: { id }, data: { status } }),
+      ...(status === 'SUSPENDED'
+        ? [
+            // Only suspend currently ACTIVE users (don't touch PENDING_DELETION)
+            this.prisma.user.updateMany({
+              where: { tenantId: id, status: UserStatus.ACTIVE },
+              data: { status: UserStatus.SUSPENDED },
+            }),
+          ]
+        : status === 'ACTIVE'
+        ? [
+            // Only reactivate SUSPENDED users (don't touch PENDING_DELETION)
+            this.prisma.user.updateMany({
+              where: { tenantId: id, status: UserStatus.SUSPENDED },
+              data: { status: UserStatus.ACTIVE },
+            }),
+          ]
+        : []),
+    ]);
 
     return this.prisma.tenant.findUnique({
       where: { id },
