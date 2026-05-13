@@ -842,3 +842,87 @@ nunca recibe el email pero la API responde 200).
 configurado (estado actual de producción) — entonces forgot-password
 del admin queda mal de UX. Subir a alta cuando se configure SMTP
 plataforma porque el log con tokens pasa a producción real.
+
+---
+
+## Sesión 2026-05-13 — Hotfixes worker build + deuda estructural detectada
+
+Dos hotfixes en cadena (`9d4fc16` `--include=dev` en `npm ci` del build dir;
+`5119598` stub completo de `push.ts`) destaparon un patrón de acoplamiento
+estructural entre el runtime template y el BuildProcessor. También se
+documentó una observación independiente del cliente sobre `Build.errorMessage`.
+
+### #45 — Stub de push.ts en build.processor.ts debe permanecer en sync con runtime/src/lib/push.ts
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-13, hotfix `5119598`.
+**Descripción**: cuando `hasPushModule && !includePushPlugin` (módulo push
+presente pero FCM no configurado), el BuildProcessor escribe un stub a
+`buildDir/src/lib/push.ts` que reemplaza al `push.ts` real del runtime.
+Hoy el stub exporta las 4 funciones que `auth.ts` y `App.tsx` importan:
+`initPush`, `getCurrentFcmToken`, `registerPushDevice`,
+`detachPushDeviceFromUser`.
+
+Acoplamiento estructural sin garantía: cualquier export futuro añadido
+a `appforge-runtime/src/lib/push.ts` y consumido por algún archivo del
+runtime (no solo `auth.ts` / `App.tsx`) rompe los builds DEBUG-sin-FCM
+con `UNRESOLVED_VARIABLE` durante `vite build` hasta que el stub se
+extienda manualmente. Es un landmine: el código compila local, los
+tests pasan, y la rotura solo aparece al hacer un build real en el VPS
+sin FCM.
+
+**Impacto**: bajo en estado normal (build falla rápido y el log es
+descriptivo). Alto cuando el equipo crece y nadie se acuerda del stub:
+puede tardar horas diagnosticar por qué el RELEASE build local pasa
+pero el DEBUG en VPS no.
+
+**Fix propuesto**: test de integración en el backend que invoque
+`BuildProcessor.process` con un schema que contenga `push_notification`
+y `FCM_CONFIG = null`, deje el build llegar hasta `vite build`, y
+verifique exit code 0. Se ejecuta en CI por cada PR que toque
+`appforge-runtime/src/lib/push.ts` (path filter) o
+`appforge-backend/src/build/build.processor.ts`. Detecta drift antes
+de merge.
+
+**Esfuerzo**: medio (~2-3h con mocks de BullMQ y fs).
+**Prioridad**: MEDIA. No bloquea producción pero será inevitable
+cuando push.ts evolucione (nuevos métodos para topics, deeplinks,
+etc.) y el equipo crezca más allá del desarrollador único.
+
+### #46 — Sanitización del campo Build.errorMessage según rol
+**Estado**: OPEN
+**Origen**: Sesión 2026-05-13, observación del cliente al ver builds
+fallidos previos en el panel.
+
+**Descripción**: cuando un build falla, el backend persiste el error
+sin sanitizar en `Build.errorMessage` (y `Build.logOutput`). Ambos
+campos se devuelven verbatim a los clientes a través de
+`GET /apps/:id/builds` y se renderizan en `BuildPanel.tsx` para
+usuarios CLIENT. Esto expone:
+- Rutas absolutas del filesystem del servidor (`/opt/appforge/...`)
+- Estructura interna de los build dirs temporales y UUIDs internos
+- Versiones y stack traces de dependencias (rollup, vite, node)
+- Nombres de archivos y funciones del runtime template
+- Información de la build pipeline interna
+
+**Severidad**: BAJA (no son credenciales ni datos de tenant) pero el
+patrón es incorrecto. Information disclosure útil para reconocimiento
+previo a un ataque dirigido. Impacto en producto: UX pobre, mensajes
+técnicos no actionables para el cliente, sensación de producto crudo.
+
+**Fix propuesto**:
+A. Sanitizar en el backend al devolver:
+   - `GET /apps/:id/builds` (cliente): redactar `errorMessage` a un
+     mensaje genérico ("Error en compilación: <categoría>. Código:
+     <buildId>"), omitir `logOutput` por completo.
+   - `GET /admin/builds` y similares con rol SUPER_ADMIN: devolver
+     verbatim.
+B. Mantener el storage interno completo en BD para diagnóstico admin.
+C. Mapear categorías de error a mensajes amigables:
+   - npm/vite errors → "Error preparando assets web"
+   - Gradle errors → "Error compilando Android"
+   - signing errors → "Error firmando APK"
+   - timeout → "La compilación tardó demasiado, reintenta"
+D. UI `BuildPanel.tsx` deja de renderizar `logOutput` si rol === CLIENT.
+
+**Prioridad**: MEDIA — antes del primer cliente externo, después de
+cerrar los críticos de smoke y los GAPs documentados de admin.
