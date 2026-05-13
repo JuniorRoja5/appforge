@@ -210,7 +210,7 @@ export default config;
       // npm install — use persistent cache so subsequent builds skip network downloads
       await fs.mkdir(NPM_CACHE_DIR, { recursive: true });
       log('Installing dependencies (npm ci with persistent cache)...');
-      await this.exec('npm ci --prefer-offline --no-audit --no-fund', buildDir, 600000, {
+      await this.exec('npm ci --include=dev --prefer-offline --no-audit --no-fund', buildDir, 600000, {
         NPM_CONFIG_CACHE: NPM_CACHE_DIR,
       });
       log('Dependencies installed');
@@ -889,7 +889,7 @@ export default config;
     // 1. npm ci (with persistent cache)
     await fs.mkdir(NPM_CACHE_DIR, { recursive: true });
     log('Installing dependencies (npm ci with persistent cache)...');
-    await this.exec('npm ci --prefer-offline --no-audit --no-fund', buildDir, 600000, {
+    await this.exec('npm ci --include=dev --prefer-offline --no-audit --no-fund', buildDir, 600000, {
       NPM_CONFIG_CACHE: NPM_CACHE_DIR,
     });
     log('Dependencies installed');
