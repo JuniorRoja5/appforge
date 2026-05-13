@@ -159,10 +159,29 @@ export class BuildProcessor extends WorkerHost {
         await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2));
         log('Removed @capacitor/push-notifications from package.json (no FCM config)');
 
-        // Replace push.ts with a stub so Vite doesn't fail on the missing dynamic import
+        // Replace push.ts with a stub so Vite doesn't fail on the missing
+        // dynamic import. The stub must export EVERY symbol the rest of the
+        // runtime imports from './push' or Rollup raises UNRESOLVED_VARIABLE
+        // at bind time. Current importers (verified via grep before this fix):
+        //   - src/lib/auth.ts → getCurrentFcmToken, registerPushDevice, detachPushDeviceFromUser
+        //   - src/App.tsx → initPush
+        // If a future change to runtime/push.ts adds a new export consumed by
+        // any other runtime file, append it here too.
         const pushStubContent = [
           'export async function initPush(): Promise<void> {',
           "  console.warn('[Push] FCM not configured — push notifications disabled');",
+          '}',
+          '',
+          'export async function getCurrentFcmToken(): Promise<string | null> {',
+          '  return null;',
+          '}',
+          '',
+          'export async function registerPushDevice(_token: string, _platform: string): Promise<void> {',
+          '  /* no-op: FCM not configured */',
+          '}',
+          '',
+          'export async function detachPushDeviceFromUser(_token: string): Promise<void> {',
+          '  /* no-op: FCM not configured */',
           '}',
           '',
         ].join('\n');
