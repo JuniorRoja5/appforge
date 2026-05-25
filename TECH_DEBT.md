@@ -926,3 +926,91 @@ D. UI `BuildPanel.tsx` deja de renderizar `logOutput` si rol === CLIENT.
 
 **Prioridad**: MEDIA — antes del primer cliente externo, después de
 cerrar los críticos de smoke y los GAPs documentados de admin.
+
+---
+
+## Sesión 2026-05-25 — Incidente #8 + #2: DTOs vacíos + ValidationPipe whitelist (RESUELTO)
+
+### #47 — Patrón a evitar: DTO NestJS con ValidationPipe whitelist:true sin decoradores
+**Estado**: RESUELTO (commits `fix(app-users)` + `fix(contact)` + `chore(backend)` sesión 2026-05-25)
+**Origen**: Producción. Primer cliente real (APK 2026-05-13) reporta 500 en registro
+y 400 "Invalid or expired captcha token" en formulario de contacto.
+
+**Causa raíz confirmada:**
+La sesión 2026-05-07 (commit `7b2168b`) activó `useGlobalPipes` con:
+```ts
+new ValidationPipe({
+  whitelist: true,      // ← culpable
+  transform: true,
+  transformOptions: { enableImplicitConversion: true },
+})
+```
+El comportamiento de `whitelist: true` es no-obvio: `class-validator` aplica la
+`@Expose()` / decorator whitelist a nivel de *propiedad*, no de *clase*. Una propiedad
+declarada como `email!: string` sin ningún decorador de `class-validator` es eliminada
+silenciosamente del objeto instanciado. El service recibe `{}` y Prisma estalla.
+
+**Síntomas observados vs. causa:**
+- Bug #8 (register): `Prisma → Argument 'email' is missing` → 500.
+  `dto.email === undefined` porque `RegisterAppUserDto` no tenía decoradores.
+- Bug #2 (contact): `400 "Invalid or expired captcha token"`.
+  `dto.captchaToken === undefined` porque `SubmitContactDto` no tenía decoradores.
+
+**Alcance real:** 29 DTOs afectados en todo el backend desde `7b2168b`.
+Ningún E2E existente los cubría (los E2E de órdenes/cupones usan DTOs ya decorados).
+
+**Fixes aplicados (sesión 2026-05-25):**
+1. `app-users/dto/`: `RegisterAppUserDto`, `LoginAppUserDto`, `UpdateAppUserDto` — añadidos
+   `@IsEmail`, `@IsString`, `@MinLength(8)`, `@MaxLength`, `@IsOptional`, `@IsUrl`.
+   Política de contraseña: `MinLength(8)`, sin `MaxLength` agresivo (hasta 128).
+2. `contact/dto/submit-contact.dto.ts` — decoradores añadidos; `captchaToken` ahora
+   `@IsOptional` porque la decisión de requerir captcha es responsabilidad del service.
+3. `contact/contact.service.ts:submit` — lee `app.schema`, busca el elemento
+   `moduleId === 'contact'`, comprueba `config.enableCaptcha`. Si es `false`, salta
+   `verifyCaptcha`. El honeypot se mantiene en todo caso. Default seguro: captcha ON.
+4. Auditoría completa: 29 DTOs restantes decorados en una sola sesión (catalog, coupons,
+   events, fan-wall, gallery, menu, news, platform, push, social-wall, users/*, auth/*, build/*).
+
+**Regla arquitectural futura (obligatoria):**
+> **Todo campo de un DTO que pasa por `ValidationPipe({ whitelist: true })`
+> DEBE llevar al menos un decorador de `class-validator`, incluso si el único
+> propósito es "marcar que este campo existe".**
+>
+> - Campos obligatorios: `@IsString()` / `@IsEmail()` / `@IsNumber()` según tipo.
+> - Campos opcionales: `@IsOptional()` + su tipo (sin `@IsOptional` solo, el
+>   whitelist lo elimina si llega como `undefined`).
+> - Declarar `field!: string` sin decorador NO es suficiente — TypeScript types
+>   son borrados en runtime; `class-validator` no los ve.
+
+**Relación con #27:**
+`#27` tracked el riesgo de `forbidNonWhitelisted: false` (no rechaza propiedades extra).
+Este incidente descubre la otra cara: `whitelist: true` SÍ elimina propiedades reales
+sin decorador. Ambos riesgos del mismo flag, documentados ahora.
+`#27` queda PARCIALMENTE ABORDADO: todos los DTOs tienen decoradores (requisito previo
+para poder activar `forbidNonWhitelisted: true` en el futuro). El flip del flag sigue
+pendiente.
+
+**Verificación post-fix:**
+```bash
+# Debe devolver { access_token, user } con status 201:
+curl -X POST https://api.creatu.app/apps/<appId>/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"Temporal123","firstName":"Test"}'
+
+# Auditoría: debe dar output vacío (0 DTOs sin decoradores):
+Get-ChildItem -Path src -Recurse -Filter "*.dto.ts" | ForEach-Object {
+  $c = Get-Content $_.FullName -Raw
+  if ($c -notmatch '@Is|@Min|@Max|@Length|@Matches|@Type|@IsNotEmpty|@IsNumber|@IsArray|@IsObject') {
+    Write-Host "BROKEN: $($_.FullName)"
+  }
+}
+```
+
+**Verificación ejecutada 2026-05-25:** TS build limpio. Grep de auditoría: 0 DTOs afectados.
+
+**Impacto en cascada:**
+- Bug #4 (loyalty card "improbable") — pasa a "probable" sin tocar nada más, una vez
+  que `app-users` funcione y los usuarios puedan registrarse.
+- E2E: los tests existentes no capturaron esto porque los DTOs de órdenes/cupones
+  ya tenían decoradores. Pendiente revisar cobertura E2E del flujo de registro.
+
