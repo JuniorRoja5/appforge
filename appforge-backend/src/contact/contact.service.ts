@@ -51,20 +51,28 @@ export class ContactService {
   }
 
   async submit(appId: string, dto: SubmitContactDto, ip?: string) {
-    // Honeypot check
+    // Honeypot check (always enforced — invisible to legitimate users)
     if (dto.honeypot) {
       throw new BadRequestException('Spam detected');
-    }
-
-    // Captcha check
-    if (!dto.captchaToken || !this.verifyCaptcha(appId, dto.captchaToken)) {
-      throw new BadRequestException('Invalid or expired captcha token');
     }
 
     // Verificar que la app existe (y no está soft-deleted)
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null } });
     if (!app) {
       throw new NotFoundException('App not found');
+    }
+
+    // Captcha check — respects the per-app enableCaptcha flag stored in the schema.
+    // Default: captcha is ON (safe default). Only skip when explicitly set to false.
+    const schema: Array<{ moduleId: string; config?: Record<string, unknown> }> =
+      Array.isArray(app.schema) ? (app.schema as any[]) : [];
+    const contactModule = schema.find((el) => el?.moduleId === 'contact');
+    const captchaEnabled = contactModule?.config?.['enableCaptcha'] !== false;
+
+    if (captchaEnabled) {
+      if (!dto.captchaToken || !this.verifyCaptcha(appId, dto.captchaToken)) {
+        throw new BadRequestException('Invalid or expired captcha token');
+      }
     }
 
     const submission = await this.prisma.contactSubmission.create({
