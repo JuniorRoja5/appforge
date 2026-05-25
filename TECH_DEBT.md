@@ -1014,3 +1014,77 @@ Get-ChildItem -Path src -Recurse -Filter "*.dto.ts" | ForEach-Object {
 - E2E: los tests existentes no capturaron esto porque los DTOs de órdenes/cupones
   ya tenían decoradores. Pendiente revisar cobertura E2E del flujo de registro.
 
+---
+
+### #48 — `@UseGuards(...)` a nivel clase rompe endpoints con auth schema distinto en el mismo controller
+**Estado**: RESUELTO en `upload.controller.ts` (este commit, sesión 2026-05-25).
+**Origen**: Validación post-deploy 2026-05-25. `/upload/app-user-image` devolvía
+401 a tokens firmados con `APP_USER_JWT_SECRET` (end-users). La APK construyó
+la petición correctamente — el rechazo era 100% server-side.
+
+**Mecanismo:**
+En NestJS, declarar `@UseGuards(...)` a nivel CLASE aplica esos guards a TODOS
+los métodos del controller, encadenándose ANTES que los guards declarados a
+nivel método. Cuando una misma clase mezcla endpoints con auth schemas
+distintos (`JwtAuthGuard` para Client/Super-Admin vs `AppUserAuthGuard` para
+end-users), el guard de clase rechaza tokens del otro schema antes de que el
+guard de método llegue a ejecutarse.
+
+Ambos guards heredan de `AuthGuard(...)` de `@nestjs/passport`. La estrategia
+JWT (`JWT_SECRET`) lanza `UnauthorizedException` cuando recibe un token firmado
+con otro secret. El stack para `/upload/app-user-image`:
+1. Request entra con `Bearer <token-de-end-user>`.
+2. `JwtAuthGuard` (clase) corre → la estrategia `'jwt'` falla verificación de
+   firma → 401 → la cadena se interrumpe.
+3. `AppUserAuthGuard` (método) NUNCA se ejecuta.
+
+**Síntoma observado:**
+- `/upload/app-user-image` → 401 Unauthorized para cualquier token de end-user.
+- Imposible subir imágenes desde fan-wall, social-wall, o avatar de end-user.
+- El mensaje del 401 venía de `JwtAuthGuard`, no de `AppUserAuthGuard`, lo que
+  confundía el diagnóstico inicial (parecía un problema del cliente APK).
+
+**Fix aplicado:**
+- `appforge-backend/src/upload/upload.controller.ts`:
+  - Quitado `@UseGuards(JwtAuthGuard, RolesGuard)` de nivel clase.
+  - Añadido `@UseGuards(JwtAuthGuard, RolesGuard)` a nivel método en los 4
+    endpoints de Client (`image`, `app-icon`, `avatar`, `file`).
+  - `app-user-image` queda solo con `@UseGuards(AppUserAuthGuard)`.
+- Comportamiento de los 4 endpoints de Client: idéntico al previo (mismos
+  guards, mismo orden de evaluación). Solo cambió DÓNDE se declaran.
+
+**Auditoría del patrón en todo el backend (completada antes del commit):**
+- Controllers con `@UseGuards(JwtAuthGuard, RolesGuard)` a nivel CLASE:
+  `admin`, `apps`, `upload`, `build`, `subscription`, `catalog-products`,
+  `platform`, `menu-items`. Todos menos `upload` son endpoints de Client/Admin
+  puros, no mezclan con `AppUserAuthGuard`.
+- Controllers que usan `AppUserAuthGuard`: `app-users`, `booking`, `fan-wall`,
+  `loyalty`, `orders`, `push`, `social-wall`, `upload`.
+- De los 8 controllers que usan `AppUserAuthGuard`, **7 ya declaraban sus
+  guards a nivel método correctamente**; `upload` era el único con el
+  anti-patrón. No quedan casos latentes en producción.
+
+**Regla arquitectural futura (obligatoria):**
+> No declarar `@UseGuards(...)` a nivel clase en controllers que puedan recibir
+> tokens de auth schemas distintos. Si la clase mezcla auth schemas (típicamente
+> `JwtAuthGuard` con `AppUserAuthGuard`), declarar los guards a nivel método
+> para cada endpoint individual.
+
+**Verificación post-deploy:**
+```bash
+# Token de end-user, debe devolver 201 con { url, filename }:
+curl -i -X POST https://api.creatu.app/upload/app-user-image \
+  -H "Authorization: Bearer $APP_USER_TOKEN" \
+  -F "file=@/tmp/test.png"
+
+# Token de Client, debe seguir funcionando con 201 (regression check):
+curl -i -X POST https://api.creatu.app/upload/image \
+  -H "Authorization: Bearer $CLIENT_TOKEN" \
+  -F "file=@/tmp/test.png"
+```
+
+**Impacto operativo:**
+- La APK actual NO necesita rebuild — solo deploy backend.
+- Una vez deployado, fan-wall, social-wall y avatares de end-user vuelven a
+  funcionar sin reinstalación.
+
