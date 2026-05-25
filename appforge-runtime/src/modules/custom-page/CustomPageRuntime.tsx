@@ -1,5 +1,6 @@
 import React from 'react';
 import { sanitize } from '../../lib/sanitize';
+import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
 
 const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
@@ -12,7 +13,7 @@ const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }
   return (
     <div style={{ backgroundColor: bgColor || undefined, padding }}>
       <div
-        className="prose prose-sm max-w-none mx-auto"
+        className={`${responsiveHtmlClass} mx-auto`}
         style={{ color: 'var(--color-text-primary)', lineHeight: '1.6', maxWidth: widthMap[maxWidth] ?? '100%' }}
         dangerouslySetInnerHTML={{ __html: sanitize(content) }}
       />

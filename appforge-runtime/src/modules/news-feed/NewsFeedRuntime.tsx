@@ -3,10 +3,26 @@ import { ArrowLeft } from 'lucide-react';
 import { getNews } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { sanitize } from '../../lib/sanitize';
+import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
 import { imgFallback } from '../../lib/img-fallback';
 
 type Article = Awaited<ReturnType<typeof getNews>>[number];
+
+// Plain-text excerpt from a HTML string. Used in list/cards so rich-text markup
+// from the Quill editor doesn't leak as visible tags when line-clamp truncates.
+const stripHtml = (html: string): string => {
+  if (!html) return '';
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+    } catch {
+      // fall through to regex
+    }
+  }
+  return html.replace(/<[^>]+>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\s+/g, ' ').trim();
+};
 
 const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Noticias';
@@ -57,7 +73,7 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
           </span>
         )}
         <div
-          className="prose prose-sm max-w-none text-sm"
+          className={`${responsiveHtmlClass} text-sm`}
           style={{ color: 'var(--color-text-primary)' }}
           dangerouslySetInnerHTML={{ __html: sanitize(selected.content) }}
         />
@@ -94,11 +110,12 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-semibold line-clamp-1" style={{ color: 'var(--color-text-primary)' }}>{article.title}</h4>
                   {showExcerpt && (
-                    <div
+                    <p
                       className="text-xs line-clamp-2"
                       style={{ color: 'var(--color-text-secondary)' }}
-                      dangerouslySetInnerHTML={{ __html: sanitize(article.content) }}
-                    />
+                    >
+                      {stripHtml(article.content)}
+                    </p>
                   )}
                   <div className="flex items-center gap-2 mt-0.5">
                     {showDate && (
@@ -142,11 +159,12 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
               <div style={{ padding: 'var(--spacing-card, 16px)' }}>
                 <h4 className="font-semibold text-base mb-1" style={{ color: 'var(--color-text-primary)' }}>{article.title}</h4>
                 {showExcerpt && (
-                  <div
+                  <p
                     className="text-sm line-clamp-2"
                     style={{ color: 'var(--color-text-secondary)' }}
-                    dangerouslySetInnerHTML={{ __html: sanitize(article.content) }}
-                  />
+                  >
+                    {stripHtml(article.content)}
+                  </p>
                 )}
                 <div className="flex items-center gap-2 mt-2">
                   {showDate && (
