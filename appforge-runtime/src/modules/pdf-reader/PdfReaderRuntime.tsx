@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { FileText, ExternalLink } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
@@ -10,6 +11,14 @@ const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data })
   const showTitle = (data.showTitle as boolean) ?? true;
   const fileName = (data.fileName as string) ?? '';
   const [iframeError, setIframeError] = useState(false);
+
+  // Android WebView (Capacitor) does not render <iframe src="*.pdf"> — the user
+  // just sees a blank box. iOS WebView is inconsistent. The system browser, on
+  // the other hand, has a native PDF viewer on both platforms. So on native we
+  // skip the iframe entirely and surface only the "open document" button, which
+  // routes through @capacitor/browser. On PWA the iframe still works.
+  const isNative = Capacitor.isNativePlatform();
+  const showIframe = !isNative && !iframeError;
 
   const fullUrl = pdfUrl ? resolveAssetUrl(pdfUrl) : '';
 
@@ -38,8 +47,8 @@ const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data })
         <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
       )}
 
-      {/* Embedded PDF viewer */}
-      {!iframeError && (
+      {/* Embedded PDF viewer (PWA only — native WebView can't render PDFs in iframe) */}
+      {showIframe && (
         <div style={{ borderRadius: 'var(--radius-card, 12px)', overflow: 'hidden', border: '1px solid var(--color-divider, #e5e7eb)', marginBottom: 12 }}>
           <iframe
             src={`${fullUrl}#toolbar=1&navpanes=0`}
