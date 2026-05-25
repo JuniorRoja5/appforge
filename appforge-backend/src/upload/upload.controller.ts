@@ -17,10 +17,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 @Controller('upload')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
-  
+
   @Post('image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
@@ -56,6 +56,7 @@ export class UploadController {
   }
 
   @Post('app-icon')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
@@ -91,6 +92,7 @@ export class UploadController {
   }
 
   @Post('avatar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
@@ -126,6 +128,7 @@ export class UploadController {
   }
 
   @Post('file')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
