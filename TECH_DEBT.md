@@ -1088,3 +1088,112 @@ curl -i -X POST https://api.creatu.app/upload/image \
 - Una vez deployado, fan-wall, social-wall y avatares de end-user vuelven a
   funcionar sin reinstalación.
 
+---
+
+### #49 — Capacitor Android WebView intercepta `<a target="_blank">` / `window.open('_blank')`
+**Estado**: RESUELTO en booking. Auditoría del runtime completada.
+**Origen**: APK 2026-05-13. Junior reportó (#7A) que tras confirmar una reserva,
+pulsar "Ver mi reserva →" hacía que la app "volviera a la pantalla de inicio".
+
+**Mecanismo:**
+En Capacitor Android, el `<a target="_blank">` y `window.open(url, '_blank')`
+no abren en navegador externo limpio — la WebView de la app los intercepta y,
+según versión, los carga *dentro de la misma WebView* (reemplazando la app) o
+los abre en externo pero al volver la app se reinstancia desde cero, perdiendo
+toda la pila de navegación interna. Síntoma observado: "volver a inicio".
+
+La hipótesis inicial fue *remount del módulo* / *backButton mal capturado*.
+Ambas eran incorrectas — el archivo no hacía nada de eso. Era un único `<a>`
+con `target="_blank"`.
+
+**Fix correcto:** `Browser.open({ url })` de `@capacitor/browser` (envuelto
+por `BrowserShim` en `appforge-runtime/src/lib/platform/index.ts`). Abre el
+visor de browser del sistema (Chrome Custom Tabs en Android,
+SFSafariViewController en iOS) **sin tocar la WebView de la app**.
+
+**Auditoría del patrón en el runtime (commit 0215c6e):**
+- `target="_blank"` raw: 1 caso. `BookingRuntime.tsx:165`. **Fix aplicado.**
+- `window.open(url, '_blank')` raw o como fallback:
+  - `BrowserShim.open` (lib/platform): fallback PWA, correcto.
+  - `ButtonRuntime.tsx:29`: catch-fallback detrás de `await Browser.open(...)`.
+    Dead code en práctica salvo que el plugin falle al cargar. No-touch.
+  - `LinksRuntime.tsx:27`: igual que Button. No-touch.
+  - `EventsRuntime.tsx:34`, `HeroProfileRuntime.tsx:51`,
+    `PdfReaderRuntime.tsx:21`: igual patrón catch-fallback. No-touch.
+
+**Conclusión:** un solo bug real, todos los demás sitios ya usaban el path
+canónico de `Browser.open()` como primario.
+
+**Regla arquitectural futura (obligatoria):**
+> En código del runtime, NUNCA usar `<a target="_blank">` ni
+> `window.open(url, '_blank')` como path principal para abrir URLs externas.
+> El patrón canónico es `import { BrowserShim as Browser } from '../../lib/platform'`
+> y llamar `Browser.open({ url })`. El shim se encarga de Capacitor Browser
+> en nativo y `window.open` en PWA. Si necesitas un fallback adicional para
+> robustez, ya está dentro del shim — no lo dupliques en el sitio de llamada.
+
+**Verificación post-deploy:**
+APK actual sirve. Después de instalar la próxima APK que incluya este commit,
+hacer una reserva → pulsar "Ver mi reserva" → debe abrir el navegador del
+sistema (Chrome Custom Tabs) sin matar la app. Volver con back nativo → app
+sigue en la vista de éxito de reserva, no en home.
+
+---
+
+## Features diferidas — pendientes de planeación en sesión propia
+
+Estas no son tech-debt strictly speaking — son funcionalidades nuevas que
+salieron a luz junto con los bug fixes 2026-05-25. Documentadas aquí para no
+perderlas y arrancar la próxima sesión con spec inicial.
+
+### #7B — Builder: mini-dashboard de reservas (FEATURE, no bug)
+**Estado**: DIFERIDA. Spec inicial pendiente de pulir con Junior.
+**Origen**: Tras la APK 2026-05-13, Junior reportó que ver las reservas
+existentes desde el panel del cliente actual es "horrible". Pide vista que
+le ayude a detectar solapamientos antes de confirmar manualmente.
+**Alcance estimado**: 200-400 LoC en `appforge-builder/src/modules/booking/`
+(nuevo componente de panel de gestión, no toca runtime).
+**Decisiones a tomar antes de implementar:**
+1. ¿Vista calendario, lista ordenada, o ambas con toggle? (Calendario añade
+   complejidad — librería tipo `@fullcalendar/react` o build-your-own; lista
+   ordenada por `eventDate ASC` es la baseline barata).
+2. Definición de "solapamiento": ¿slots adyacentes en el mismo recurso, o
+   solo coincidencia exacta de `eventDate`? Depende de si Booking tiene
+   duración (sí — campo `duration` en el schema, ver `BookingService`).
+3. Filtros: por estado (`CONFIRMED` / `CANCELLED` / `COMPLETED` / `NO_SHOW`),
+   por rango de fechas, por servicio.
+4. ¿Acciones inline? (cancelar, marcar como completed, marcar no-show)
+**Prioridad**: media. No bloquea el uso de la app, pero es la queja UX más
+fuerte del primer cliente.
+**Próxima sesión**: arrancar con Plan Mode y un mock visual.
+
+### #7C — Runtime: UI polish del módulo booking en nativo (FEATURE)
+**Estado**: DIFERIDA. Spec sin definir.
+**Origen**: Junior mencionó "hay que mejorar la UI nativa para las reservas"
+post-APK. Frase deliberadamente vaga al cierre de sesión.
+**Bloqueador para implementar**: lista cerrada de 3-5 cambios atómicos
+concretos. Sin esto el commit puede ser cualquier cosa entre 20 LoC y 500 LoC.
+**Sugerencias para definir scope en la próxima sesión:**
+- Confirmación visual al pulsar slot disponible (estado intermedio antes
+  de submit del form).
+- Spinner explícito durante `getAvailableSlots` y `createBooking`.
+- Mostrar duración estimada del slot en la confirmación.
+- Mensaje claro cuando todos los slots del día están ocupados.
+- Persistir parcialmente los datos del form si el usuario sale y vuelve.
+**Prioridad**: baja. El flujo funciona; es pulido.
+
+---
+
+## Operaciones diferidas
+
+### INFRASTRUCTURE_SETUP.md no versionado
+**Estado**: PENDIENTE OPERATIVA.
+**Contexto**: Sesión 2026-05-13 generó este documento describiendo el
+provisioning del VPS desde cero (JDK 17, Android SDK platforms;android-34,
+build-tools;34.0.0, Gradle 8.7, env vars PM2 con ANDROID_SDK_ROOT, etc.).
+El archivo no llegó al repo — no aparece en `git status` ni en `git log`.
+**Acción pendiente**: Junior recupera el contenido (de su Claude.ai project
+knowledge o del VPS) y lo commitea en raíz. Sin esto, una migración a otro
+VPS o un sucesor de Junior va ciego.
+**Prioridad**: media. No urgente hasta que haya que tocar infra.
+
