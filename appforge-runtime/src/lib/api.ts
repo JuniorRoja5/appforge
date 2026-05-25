@@ -184,6 +184,14 @@ export const getMyLoyaltyCard = () =>
 export const redeemLoyalty = () =>
   apiFetch<{ message: string }>(`/apps/${getAppId()}/loyalty/redeem`, { method: 'POST' });
 
+// Stamp is a public endpoint (no JWT) — the merchant PIN is what authorises.
+// Called from the end-user's device after the merchant types the PIN in front of them.
+export const stampLoyalty = (appUserEmail: string, pin: string) =>
+  apiFetch<unknown>(`/apps/${getAppId()}/loyalty/stamp`, {
+    method: 'POST',
+    body: JSON.stringify({ appUserEmail, pin }),
+  });
+
 // ─── Orders (Catalog) ────────────────────────────────
 export const createOrder = (data: {
   customerName: string;

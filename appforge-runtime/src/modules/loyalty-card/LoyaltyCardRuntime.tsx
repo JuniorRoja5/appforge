@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Coffee, Heart, Check, Gift } from 'lucide-react';
+import { Star, Coffee, Heart, Check, Gift, X } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
-import { getMyLoyaltyCard, redeemLoyalty } from '../../lib/api';
-import { isAuthenticated, onAuthChange } from '../../lib/auth';
+import { getMyLoyaltyCard, redeemLoyalty, stampLoyalty } from '../../lib/api';
+import { isAuthenticated, onAuthChange, getCurrentUser } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 
 const STAMP_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -26,11 +26,25 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
   const [redeeming, setRedeeming] = useState(false);
   const [redeemMsg, setRedeemMsg] = useState('');
 
+  const [showStampModal, setShowStampModal] = useState(false);
+  const [pin, setPin] = useState('');
+  const [stamping, setStamping] = useState(false);
+  const [stampError, setStampError] = useState('');
+
   const StampIcon = STAMP_ICONS[stampIcon] ?? Star;
 
   useEffect(() => {
     return onAuthChange((u) => setAuthed(u !== null));
   }, []);
+
+  const refreshCard = () => {
+    getMyLoyaltyCard()
+      .then((card) => {
+        setCurrentStamps(card.currentStamps);
+        setCanRedeem(card.canRedeem);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!authed) {
@@ -38,12 +52,7 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
       setCanRedeem(false);
       return;
     }
-    getMyLoyaltyCard()
-      .then((card) => {
-        setCurrentStamps(card.currentStamps);
-        setCanRedeem(card.canRedeem);
-      })
-      .catch(() => {});
+    refreshCard();
   }, [authed]);
 
   const handleRedeem = async () => {
@@ -58,6 +67,43 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
     }
     setRedeeming(false);
     setTimeout(() => setRedeemMsg(''), 4000);
+  };
+
+  const openStampModal = () => {
+    setPin('');
+    setStampError('');
+    setShowStampModal(true);
+  };
+  const closeStampModal = () => {
+    setShowStampModal(false);
+    setStampError('');
+    setPin('');
+  };
+
+  const submitStamp = async () => {
+    const email = getCurrentUser()?.email;
+    if (!email) {
+      setStampError('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+      return;
+    }
+    if (pin.trim().length < 6) {
+      setStampError('El PIN debe tener al menos 6 caracteres.');
+      return;
+    }
+    setStamping(true);
+    setStampError('');
+    try {
+      await stampLoyalty(email, pin.trim());
+      // Backend response shape isn't relied on — refetch authoritative state.
+      refreshCard();
+      closeStampModal();
+    } catch (err: any) {
+      const msg = err?.message ?? 'No se pudo añadir el sello. Inténtalo de nuevo.';
+      // The backend rate-limits via Redis; bcrypt comparison failure surfaces as 400.
+      // Surface the server message verbatim when present — it's the most informative.
+      setStampError(msg);
+    }
+    setStamping(false);
   };
 
   return (
@@ -105,6 +151,17 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
         </p>
       )}
 
+      {/* Stamp request button */}
+      {authed && !canRedeem && (
+        <button
+          onClick={openStampModal}
+          className="w-full mt-3 py-2.5 text-sm font-semibold"
+          style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-on-primary, #fff)', borderRadius: 'var(--radius-button, 12px)' }}
+        >
+          Solicitar sello en el negocio
+        </button>
+      )}
+
       {/* Redeem button */}
       {authed && canRedeem && (
         <button
@@ -132,14 +189,85 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
       )}
 
       {/* Explanation text */}
-      {authed && !rewardDescription && (
+      {authed && !rewardDescription && !canRedeem && (
         <p className="text-xs text-center mt-3 px-2" style={{ color: 'var(--color-text-secondary)' }}>
-          Muestra esta pantalla en el negocio para que sellen tu progreso. Necesitas {totalStamps} sellos para obtener: {reward}.
+          Pulsa "Solicitar sello" y pide al comerciante que introduzca el PIN del negocio. Necesitas {totalStamps} sellos para obtener: {reward}.
         </p>
       )}
 
       {termsText && (
         <p className="text-[10px] mt-2" style={{ color: 'var(--color-text-secondary)' }}>{termsText}</p>
+      )}
+
+      {/* Stamp request modal (bottom sheet) */}
+      {showStampModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          onClick={closeStampModal}
+        >
+          <div
+            className="w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: 'var(--color-surface-card, #fff)', borderTopLeftRadius: 20, borderTopRightRadius: 20 }}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <h4 className="text-base font-bold" style={{ color: 'var(--color-text-primary)' }}>
+                Sello en el negocio
+              </h4>
+              <button onClick={closeStampModal} aria-label="Cerrar" style={{ color: 'var(--color-text-secondary)' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>
+              Muestra esta pantalla al comerciante. Pídele que introduzca el PIN del negocio para añadir un sello a tu tarjeta.
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="PIN del comerciante"
+              autoFocus
+              className="w-full p-3 text-lg text-center mb-3"
+              style={{
+                border: '1px solid var(--color-divider, #e5e7eb)',
+                borderRadius: 'var(--radius-button, 12px)',
+                color: 'var(--color-text-primary)',
+                backgroundColor: 'var(--color-surface-page, #fff)',
+              }}
+            />
+            {stampError && (
+              <p className="text-xs mb-3" style={{ color: 'var(--color-feedback-error, #ef4444)' }}>{stampError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={closeStampModal}
+                className="flex-1 py-2.5 text-sm font-semibold"
+                style={{
+                  backgroundColor: 'var(--color-surface-variant, #f3f4f6)',
+                  color: 'var(--color-text-primary)',
+                  borderRadius: 'var(--radius-button, 12px)',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={submitStamp}
+                disabled={stamping || pin.length < 6}
+                className="flex-1 py-2.5 text-sm font-semibold disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'var(--color-text-on-primary, #fff)',
+                  borderRadius: 'var(--radius-button, 12px)',
+                }}
+              >
+                {stamping ? 'Validando…' : 'Validar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
