@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
+import { Share } from '@capacitor/share';
 import { getNews } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { sanitize } from '../../lib/sanitize';
@@ -34,27 +35,85 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Article | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Short visual highlight on the item the user just came back from.
+  const [lastVisitedIndex, setLastVisitedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     getNews().then(setArticles).catch(console.error).finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (lastVisitedIndex === null) return;
+    const t = setTimeout(() => setLastVisitedIndex(null), 1200);
+    return () => clearTimeout(t);
+  }, [lastVisitedIndex]);
+
   if (loading) return <LoadingCards />;
 
   const displayed = articles.slice(0, itemsToShow);
+  const selected = selectedIndex !== null ? displayed[selectedIndex] : null;
+
+  const goBack = () => {
+    setLastVisitedIndex(selectedIndex);
+    setSelectedIndex(null);
+  };
+
+  const shareArticle = async (a: Article) => {
+    const text = stripHtml(a.content).slice(0, 200);
+    await Share.share({
+      title: a.title,
+      text: text ? `${a.title}\n\n${text}…` : a.title,
+      dialogTitle: 'Compartir noticia',
+    }).catch(() => {});
+  };
 
   // ── Article detail view ──
-  if (selected) {
+  if (selected && selectedIndex !== null) {
+    const atFirst = selectedIndex === 0;
+    const atLast = selectedIndex === displayed.length - 1;
     return (
       <div>
-        <button
-          onClick={() => setSelected(null)}
-          className="flex items-center gap-1 text-sm font-medium mb-3"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          <ArrowLeft size={16} /> Volver
-        </button>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={goBack}
+            className="flex items-center gap-1 text-sm font-medium"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            <ArrowLeft size={16} /> Volver
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => shareArticle(selected)}
+              className="p-1.5 rounded-full"
+              style={{ color: 'var(--color-primary)' }}
+              aria-label="Compartir"
+            >
+              <Share2 size={16} />
+            </button>
+            <button
+              onClick={() => setSelectedIndex(selectedIndex - 1)}
+              disabled={atFirst}
+              className="p-1.5 rounded-full disabled:opacity-30"
+              style={{ color: 'var(--color-primary)' }}
+              aria-label="Anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+              {selectedIndex + 1} / {displayed.length}
+            </span>
+            <button
+              onClick={() => setSelectedIndex(selectedIndex + 1)}
+              disabled={atLast}
+              className="p-1.5 rounded-full disabled:opacity-30"
+              style={{ color: 'var(--color-primary)' }}
+              aria-label="Siguiente"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
         {showImage && selected.imageUrl && (
           <img
             src={resolveAssetUrl(selected.imageUrl)}
@@ -83,6 +142,11 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
     );
   }
 
+  const highlightStyle = (idx: number): React.CSSProperties =>
+    lastVisitedIndex === idx
+      ? { outline: '2px solid var(--color-primary)', outlineOffset: 2, transition: 'outline 0.3s ease' }
+      : { transition: 'outline 0.3s ease' };
+
   // ── List layout ──
   if (layout === 'list') {
     return (
@@ -92,12 +156,12 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay noticias disponibles.</p>
         ) : (
           <div className="space-y-1">
-            {displayed.map((article) => (
+            {displayed.map((article, idx) => (
               <div
                 key={article.id}
-                className="flex gap-3 py-2 cursor-pointer"
-                style={{ borderBottom: '1px solid var(--color-divider)' }}
-                onClick={() => setSelected(article)}
+                className="flex gap-3 py-2 cursor-pointer rounded-lg"
+                style={{ borderBottom: '1px solid var(--color-divider)', ...highlightStyle(idx) }}
+                onClick={() => setSelectedIndex(idx)}
               >
                 {showImage && article.imageUrl && (
                   <img
@@ -146,12 +210,12 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay noticias disponibles.</p>
       ) : (
         <div className="space-y-3">
-          {displayed.map((article) => (
+          {displayed.map((article, idx) => (
             <div
               key={article.id}
               className="overflow-hidden cursor-pointer"
-              style={{ borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)' }}
-              onClick={() => setSelected(article)}
+              style={{ borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)', ...highlightStyle(idx) }}
+              onClick={() => setSelectedIndex(idx)}
             >
               {showImage && article.imageUrl && (
                 <img src={resolveAssetUrl(article.imageUrl)} alt={article.title} className="w-full h-40 object-cover" onError={imgFallback} />
