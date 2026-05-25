@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Check, Calendar } from 'lucide-react';
+import { BrowserShim as Browser } from '../../lib/platform';
 import { getAvailableSlots, createBooking } from '../../lib/api';
 import { registerRuntimeModule } from '../registry';
 
@@ -160,15 +161,13 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
           Te hemos enviado los detalles por email.
         </p>
         {trackingUrl && (
-          <a
-            href={trackingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => { Browser.open({ url: trackingUrl }).catch(() => {}); }}
             className="inline-block mt-3 text-sm font-medium underline"
             style={{ color: 'var(--color-primary)' }}
           >
             Ver mi reserva →
-          </a>
+          </button>
         )}
         <div>
           <button
