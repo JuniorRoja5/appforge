@@ -1197,3 +1197,120 @@ knowledge o del VPS) y lo commitea en raíz. Sin esto, una migración a otro
 VPS o un sucesor de Junior va ciego.
 **Prioridad**: media. No urgente hasta que haya que tocar infra.
 
+---
+
+### #50 — `@IsUrl()` aplicado a campos que reciben paths relativos de `/uploads/*`
+**Estado**: RESUELTO (commit 25cbbf1, sesión 2026-05-28).
+**Origen**: Regresión introducida por commit cc4ef37 ("full DTO audit" del
+2026-05-25). La auditoría añadió `@IsUrl()` a todo campo que parecía URL,
+sin diferenciar entre URLs externas (las que el cliente escribe a mano en
+el builder) y paths internos generados por nuestros propios endpoints
+`/upload/*`.
+
+**Síntoma**: Tras desplegar cc4ef37, cualquier intento de crear un post de
+fan-wall / social-wall, item de galería, etc., con imagen subida vía
+`/upload/app-user-image` devolvía:
+```
+{"statusCode":400,"message":["imageUrl must be a URL address"]}
+```
+Porque el frontend mandaba el path relativo `/uploads/355e54d7-...png` que
+devuelve nuestro endpoint de upload, y `@IsUrl()` exige URL absoluta.
+
+**Lo verdaderamente alarmante**: este bug ya existía latente desde el
+2026-05-07 (`7b2168b`, activación de `ValidationPipe whitelist:true`).
+Entre esa fecha y cc4ef37, los mismos DTOs no tenían decoradores y el
+whitelist eliminaba silenciosamente el campo `imageUrl` antes de llegar
+al service. Los posts se creaban con 201 (parecía OK) **pero sin imagen**.
+Dos semanas de imágenes que el cliente creía estar subiendo y se perdían
+en el ValidationPipe. Mismo mecanismo que disparó #47 y #8 ahora se
+manifiesta en sentido opuesto: visible > invisible, pero la pérdida de
+datos ya está hecha.
+
+**Análisis y categorización (22 ocurrencias en 19 DTOs):**
+
+**Cat 1 — INTERNAL UPLOAD (relajar a `@IsString()`)** — 20 campos:
+| Archivo | Campo |
+|---------|-------|
+| app-users/dto/update-app-user.dto.ts | avatarUrl |
+| catalog/dto/create-collection.dto.ts | imageUrl |
+| catalog/dto/update-collection.dto.ts | imageUrl |
+| catalog/dto/create-product.dto.ts | imageUrls[] |
+| catalog/dto/update-product.dto.ts | imageUrls[] |
+| contact/dto/submit-contact.dto.ts | fileUrls[] |
+| coupons/dto/create-coupon.dto.ts | imageUrl |
+| coupons/dto/update-coupon.dto.ts | imageUrl |
+| events/dto/create-event.dto.ts | imageUrl (línea 22) |
+| events/dto/update-event.dto.ts | imageUrl (línea 21) |
+| fan-wall/dto/create-fan-post.dto.ts | imageUrl |
+| gallery/dto/create-gallery-item.dto.ts | imageUrl |
+| gallery/dto/update-gallery-item.dto.ts | imageUrl |
+| menu/dto/create-menu-category.dto.ts | imageUrl |
+| menu/dto/update-menu-category.dto.ts | imageUrl |
+| menu/dto/create-menu-item.dto.ts | imageUrl |
+| menu/dto/update-menu-item.dto.ts | imageUrl |
+| news/dto/create-news-article.dto.ts | imageUrl + videoUrl |
+| news/dto/update-news-article.dto.ts | imageUrl + videoUrl |
+| push/dto/send-push.dto.ts | imageUrl |
+| social-wall/dto/create-social-post.dto.ts | imageUrl |
+| users/dto/update-profile.dto.ts | avatarUrl |
+
+**Cat 2 — EXTERNAL URL (mantener `@IsUrl()`)** — 2 campos:
+| Archivo | Campo |
+|---------|-------|
+| events/dto/create-event.dto.ts | ticketUrl (línea 44) |
+| events/dto/update-event.dto.ts | ticketUrl (línea 44) |
+
+**Decisión sobre `videoUrl` (news)**: tratado como Cat 1 porque el runtime
+`NewsFeedRuntime.VideoEmbed` soporta tanto YouTube/Vimeo (URL absoluta)
+como upload directo (path relativo a `/uploads/*.mp4`). `@IsUrl()` rechaza
+la segunda. Aceptar string permite ambos.
+
+**Seguridad de la relajación**:
+- `imageUrl` y `avatarUrl` se renderizan vía `<img src={...}>` exclusivamente,
+  nunca como `<a href>` ni como argumento de `eval()`. Payloads tipo
+  `javascript:` no se ejecutan en `<img src>` en navegadores modernos.
+- `@MaxLength(512)` (preexistente) impide payloads patológicos.
+- El upload físico del archivo sigue pasando por nuestro endpoint, que
+  valida MIME-type, tamaño, y firma con `validateFileType` magic-bytes.
+  El campo del DTO solo guarda la REFERENCIA al archivo ya validado.
+
+**Regla arquitectural futura (obligatoria):**
+> En cualquier auditoría DTO que añada `@IsUrl()`, **mirar siempre quién
+> popula el campo**:
+> - Si lo escribe el usuario en el builder (URL externa a tercero):
+>   `@IsUrl()` ✓.
+> - Si viene del flujo de upload interno (`/upload/*` devuelve path
+>   relativo): `@IsString()` + `@MaxLength(512)`.
+> - Si admite ambos (ej. videoUrl que puede ser YouTube o upload local):
+>   `@IsString()` + `@MaxLength(512)`.
+> El nombre del campo no es suficiente — `videoUrl` puede ser cualquiera
+> de las tres. Hay que mirar el componente del builder.
+
+**Verificación post-deploy:**
+```bash
+# Path relativo: debe devolver 201 (antes 400)
+curl -i -X POST https://api.creatu.app/apps/<appId>/fan-wall/posts \
+  -H "Authorization: Bearer $APP_USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"imageUrl":"/uploads/test.png","caption":"smoke"}'
+
+# URL absoluta a nuestro propio dominio: debe seguir funcionando
+curl -i -X POST https://api.creatu.app/apps/<appId>/fan-wall/posts \
+  -H "Authorization: Bearer $APP_USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"imageUrl":"https://api.creatu.app/uploads/test.png","caption":"smoke"}'
+
+# ticketUrl con valor inválido (no URL): debe seguir devolviendo 400
+# (regression check, mantenemos @IsUrl ahí)
+curl -i -X PUT https://api.creatu.app/apps/<appId>/events/<id> \
+  -H "Authorization: Bearer $CLIENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ticketUrl":"no es url"}'
+```
+
+**Impacto operativo**:
+- APK actual no necesita rebuild — fix backend-only.
+- Los posts/items creados entre 2026-05-07 y 2026-05-25 (whitelist
+  silencioso) NO se pueden recuperar — el imageUrl nunca llegó a la BD.
+  Los clientes tendrán que re-subir esas imágenes. Comunicar.
+
