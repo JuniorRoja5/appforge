@@ -1,7 +1,7 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 
 export class CreateFanPostDto {
-  @IsUrl()
+  @IsString()
   @IsNotEmpty()
   @MaxLength(512)
   imageUrl!: string;

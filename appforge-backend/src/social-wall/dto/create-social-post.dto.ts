@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 
 export class CreateSocialPostDto {
   @IsString()
@@ -7,7 +7,7 @@ export class CreateSocialPostDto {
   content!: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 }

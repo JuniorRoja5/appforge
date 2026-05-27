@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsObject, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject, MaxLength } from 'class-validator';
 
 export class SendPushDto {
   @IsString()
@@ -12,7 +12,7 @@ export class SendPushDto {
   body!: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 

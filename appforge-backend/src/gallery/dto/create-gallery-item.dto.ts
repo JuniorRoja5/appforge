@@ -1,8 +1,8 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, IsInt, Min, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, Min, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateGalleryItemDto {
-  @IsUrl()
+  @IsString()
   @IsNotEmpty()
   @MaxLength(512)
   imageUrl!: string;

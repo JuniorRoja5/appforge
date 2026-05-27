@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUrl, IsInt, Min, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateGalleryItemDto {
@@ -13,7 +13,7 @@ export class UpdateGalleryItemDto {
   description?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 

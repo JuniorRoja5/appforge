@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateAppUserDto {
   @IsOptional()
@@ -12,7 +12,7 @@ export class UpdateAppUserDto {
   lastName?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   avatarUrl?: string;
 }

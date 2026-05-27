@@ -5,7 +5,6 @@ import {
   IsNumber,
   IsPositive,
   Min,
-  IsUrl,
   IsBoolean,
   IsArray,
   ArrayMaxSize,
@@ -38,7 +37,7 @@ export class CreateProductDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
-  @IsUrl({}, { each: true })
+  @IsString({ each: true })
   imageUrls?: string[];
 
   @IsOptional()

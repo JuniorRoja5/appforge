@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength } from 'class-validator';
 
 export class UpdateCollectionDto {
   @IsOptional()
@@ -12,7 +12,7 @@ export class UpdateCollectionDto {
   description?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 }

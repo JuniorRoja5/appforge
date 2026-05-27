@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsArray,
   ArrayMaxSize,
-  IsUrl,
   MaxLength,
 } from 'class-validator';
 
@@ -15,7 +14,7 @@ export class SubmitContactDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @IsUrl({}, { each: true })
+  @IsString({ each: true })
   fileUrls?: string[];
 
   @IsOptional()

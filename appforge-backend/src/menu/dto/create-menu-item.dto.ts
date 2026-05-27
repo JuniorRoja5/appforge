@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsNumber,
   IsPositive,
-  IsUrl,
   IsBoolean,
   IsArray,
   ArrayMaxSize,
@@ -29,7 +28,7 @@ export class CreateMenuItemDto {
   price!: number;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 

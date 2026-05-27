@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUrl, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsDateString, MaxLength } from 'class-validator';
 
 export class UpdateNewsArticleDto {
   @IsOptional()
@@ -11,12 +11,12 @@ export class UpdateNewsArticleDto {
   content?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   videoUrl?: string;
 

@@ -3,7 +3,6 @@ import {
   IsOptional,
   IsNumber,
   IsPositive,
-  IsUrl,
   IsIn,
   IsDateString,
   IsInt,
@@ -40,7 +39,7 @@ export class UpdateCouponDto {
   discountValue?: number;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   @MaxLength(512)
   imageUrl?: string;
 
