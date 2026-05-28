@@ -36,7 +36,21 @@ export const getNews = () =>
 
 // ─── Events ────────────────────────────────────────────
 export const getEvents = () =>
-  apiFetch<Array<{ id: string; title: string; description?: string; imageUrl?: string; eventDate: string; location?: string; price?: string; ticketUrl?: string }>>(
+  apiFetch<Array<{
+    id: string;
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    eventDate: string;
+    eventEndDate?: string;
+    location?: string;
+    price?: string;
+    ticketUrl?: string;
+    ticketLabel?: string;
+    category?: string;
+    organizer?: string;
+    contactInfo?: string;
+  }>>(
     `/apps/${getAppId()}/events`,
   );
 
