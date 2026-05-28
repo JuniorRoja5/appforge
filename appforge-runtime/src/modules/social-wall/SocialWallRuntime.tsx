@@ -22,6 +22,7 @@ import {
 } from '../../lib/api';
 import { compressImage } from '../../lib/image-utils';
 import { imgFallback } from '../../lib/img-fallback';
+import { showConfirm, showPrompt, showAlert } from '../../lib/dialogs';
 
 // ─── PostCard ──────────────────────────────────────────
 
@@ -331,7 +332,8 @@ const SocialWallRuntime: React.FC<{
   };
 
   const handleDelete = async (postId: string) => {
-    if (!confirm('¿Eliminar este post?')) return;
+    const ok = await showConfirm('¿Eliminar este post?', { confirmLabel: 'Eliminar' });
+    if (!ok) return;
     try {
       await deleteSocialPost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
@@ -342,13 +344,13 @@ const SocialWallRuntime: React.FC<{
   };
 
   const handleReport = async (postId: string) => {
-    const reason = prompt('¿Por qué quieres reportar este post? (opcional)');
+    const reason = await showPrompt('¿Por qué quieres reportar este post?', { placeholder: 'Motivo (opcional)' });
     if (reason === null) return; // cancelled
     try {
       await reportSocialContent('social_post', postId, reason || undefined);
-      alert('Reporte enviado. Gracias.');
+      await showAlert('Reporte enviado. Gracias.');
     } catch (err: any) {
-      alert(err.message || 'Error al reportar');
+      await showAlert(err.message || 'Error al reportar');
     }
   };
 

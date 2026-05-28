@@ -18,6 +18,7 @@ import {
 } from '../../lib/api';
 import { compressImage } from '../../lib/image-utils';
 import { imgFallback } from '../../lib/img-fallback';
+import { showConfirm, showPrompt, showAlert } from '../../lib/dialogs';
 
 // ─── PhotoDetail Modal ─────────────────────────────────
 
@@ -145,7 +146,8 @@ const FanWallRuntime: React.FC<{
   };
 
   const handleDelete = async (postId: string) => {
-    if (!confirm('¿Eliminar esta foto?')) return;
+    const ok = await showConfirm('¿Eliminar esta foto?', { confirmLabel: 'Eliminar' });
+    if (!ok) return;
     try {
       await deleteFanPost(postId);
       setPosts((prev) => prev.filter((p) => p.id !== postId));
@@ -157,13 +159,13 @@ const FanWallRuntime: React.FC<{
   };
 
   const handleReport = async (postId: string) => {
-    const reason = prompt('¿Por qué quieres reportar esta foto? (opcional)');
+    const reason = await showPrompt('¿Por qué quieres reportar esta foto?', { placeholder: 'Motivo (opcional)' });
     if (reason === null) return;
     try {
       await reportFanPost(postId, reason || undefined);
-      alert('Reporte enviado. Gracias.');
+      await showAlert('Reporte enviado. Gracias.');
     } catch (err: any) {
-      alert(err.message || 'Error al reportar');
+      await showAlert(err.message || 'Error al reportar');
     }
   };
 
@@ -174,7 +176,7 @@ const FanWallRuntime: React.FC<{
     try {
       const compressed = await compressImage(file);
       const result = await uploadAppUserImage(compressed);
-      const caption = prompt('Agrega una descripción (opcional)') ?? undefined;
+      const caption = (await showPrompt('Agrega una descripción', { placeholder: 'Opcional' })) ?? undefined;
       const post = await createFanPost(result.url, caption || undefined);
       setPosts((prev) => [post, ...prev]);
       setTotal((t) => t + 1);
