@@ -1314,3 +1314,139 @@ curl -i -X PUT https://api.creatu.app/apps/<appId>/events/<id> \
   silencioso) NO se pueden recuperar — el imageUrl nunca llegó a la BD.
   Los clientes tendrán que re-subir esas imágenes. Comunicar.
 
+---
+
+### #51 — Capacitor Android back button no manejado en runtime
+**Estado**: RESUELTO (commits `6b0eb50` + `a1e5cb4`, sesión 2026-05-28).
+**Origen**: APK 2026-05-28. Junior reportó: "la app no responde a los botones
+nativos de 'atrás' de Android". Quedaba bloqueado en vistas internas que no
+tenían X / flecha visible.
+
+**Causa**: ningún `*Runtime.tsx` registraba listener para
+`App.addListener('backButton', ...)` de `@capacitor/app`. Sin handler,
+Capacitor cierra la app (comportamiento por defecto) o la WebView se traga
+el evento. En cualquier caso, el usuario no podía salir de detalle/modal sin
+una X explícita.
+
+**Solución**: nuevo hook `useBackButton` en `appforge-runtime/src/lib/use-back-button.ts`:
+
+```ts
+useBackButton(() => setSelectedIndex(null), selectedIndex !== null);
+```
+
+Características no-obvias del hook (que el implementador DEBE mantener si lo
+modifica):
+1. **`useRef`+effect del handler**: si el caller pasa un arrow function nuevo
+   en cada render, el listener no se re-registra. La ref siempre apunta al
+   handler "actual". Sin esto, un parent re-render causa tormenta de
+   register/unregister.
+2. **`removed` flag**: `CapApp.addListener` es async. Si el effect limpia
+   antes de que la Promise resuelva, `handle` es `undefined` y `remove()` es
+   no-op — listener zombie permanente. El flag cierra esa ventana:
+   cuando la Promise resuelve, si `removed=true`, se llama `h.remove()`.
+3. **`Capacitor.isNativePlatform()` guard**: PWA es no-op (el navegador
+   maneja su back).
+4. **Flag `enabled`**: cuando es `false`, NO se registra listener. Esto
+   permite que la vista raíz de un módulo deje a Capacitor cerrar la app.
+
+**Módulos cubiertos** (7):
+- `news-feed`, `events`, `fan-wall`, `loyalty-card`, `photo-gallery`:
+  estado simple (`selected*` o `show*Modal`), back → cerrar sub-vista.
+- `booking`: state machine `'select' | 'form' | 'sending' | 'success' | 'error'`,
+  back recorre la máquina en reverso. No registrado durante `'sending'` para
+  no interrumpir red.
+- `catalog`: state machine `'shopping' | 'cart' | 'login-gate' | 'checkout' | 'confirmation'`,
+  back recorre la máquina hacia `'shopping'`.
+
+**Módulos auditados y descartados (read-first rule del plan)**:
+- `social-wall`: comments inline expand + form siempre-visible. Sin sub-vista.
+- `menu-restaurant`: accordion + tabs (estado plano).
+- `discount-coupon`: flat list.
+
+**Módulos fuera de scope** (sin navegación interna):
+- `button`, `image`, `text`, `links`, `video`, `testimonials`, `hero-profile`,
+  `user-profile`, `push-notification`, `contact`, `custom-page`, `pdf-reader`.
+
+**Regla arquitectural futura (obligatoria)**:
+> Cualquier `*Runtime.tsx` que añada un sub-state (`selected*`, `*Index`,
+> `show*Modal`, state machine con vistas distintas) DEBE registrar
+> `useBackButton(handler, subViewIsOpen)`. Si el módulo es flat-list,
+> NO registrar — el botón atrás cierra la app, comportamiento esperado en
+> la vista raíz.
+
+---
+
+### #52 — `window.confirm` / `prompt` / `alert` no funcionan en Capacitor WebView
+**Estado**: RESUELTO (commits `731f9c8` + `a799c20`, sesión 2026-05-28).
+**Origen**: APK 2026-05-28. Junior reportó: "he subido una imagen a fanwall,
+pero ahora al querer eliminar, no me deja. No hay errores, simplemente no
+hace nada". Curl al endpoint `/fan-wall/posts/:id` con DELETE devolvía 200
+limpio — bug 100% en runtime.
+
+**Causa**: Capacitor Android WebView suprime los diálogos síncronos del web.
+`window.confirm()`, `window.prompt()`, `window.alert()` retornan
+`false`/`null`/`undefined` inmediatamente sin mostrar UI. Patrón típico
+roto:
+```ts
+const handleDelete = async (postId: string) => {
+  if (!confirm('¿Eliminar?')) return; // confirm() retorna false en native
+  await deleteFanPost(postId);        // NUNCA SE EJECUTA
+};
+```
+Síntoma: tap → no diálogo → no request → no error. Exactamente el reporte.
+
+**Auditoría del runtime** (grep `confirm\(|prompt\(|alert\(` en `*Runtime.tsx`):
+- 2 archivos, 9 ocurrencias totales.
+- `FanWallRuntime.tsx`: 5 calls (handleDelete, handleReport con prompt + 2× alert, handleUpload caption).
+- `SocialWallRuntime.tsx`: 4 calls (handleDelete, handleReport con prompt + 2× alert).
+- `LoyaltyCardRuntime.tsx`: NO afectado — su modal de PIN ya es custom (commit `98d7b5a`).
+
+**Solución**: utilidad `appforge-runtime/src/lib/dialogs.tsx` con tres
+funciones promise-returning:
+- `showConfirm(message, opts?): Promise<boolean>`
+- `showPrompt(message, opts?): Promise<string | null>`
+- `showAlert(message, opts?): Promise<void>`
+
+Cada función monta un `<div>` en `document.body`, renderiza un modal
+bottom-sheet vía `react-dom/client createRoot`, y resuelve cuando el usuario
+interactúa (OK / Cancelar / X / backdrop click / Escape). Estilo idéntico al
+modal de PIN de `LoyaltyCardRuntime` — mismas variables CSS, mismo radio,
+misma opacidad backdrop. No se añade `@capacitor/dialog` ni ninguna otra
+dependencia.
+
+**Migración aplicada**:
+- `FanWallRuntime.tsx`: 5 sitios.
+- `SocialWallRuntime.tsx`: 4 sitios.
+- Todas las funciones tocadas ya eran `async`, así que el cambio es
+  mecánico: añadir `await` a la llamada.
+
+**Regla arquitectural futura (obligatoria)**:
+> **Prohibido** `window.confirm`, `window.prompt`, `window.alert` en
+> `*Runtime.tsx`. Siempre `showConfirm`/`showPrompt`/`showAlert` de
+> `appforge-runtime/src/lib/dialogs`. Funcionan en nativo y en PWA con la
+> misma API y el mismo estilo visual.
+
+**Nota operativa**: posts de fan-wall creados desde la APK actual ANTES de
+este fix tienen `caption: null` en BD. El `prompt('Agrega una descripción')`
+devolvía `null` silenciosamente y el endpoint guardaba `null` en lugar del
+texto que el usuario nunca pudo escribir. Las imágenes están — solo el
+caption se perdió. Comunicar al primer cliente si pregunta. Mismo patrón
+que la pérdida de `imageUrl` documentada en #50, mecanismos distintos pero
+mismo efecto.
+
+**Verificación post-APK (Junior)**:
+1. Fan-wall: tap "Eliminar" en un post propio → bottom-sheet aparece →
+   tap "Eliminar" → post desaparece de la lista.
+2. Fan-wall: subir nueva foto → bottom-sheet para descripción aparece →
+   escribir texto → post se crea con caption.
+3. Social-wall: idéntico al fan-wall en delete y report.
+4. Tecla Escape (PWA): cierra el modal como cancel.
+
+---
+
+### Decisión: NO se abre #53 "audit nativo pendiente"
+El audit que motivó esta sesión (back button + dialogs) está cerrado por
+#51 + #52. Un entry permanente "audit pendiente" sería siempre `OPEN` —
+es trabajo continuo. Si Junior reproduce nuevos síntomas en la próxima
+APK, se abre un entry específico con su número.
+
