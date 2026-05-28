@@ -7,6 +7,7 @@ import { sanitize } from '../../lib/sanitize';
 import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
 import { imgFallback } from '../../lib/img-fallback';
+import { useBackButton } from '../../lib/use-back-button';
 
 type Article = Awaited<ReturnType<typeof getNews>>[number];
 
@@ -58,6 +59,10 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
     setLastVisitedIndex(selectedIndex);
     setSelectedIndex(null);
   };
+
+  // Hardware back button closes the detail view and returns to the list.
+  // Disabled when on the list itself so Capacitor's default (exit app) applies.
+  useBackButton(goBack, selectedIndex !== null);
 
   const shareArticle = async (a: Article) => {
     const text = stripHtml(a.content).slice(0, 200);

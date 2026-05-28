@@ -3,6 +3,7 @@ import { Clock, Check, Calendar } from 'lucide-react';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { getAvailableSlots, createBooking } from '../../lib/api';
 import { registerRuntimeModule } from '../registry';
+import { useBackButton } from '../../lib/use-back-button';
 
 interface BookingField {
   id: string;
@@ -68,6 +69,28 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     trackingToken: string;
   } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Hardware back button: step one state machine state backward.
+  // - 'form' -> 'select' (release the slot, keep the date)
+  // - 'success' / 'error' -> 'select' (full reset, same as "Hacer otra reserva")
+  // - 'select': default Capacitor behaviour (exit app)
+  // - 'sending': no-op while a request is in flight
+  useBackButton(
+    () => {
+      if (status === 'form') {
+        setStatus('select');
+        setSelectedSlot('');
+      } else if (status === 'success' || status === 'error') {
+        setStatus('select');
+        setSelectedSlot('');
+        setSelectedDate('');
+        setFormData({});
+        setConfirmedBooking(null);
+        setError('');
+      }
+    },
+    status !== 'select' && status !== 'sending',
+  );
 
   // Determine available days for the calendar (next bookingHorizonDays, respecting weekdays + blocked)
   const availableDays = new Set<string>();

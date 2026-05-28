@@ -4,6 +4,7 @@ import { getGallery } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
+import { useBackButton } from '../../lib/use-back-button';
 
 type GalleryImage = Awaited<ReturnType<typeof getGallery>>[number];
 
@@ -25,6 +26,9 @@ const PhotoGalleryRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data
       .catch((err) => setError(err?.message || 'Error al cargar galería'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Hardware back button closes the lightbox.
+  useBackButton(() => setSelectedIndex(null), selectedIndex !== null);
 
   if (loading) return <div className="animate-pulse h-40 rounded-xl" style={{ backgroundColor: 'var(--color-surface-variant)' }} />;
   if (error) return <p className="text-sm text-center py-4" style={{ color: 'var(--color-feedback-error)' }}>{error}</p>;

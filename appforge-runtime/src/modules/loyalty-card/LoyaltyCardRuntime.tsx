@@ -4,6 +4,7 @@ import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { getMyLoyaltyCard, redeemLoyalty, stampLoyalty } from '../../lib/api';
 import { isAuthenticated, onAuthChange, getCurrentUser } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
+import { useBackButton } from '../../lib/use-back-button';
 
 const STAMP_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
   star: Star, coffee: Coffee, heart: Heart, check: Check, gift: Gift,
@@ -79,6 +80,9 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
     setStampError('');
     setPin('');
   };
+
+  // Hardware back button closes the PIN modal when it's open.
+  useBackButton(closeStampModal, showStampModal);
 
   const submitStamp = async () => {
     const email = getCurrentUser()?.email;

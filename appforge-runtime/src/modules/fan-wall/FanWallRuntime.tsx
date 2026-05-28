@@ -19,6 +19,7 @@ import {
 import { compressImage } from '../../lib/image-utils';
 import { imgFallback } from '../../lib/img-fallback';
 import { showConfirm, showPrompt, showAlert } from '../../lib/dialogs';
+import { useBackButton } from '../../lib/use-back-button';
 
 // ─── PhotoDetail Modal ─────────────────────────────────
 
@@ -117,6 +118,9 @@ const FanWallRuntime: React.FC<{
   }, []);
 
   useEffect(() => { loadPosts(1); }, [loadPosts]);
+
+  // Hardware back button closes the photo-detail modal.
+  useBackButton(() => setSelectedPost(null), selectedPost !== null);
 
   const handleLike = async (postId: string) => {
     if (!authed) return;

@@ -5,6 +5,7 @@ import { getCurrentUser, isAuthenticated, login as appUserLogin, register as app
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
+import { useBackButton } from '../../lib/use-back-button';
 
 type Collections = Awaited<ReturnType<typeof getCatalogCollections>>;
 type Product = Collections[number]['products'][number];
@@ -60,6 +61,22 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
       }
     });
   }, [view]);
+
+  // Hardware back button steps one view backward through the checkout flow.
+  // 'shopping' is the root — default Capacitor behaviour applies (exit app).
+  useBackButton(
+    () => {
+      if (view === 'confirmation') {
+        setView('shopping');
+        setConfirmedOrder(null);
+      } else if (view === 'checkout' || view === 'login-gate') {
+        setView('cart');
+      } else if (view === 'cart') {
+        setView('shopping');
+      }
+    },
+    view !== 'shopping',
+  );
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
