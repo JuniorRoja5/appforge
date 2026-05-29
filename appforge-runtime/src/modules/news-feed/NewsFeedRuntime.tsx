@@ -50,11 +50,11 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
     return () => clearTimeout(t);
   }, [lastVisitedIndex]);
 
-  if (loading) return <LoadingCards />;
-
-  const displayed = articles.slice(0, itemsToShow);
-  const selected = selectedIndex !== null ? displayed[selectedIndex] : null;
-
+  // goBack + useBackButton MUST be called before any conditional early return
+  // so the number of hooks invoked stays constant across renders. The original
+  // placement (after `if (loading) return ...`) caused React error #310 when
+  // loading flipped from true to false on the second render — the first render
+  // never reached useBackButton, the second did, hook counts differed, throw.
   const goBack = () => {
     setLastVisitedIndex(selectedIndex);
     setSelectedIndex(null);
@@ -63,6 +63,11 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
   // Hardware back button closes the detail view and returns to the list.
   // Disabled when on the list itself so Capacitor's default (exit app) applies.
   useBackButton(goBack, selectedIndex !== null);
+
+  if (loading) return <LoadingCards />;
+
+  const displayed = articles.slice(0, itemsToShow);
+  const selected = selectedIndex !== null ? displayed[selectedIndex] : null;
 
   const shareArticle = async (a: Article) => {
     const text = stripHtml(a.content).slice(0, 200);
