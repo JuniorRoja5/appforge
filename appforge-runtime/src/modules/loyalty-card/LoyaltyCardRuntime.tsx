@@ -26,6 +26,7 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
   const [canRedeem, setCanRedeem] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [redeemMsg, setRedeemMsg] = useState('');
+  const [cardError, setCardError] = useState('');
 
   const [showStampModal, setShowStampModal] = useState(false);
   const [pin, setPin] = useState('');
@@ -41,10 +42,19 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
   const refreshCard = () => {
     getMyLoyaltyCard()
       .then((card) => {
-        setCurrentStamps(card.currentStamps);
+        setCurrentStamps(card.stampsCollected);
         setCanRedeem(card.canRedeem);
+        setCardError('');
       })
-      .catch(() => {});
+      .catch((err) => {
+        // Surface the error in-place instead of throwing. The RuntimeErrorBoundary
+        // would catch a throw and replace the whole card with its fallback — too
+        // disruptive for a transient network failure. A small inline message
+        // gives the user a Reintentar without losing the rest of the UI.
+        // eslint-disable-next-line no-console
+        console.warn('[loyalty] my-card failed:', err);
+        setCardError(err?.message || 'No se pudieron cargar tus sellos.');
+      });
   };
 
   useEffect(() => {
@@ -152,6 +162,20 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
       {!authed && (
         <p className="text-xs text-center mt-3" style={{ color: 'var(--color-text-secondary)' }}>
           Inicia sesión para acumular sellos.
+        </p>
+      )}
+
+      {/* Card fetch error — shown inline so the rest of the UI stays usable. */}
+      {authed && cardError && (
+        <p className="text-xs text-center mt-3" style={{ color: 'var(--color-feedback-error, #ef4444)' }}>
+          {cardError}{' '}
+          <button
+            onClick={refreshCard}
+            className="underline font-medium"
+            style={{ color: 'var(--color-feedback-error, #ef4444)' }}
+          >
+            Reintentar
+          </button>
         </p>
       )}
 

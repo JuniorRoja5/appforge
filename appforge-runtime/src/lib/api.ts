@@ -190,8 +190,19 @@ export const reportFanPost = (postId: string, reason?: string) =>
   });
 
 // ─── Loyalty Card ────────────────────────────────────
+// Response shape mirrors LoyaltyService.getMyCard() in the backend.
+// Note: the backend field is `stampsCollected`, NOT `currentStamps` — a prior
+// version of this type used `currentStamps` and the runtime read undefined,
+// silently showing 0 stamps for every authed user (B6, fixed 2026-05-29).
 export const getMyLoyaltyCard = () =>
-  apiFetch<{ currentStamps: number; totalStamps: number; canRedeem: boolean; reward: string }>(
+  apiFetch<{
+    totalStamps: number;
+    reward: string;
+    rewardDescription: string | null;
+    stampsCollected: number;
+    canRedeem: boolean;
+    totalRedemptions: number;
+  }>(
     `/apps/${getAppId()}/loyalty/my-card`,
   );
 
