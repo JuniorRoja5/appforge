@@ -1450,3 +1450,103 @@ El audit que motivó esta sesión (back button + dialogs) está cerrado por
 es trabajo continuo. Si Junior reproduce nuevos síntomas en la próxima
 APK, se abre un entry específico con su número.
 
+---
+
+### #54 — Regla de orden de hooks (precisificada) + boundary state persistence
+**Estado parte 1 (regla)**: DOCUMENTADA tras el incidente de #310 en `6126d77`.
+**Estado parte 2 (boundary `resetKeys`)**: OPEN, diferido.
+
+#### Parte 1 — Regla del orden de hooks en `*Runtime.tsx`
+
+**Origen**: APK 2026-05-29. NewsFeedRuntime petaba con React error #310
+("Rendered more hooks than during the previous render") al pasar de
+`loading=true` a `loading=false`. Causa concreta: la llamada a
+`useBackButton(...)` quedó por debajo de `if (loading) return <LoadingCards />`.
+El primer render (loading=true) no la alcanzaba; el segundo (loading=false)
+sí → el conteo de hooks cambió entre renders → throw → sin Error Boundary
+montado, el throw desmontó el árbol entero → pantalla blanca.
+
+**Regla mal formulada en el commit message de `6126d77`**: «si el handler
+depende de un valor derivado que solo existe tras un return temprano,
+calcula el handler inline». Eso enfoca el problema en el handler, que NO
+es la pieza relevante. El handler es una función normal — puede declararse
+inline, arriba, abajo, da igual mientras solo referencie state/props ya
+declarados.
+
+**Regla correcta (precisificada)**:
+> **Toda llamada a un hook (`useX(...)`) debe ejecutarse antes de cualquier
+> `return` condicional del componente.** Esto incluye `useState`, `useEffect`,
+> `useRef`, `useCallback`, `useMemo`, `useContext`, `useReducer` y CUALQUIER
+> hook custom (`useBackButton`, hooks de routing, etc.).
+>
+> Las funciones que el hook recibe como argumento (handlers) pueden
+> definirse en cualquier orden, mientras solo referencien identificadores
+> (state, setters, props) declarados arriba en el cuerpo del componente.
+>
+> Si la regla parece forzar a hacer "más cosas" arriba de un early return,
+> casi siempre el resultado correcto es mover el hook (y, si hace falta,
+> mover el handler con él). Nunca mover el early return debajo del hook —
+> la condición de salida está ahí por una razón funcional, no de hooks.
+
+**Auditoría del fix (en `6126d77`)**: revisé los 7 runtimes tocados por
+`a1e5cb4`. Solo `NewsFeedRuntime` tenía la violación. Los otros 6
+(`events`, `booking`, `fan-wall`, `loyalty-card`, `photo-gallery`,
+`catalog`) ya tenían el `useBackButton` correctamente por encima de
+cualquier `if (...) return ...`. Confirmado por grep de posiciones de línea.
+
+**Por qué solo NewsFeed**: era el único cuyo handler (`goBack`) hacía
+referencia a `setLastVisitedIndex` Y leía `selectedIndex`, mientras que
+el resto pasaban arrow functions triviales que no necesitaban una
+declaración nombrada. El reflejo natural ("declaro `goBack` cerca de
+donde lo uso, luego paso al hook") metió ambos por debajo del early return.
+Por eso esta regla merece estar escrita, no asumida.
+
+#### Parte 2 — `RuntimeErrorBoundary` state persistence (diferido)
+
+**Origen**: review del boundary añadido en `9da9171`. El componente
+es un class component clásico con `state = { error: null }`.
+`getDerivedStateFromError` setea el error; `reset` lo limpia con un
+click del usuario.
+
+**Limitación conocida**: una vez `error` se setea, React reusa la
+instancia del boundary mientras `key={element.id}` se mantenga estable
+(que es lo que pasa en TabScreen — el key es el id del elemento del
+schema). Si el error de hoy es no-transitorio (un bug de render
+determinista), `Reintentar` re-renderiza el mismo árbol, vuelve a tirar,
+fallback persiste. Si el usuario navega a otro tab y vuelve, AppShell
+desmonta el TabScreen anterior → los boundaries del tab nuevo montan
+frescos → en ESE caso el state se limpia solo, pero solo porque el
+boundary se reinstancia, no porque el reset funcione.
+
+**Cuándo bite**: error transitorio en el mismo módulo, mismo tab.
+Ejemplos: prop nueva tras `getNews()` que el módulo no sabía manejar y
+peta una vez; segunda llamada a la API devuelve un shape válido. Con el
+estado pegado, el usuario no recupera aunque la causa ya no exista.
+
+**Fix futuro (no en esta tanda)**: API `resetKeys?: unknown[]` estilo
+`react-error-boundary` de Brian Vaughn. `getDerivedStateFromProps`
+compara el array de keys del render anterior; si cambian, resetea
+`error` a `null`. Caller en TabScreen pasaría algo como
+`resetKeys={[element.config]}` para que reseteo automático ocurra
+cuando la config del módulo cambia.
+
+**Por qué no se hace ahora**:
+- No está en la ruta crítica del APK actual (el #310 ya está fijo
+  por la vía estructural, sin depender del reset del boundary).
+- Validar `resetKeys` se hace razonando y con un test unitario, no
+  necesita APK build.
+- Mete una variable extra al build de verificación cuyo objetivo es
+  una sola pregunta binaria: ¿la home dejó de irse a blanco?
+
+**Acción cuando se aborde**: 1 commit en `appforge-runtime/src/components/RuntimeErrorBoundary.tsx`
+añadiendo `resetKeys` prop + lifecycle. Idealmente con un test unitario
+con `@testing-library/react` para verificar el reseteo. ~30 min.
+
+**No abrir #55 para "smoke del boundary"**: se descartó tras debatir
+opciones (a)/(b)/(c) en la sesión 2026-05-29. El contrato `catch →
+fallback` está suficientemente garantizado por React; lo único que puede
+fallar de nuestro código (el reset) no se ejercita con un swap de
+Component + tab-switch (los boundaries se reinstancian al desmontar el
+tab). Si en producción aparece un caso donde el fallback queda pegado,
+ese síntoma abre un entry concreto.
+
