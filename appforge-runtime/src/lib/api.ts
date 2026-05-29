@@ -83,7 +83,12 @@ export const getAvailableSlots = (date: string) =>
   apiFetch<string[]>(`/apps/${getAppId()}/bookings/available?date=${date}`);
 
 export const createBooking = (data: { date: string; timeSlot: string; formData: Record<string, string> }) =>
-  apiFetch<{ id: string; shortCode: string; trackingToken: string; date: string; timeSlot: string }>(
+  // Backend includes a server-built `trackingUrl` so the runtime doesn't
+  // construct one from window.location.origin (which is `https://localhost`
+  // inside Capacitor — B3). The field is typed optional so an older backend
+  // that hasn't deployed 044a8c8 still parses against this type without
+  // failing; the runtime falls back accordingly.
+  apiFetch<{ id: string; shortCode: string; trackingToken: string; date: string; timeSlot: string; trackingUrl?: string }>(
     `/apps/${getAppId()}/bookings`,
     {
       method: 'POST',

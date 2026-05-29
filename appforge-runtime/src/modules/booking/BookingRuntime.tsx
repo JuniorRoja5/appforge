@@ -67,6 +67,7 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     id: string;
     shortCode: string;
     trackingToken: string;
+    trackingUrl?: string;
   } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -165,8 +166,14 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
 
   // ── Success view ──
   if (status === 'success') {
+    // Prefer the server-built trackingUrl (added in 044a8c8). Fall back to
+    // window.location.origin only for backwards-compat with an older backend
+    // — and note that in Capacitor Android this fallback URL is broken
+    // (`https://localhost/...`) and was the original B3 symptom. Once the
+    // backend with 044a8c8 is deployed, the fallback never fires in practice.
     const trackingUrl = confirmedBooking
-      ? `${window.location.origin}/booking/${(data.appId as string) ?? ''}/${confirmedBooking.id}?t=${confirmedBooking.trackingToken}`
+      ? confirmedBooking.trackingUrl
+        ?? `${window.location.origin}/booking/${(data.appId as string) ?? ''}/${confirmedBooking.id}?t=${confirmedBooking.trackingToken}`
       : null;
     return (
       <div className="text-center p-8" style={{ borderRadius: 'var(--radius-card)', backgroundColor: 'var(--color-surface-card)' }}>
