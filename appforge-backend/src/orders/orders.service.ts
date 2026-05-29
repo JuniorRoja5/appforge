@@ -11,6 +11,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { decrypt } from '../lib/crypto';
+import { orderTrackingUrl } from '../lib/tracking-urls';
 import * as nodemailer from 'nodemailer';
 
 const ORDER_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin I, O, 0, 1
@@ -148,7 +149,13 @@ export class OrdersService {
       this.logger.warn(`Order email failed for ${order.id}: ${err.message}`),
     );
 
-    return order;
+    // Include the public trackingUrl built from PUBLIC_BUILDER_URL so the
+    // runtime can open it via Capacitor Browser. Same reason as the
+    // booking flow (B3, fixed 2026-05-29).
+    return {
+      ...order,
+      trackingUrl: orderTrackingUrl(appId, order.id, order.trackingToken),
+    };
   }
 
   // ─────────────────────────────────────────────────────
@@ -188,8 +195,7 @@ export class OrdersService {
       auth: { user: smtpConfig.username, pass: password },
     });
 
-    const builderUrl = process.env.PUBLIC_BUILDER_URL || 'http://localhost:5173';
-    const trackingUrl = `${builderUrl}/order/${appId}/${order.id}?t=${order.trackingToken}`;
+    const trackingUrl = orderTrackingUrl(appId, order.id, order.trackingToken);
 
     const items = order.items as Array<{ name: string; quantity: number; price: number }>;
     const itemsHtml = items

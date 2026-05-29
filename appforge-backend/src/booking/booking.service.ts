@@ -13,6 +13,7 @@ import { FcmService } from '../push/fcm.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus, Prisma } from '@prisma/client';
 import { decrypt } from '../lib/crypto';
+import { bookingTrackingUrl } from '../lib/tracking-urls';
 import * as nodemailer from 'nodemailer';
 
 const ORDER_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin I, O, 0, 1
@@ -215,7 +216,15 @@ export class BookingService {
       this.logger.warn(`Reminder scheduling failed for ${booking.id}: ${e.message}`),
     );
 
-    return booking;
+    // Include the public trackingUrl built from PUBLIC_BUILDER_URL so the
+    // runtime can open it via Capacitor Browser. Without this the runtime
+    // used to build the URL from window.location.origin, which is
+    // `https://localhost` inside Capacitor — system browser then fails
+    // with connection refused (B3, fixed 2026-05-29).
+    return {
+      ...booking,
+      trackingUrl: bookingTrackingUrl(appId, booking.id, booking.trackingToken),
+    };
   }
 
   // ─────────────────────────────────────────────────────
@@ -446,8 +455,7 @@ export class BookingService {
       businessAddress = cfg.businessAddress;
     } catch {}
 
-    const builderUrl = process.env.PUBLIC_BUILDER_URL || 'http://localhost:5173';
-    const trackingUrl = `${builderUrl}/booking/${appId}/${booking.id}?t=${booking.trackingToken}`;
+    const trackingUrl = bookingTrackingUrl(appId, booking.id, booking.trackingToken);
 
     const fechaPretty = booking.date.toLocaleDateString('es-ES', {
       weekday: 'long',
@@ -740,8 +748,7 @@ export class BookingService {
           secure: smtpConfig.secure,
           auth: { user: smtpConfig.username, pass: password },
         });
-        const builderUrl = process.env.PUBLIC_BUILDER_URL || 'http://localhost:5173';
-        const trackingUrl = `${builderUrl}/booking/${booking.appId}/${booking.id}?t=${booking.trackingToken}`;
+        const trackingUrl = bookingTrackingUrl(booking.appId, booking.id, booking.trackingToken);
         const fechaPretty = booking.date.toLocaleDateString('es-ES', {
           weekday: 'long',
           day: 'numeric',
