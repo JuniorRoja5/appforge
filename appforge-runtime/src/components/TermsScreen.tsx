@@ -1,5 +1,6 @@
 import React from 'react';
 import { sanitize } from '../lib/sanitize';
+import { responsiveHtmlClass } from '../lib/responsive-html';
 
 interface Props {
   content: string;
@@ -38,7 +39,7 @@ export const TermsScreen: React.FC<Props> = ({ content, onAccept }) => {
         WebkitOverflowScrolling: 'touch',
       }}>
         <div
-          className="prose prose-sm max-w-none"
+          className={responsiveHtmlClass}
           style={{ color: 'var(--color-text-primary, #374151)', fontSize: 13, lineHeight: 1.7 }}
           dangerouslySetInnerHTML={{ __html: sanitize(content) }}
         />
