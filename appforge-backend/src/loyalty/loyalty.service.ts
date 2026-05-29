@@ -66,15 +66,9 @@ export class LoyaltyService {
 
   // --- My card (app user's stamps + canRedeem) ---
   async getMyCard(appId: string, appUserId: string) {
-    // TEMP DEBUG — instrumenting B1 (loyalty 404 in production despite data
-    // existing in psql and dist matching source). REVERT AFTER DIAGNOSIS.
-    // eslint-disable-next-line no-console
-    console.log('[DBG getMyCard] appId=', JSON.stringify(appId), 'len=', appId?.length, 'appUserId=', JSON.stringify(appUserId));
     const card = await this.prisma.loyaltyCard.findUnique({
       where: { appId },
     });
-    // eslint-disable-next-line no-console
-    console.log('[DBG getMyCard] card encontrado?=', card === null ? 'NULL' : 'SÍ', card ? `(appId fila: ${card.appId})` : '');
     if (!card) throw new NotFoundException('Loyalty card not configured');
 
     const stampsCollected = await this.countStampsSinceLastRedemption(appId, appUserId);
