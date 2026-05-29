@@ -51,7 +51,7 @@ export class LoyaltyController {
   @Get('my-card')
   @UseGuards(AppUserAuthGuard)
   getMyCard(@Param('appId') appId: string, @Request() req) {
-    return this.loyaltyService.getMyCard(appId, req.user.id);
+    return this.loyaltyService.getMyCard(appId, req.user.appUserId);
   }
 
   // Public: stamp with PIN (rate limited + Redis lockout)
@@ -65,6 +65,6 @@ export class LoyaltyController {
   @Post('redeem')
   @UseGuards(AppUserAuthGuard)
   redeem(@Param('appId') appId: string, @Request() req) {
-    return this.loyaltyService.redeem(appId, req.user.id);
+    return this.loyaltyService.redeem(appId, req.user.appUserId);
   }
 }
