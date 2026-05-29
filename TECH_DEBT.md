@@ -1550,3 +1550,43 @@ Component + tab-switch (los boundaries se reinstancian al desmontar el
 tab). Si en producción aparece un caso donde el fallback queda pegado,
 ese síntoma abre un entry concreto.
 
+---
+
+### #55 — APK build worker salta `tsc -b`, deja pasar errores TypeScript a producción
+**Estado**: OPEN.
+**Origen**: Sesión 2026-05-29. Junior observó que dos errores TypeScript
+existieron en `main` sin que el pipeline de build de APK los rechazara:
+los `import.meta.env` sin tipos de `manifest.ts` / `platform/index.ts`, y
+el tipo angosto del retorno de `getEvents()` que no incluía
+`eventEndDate`/`category`/etc. Ambos se arreglaron a posteriori
+(`bab5563` + `bac95dc`), pero solo porque corrimos `npm run build` local
+antes de pushear — el pipeline del worker no los habría caçado.
+
+**Diagnóstico**: el job de build del APK ejecuta `npx vite build`
+directamente, en vez de `npm run build` que es `tsc -b && vite build`.
+Vite no hace typecheck del proyecto — solo transforma y bundlea. Por
+tanto, errores TypeScript silenciosos llegan a artefacto.
+
+**Fix propuesto**: en el worker que construye APKs (en
+`appforge-backend/src/build/`, el processor que invoca `vite`), una de
+dos opciones:
+1. Sustituir la invocación de `vite build` por `npm run build` (mantiene
+   `tsc -b && vite build` definidos en el package.json del runtime).
+2. Añadir un paso `npx tsc --noEmit` ANTES de `npx vite build`. Si
+   `tsc --noEmit` falla con exit code != 0, el job entero falla.
+
+Recomiendo (1) — usa la receta canónica del package.json y evita
+divergencia entre dev local y CI.
+
+**Test del fix**: introducir un error TS deliberado en cualquier archivo
+del runtime (e.g. `const x: number = 'foo';`), kickear un build APK,
+confirmar que el job FALLA en vez de producir APK roto. Revertir el
+error después.
+
+**Por qué no se arregla ahora**: deuda real pero no en ruta crítica del
+ciclo actual. Los slips de hoy fueron cosméticos (errores de tipo, no de
+runtime). Si en el futuro algo más grave colara, esto subiría de
+prioridad. Estimación: 1-2h incluyendo el test de regresión.
+
+**Prioridad**: media.
+
