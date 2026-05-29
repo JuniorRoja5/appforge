@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
 import { PlatformSmtpService } from './platform-smtp.service';
 import { PlatformFcmService } from './platform-fcm.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -34,9 +34,8 @@ export class PlatformController {
   @Roles(Role.SUPER_ADMIN)
   testSmtp(
     @Body() body: { host?: string; port?: number; secure?: boolean; username?: string; password?: string; fromEmail?: string; fromName?: string },
-    @Request() req: any,
   ) {
-    return this.smtpService.testConnection(body, req.user.email);
+    return this.smtpService.testConnection(body);
   }
 
   // ─── FCM ─────────────────────────────────────

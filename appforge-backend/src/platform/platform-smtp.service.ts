@@ -64,7 +64,6 @@ export class PlatformSmtpService {
 
   async testConnection(
     dto: { host?: string; port?: number; secure?: boolean; username?: string; password?: string; fromEmail?: string; fromName?: string },
-    targetEmail: string,
   ) {
     let host: string, port: number, secure: boolean, username: string, password: string, fromEmail: string, fromName: string;
 
@@ -121,7 +120,13 @@ export class PlatformSmtpService {
     try {
       await transport.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
-        to: targetEmail,
+        // Send the test email to the configured fromEmail (the SMTP account
+        // itself). Sending it to the logged-in Client's account (req.user.email)
+        // was the previous behaviour and rejected with 550 whenever that
+        // account was not a real mailbox on the SMTP server — which is
+        // every dev/test login. fromEmail always exists by definition of
+        // being able to authenticate as it.
+        to: fromEmail,
         subject: 'AppForge — Email de prueba SMTP de plataforma',
         html: `<p>¡Tu configuración SMTP de plataforma funciona correctamente!</p><p>Este email fue enviado desde AppForge para verificar tu configuración.</p>`,
       });

@@ -107,6 +107,6 @@ export class AppsController {
     @Body() body: { host?: string; port?: number; secure?: boolean; username?: string; password?: string; fromEmail?: string; fromName?: string },
     @Request() req,
   ) {
-    return this.appsService.testSmtp(id, req.user.email, body, req.user.tenantId, req.user.role);
+    return this.appsService.testSmtp(id, body, req.user.tenantId, req.user.role);
   }
 }

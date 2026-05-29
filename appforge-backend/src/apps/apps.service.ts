@@ -215,7 +215,6 @@ export class AppsService {
 
   async testSmtp(
     id: string,
-    userEmail: string,
     bodyData?: { host?: string; port?: number; secure?: boolean; username?: string; password?: string; fromEmail?: string; fromName?: string },
     tenantId?: string,
     role?: string,
@@ -278,11 +277,18 @@ export class AppsService {
       return { connectionOk: false, emailSent: false, error: `Error de conexión: ${err.message}` };
     }
 
-    // Step 2: Send test email
+    // Step 2: Send test email.
+    // Recipient is the configured fromEmail (the SMTP account itself).
+    // Previous behaviour sent to the logged-in Client's account
+    // (req.user.email), which the upstream SMTP rejected with 550 whenever
+    // that account was not a real mailbox — i.e. always in dev/test, and
+    // most of the time in production because Client emails are not hosted
+    // on the same domain as the SMTP relay. fromEmail is guaranteed to
+    // exist by virtue of being able to authenticate as it.
     try {
       await transport.sendMail({
         from: `"${fromName}" <${fromEmail}>`,
-        to: userEmail,
+        to: fromEmail,
         subject: 'AppForge — Email de prueba SMTP',
         html: `<p>¡Tu configuración SMTP funciona correctamente!</p><p>Este email fue enviado desde AppForge para verificar tu configuración.</p>`,
       });
