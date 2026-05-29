@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { CanvasElement } from '../lib/manifest';
 import { getModule } from '../modules/registry';
 import { trackModuleView } from '../lib/analytics';
+import { RuntimeErrorBoundary } from './RuntimeErrorBoundary';
 
 interface Props {
   elements: CanvasElement[];
@@ -43,7 +44,14 @@ export const TabScreen: React.FC<Props> = ({ elements, apiUrl, appId }) => {
             );
           }
           const Component = mod.Component;
-          return <Component key={element.id} data={element.config} apiUrl={apiUrl} appId={appId} />;
+          // Per-module boundary: a crash inside one Component renders a small
+          // fallback for that module only — sibling modules on the same tab
+          // and the surrounding AppShell (nav, tab bar) keep working.
+          return (
+            <RuntimeErrorBoundary key={element.id} label={element.moduleId}>
+              <Component data={element.config} apiUrl={apiUrl} appId={appId} />
+            </RuntimeErrorBoundary>
+          );
         })}
       </div>
     </div>
