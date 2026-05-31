@@ -139,7 +139,17 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     setError('');
     try {
       const result = await createBooking({ date: selectedDate, timeSlot: selectedSlot, formData });
-      setConfirmedBooking({ id: result.id, shortCode: result.shortCode, trackingToken: result.trackingToken });
+      // trackingUrl from the server (commit 044a8c8). Forgetting to copy it
+      // here was the bug behind B3 — the type/reader changes in 9f89bdc
+      // were complete but this write site was left as-is, so the optional
+      // field stayed undefined and the success view fell back to
+      // window.location.origin = "https://localhost" inside Capacitor.
+      setConfirmedBooking({
+        id: result.id,
+        shortCode: result.shortCode,
+        trackingToken: result.trackingToken,
+        trackingUrl: result.trackingUrl,
+      });
       setStatus('success');
     } catch (err: any) {
       setError(err?.message || 'Error al reservar. Intenta otro horario.');
