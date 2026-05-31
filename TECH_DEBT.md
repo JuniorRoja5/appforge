@@ -1590,3 +1590,39 @@ prioridad. Estimación: 1-2h incluyendo el test de regresión.
 
 **Prioridad**: media.
 
+**Patrón paralelo cazado en sesión 2026-05-31 — campo opcional declarado
+y leído pero no poblado.** El fix de B3 (`9f89bdc`) añadió `trackingUrl?:
+string` al type de `createBooking` (api.ts) y al shape del state
+`confirmedBooking` (BookingRuntime.tsx), y la derivación en el success
+view lee con `confirmedBooking.trackingUrl ?? fallback`. Pero el
+`setConfirmedBooking({...})` del handler en handleBook se quedó con la
+firma vieja, sin `trackingUrl: result.trackingUrl`. El campo se declaraba
+y se leía, pero nunca se poblaba. Resultado: `confirmedBooking.trackingUrl`
+siempre undefined, el `??` colapsaba al fallback `window.location.origin`
+= `https://localhost` en Capacitor, Browser.open recibía localhost,
+connection refused. Costó el slot 5/5 del APK.
+
+`tsc -b` lo deja pasar porque omitir un campo opcional de un object
+literal es válido — el compilador no sabe que el runtime necesita el
+valor. Y `tsc --noEmit` con strict tampoco lo caza por la misma razón.
+El worker que se salta `tsc -b` ni siquiera entra en este género, pero
+incluso con el typecheck completo el bug pasaría — esto es ortogonal a
+#55, en realidad un patrón paralelo que merece estar fichado aquí
+porque el género es el mismo: "cosas que pasan el chequeo de tipos y
+fallan en runtime".
+
+**Regla de review al tocar un campo opcional** (obligatoria de aquí en
+adelante): verificar las **tres caras** en este orden — `type` →
+`reader` → `writer`. Si solo grepeas dos, falta una. Específicamente,
+al añadir un campo opcional a un type del state o de la API:
+
+1. Anotar el type (lo natural).
+2. Leerlo donde corresponda (`obj.field ?? fallback`).
+3. **Inspeccionar TODOS los call sites de construcción del objeto** —
+   `setX({...})`, `return {...}`, factory functions — y añadir el
+   campo en cada uno. El grep canónico: el setter o el constructor del
+   objeto cuyo type acabas de tocar.
+
+Aplica a code review, a IA-assisted edits, y especialmente a fixes
+mecánicos que tocan un type y dejan los call sites "para después".
+
