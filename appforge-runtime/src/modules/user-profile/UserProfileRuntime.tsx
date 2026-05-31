@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Camera } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { compressImage } from '../../lib/image-utils';
-import { uploadAppUserImage } from '../../lib/api';
+import { uploadAppUserImage, requestPasswordReset } from '../../lib/api';
+import { showPrompt, showAlert } from '../../lib/dialogs';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import {
@@ -176,6 +177,47 @@ const AuthForm: React.FC<{
             color: 'var(--color-text-primary, #111827)',
           }}
         />
+
+        {tab === 'login' && (
+          <button
+            type="button"
+            onClick={async () => {
+              const emailInput = await showPrompt(
+                'Introduce el email de tu cuenta. Te enviaremos un enlace para crear una nueva contraseña.',
+                {
+                  title: 'Recuperar contraseña',
+                  defaultValue: email,
+                  placeholder: 'tu@email.com',
+                  required: true,
+                },
+              );
+              if (!emailInput) return;
+              try {
+                await requestPasswordReset(emailInput);
+                // Backend deliberately returns the same generic success
+                // whether or not the email exists, so the dialog text
+                // mirrors that anti-enumeration stance — "si existe...".
+                await showAlert(
+                  'Si existe una cuenta con ese email, te hemos enviado las instrucciones. Revisa tu bandeja de entrada.',
+                  { title: 'Email enviado' },
+                );
+              } catch {
+                // Network / server-down failures are honest errors — surfacing
+                // them is not an enumeration leak (no info about the email),
+                // and silently pretending we sent the email would mislead the
+                // user when they don't receive anything.
+                await showAlert(
+                  'No se pudo enviar el email. Comprueba tu conexión e inténtalo de nuevo.',
+                  { title: 'Error de conexión' },
+                );
+              }
+            }}
+            className="text-xs underline self-start"
+            style={{ color: 'var(--color-text-secondary, #6b7280)' }}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        )}
 
         {error && (
           <p className="text-sm px-2 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--color-feedback-error, #ef4444)20', color: 'var(--color-feedback-error, #ef4444)' }}>

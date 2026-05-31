@@ -229,6 +229,16 @@ export const getMyLoyaltyCard = () =>
 export const redeemLoyalty = () =>
   apiFetch<{ message: string }>(`/apps/${getAppId()}/loyalty/redeem`, { method: 'POST' });
 
+// F5 — request a password reset email. Public endpoint (no JWT). The backend
+// always returns the same generic success message regardless of whether the
+// email exists, so the runtime should always show the same "check your email"
+// confirmation. Rate-limited at 3/min per IP.
+export const requestPasswordReset = (email: string) =>
+  apiFetch<{ message: string }>(`/apps/${getAppId()}/users/forgot-password`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
 // Stamp is a public endpoint (no JWT) — the merchant PIN is what authorises.
 // Called from the end-user's device after the merchant types the PIN in front of them.
 export const stampLoyalty = (appUserEmail: string, pin: string) =>
