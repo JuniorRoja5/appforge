@@ -22,6 +22,7 @@ import { StampPage } from './pages/StampPage';
 import { RedeemCouponPage } from './pages/RedeemCouponPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { AppUserResetPasswordPage } from './pages/AppUserResetPasswordPage';
 import { ImpersonationBootstrap } from './components/ImpersonationBootstrap';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
 
@@ -73,6 +74,7 @@ const router = createBrowserRouter([
   { path: '/redeem/:appId', element: <RedeemCouponPage /> },
   { path: '/order/:appId/:orderId', element: <OrderTrackingPage /> },
   { path: '/booking/:appId/:bookingId', element: <BookingTrackingPage /> },
+  { path: '/app-user/reset-password/:appId', element: <AppUserResetPasswordPage /> },
 
   // Redirects
   { path: '/', element: <Navigate to="/dashboard" replace /> },
