@@ -36,3 +36,19 @@ export function orderTrackingUrl(
 ): string {
   return `${builderUrl()}/order/${appId}/${orderId}?t=${trackingToken}`;
 }
+
+// App-user password reset page hosted on the public builder URL. The reset
+// page reads `email` and `t` from the query string and submits both to
+// POST /apps/:appId/users/reset-password (the existing redeem endpoint),
+// which looks up the user by appId+email and verifies the token's SHA256
+// hash. Email is intentionally in the URL: it isn't a secret (the recipient
+// already knows their own email) and including it lets the redeem endpoint
+// use its existing { email, token, newPassword } DTO without changes.
+export function passwordResetUrl(
+  appId: string,
+  email: string,
+  token: string,
+): string {
+  const params = new URLSearchParams({ email, t: token });
+  return `${builderUrl()}/app-user/reset-password/${appId}?${params}`;
+}

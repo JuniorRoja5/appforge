@@ -12,12 +12,18 @@ import { LoginAppUserDto } from './dto/login-app-user.dto';
 import { UpdateAppUserDto } from './dto/update-app-user.dto';
 import { ListAppUsersQueryDto } from './dto/list-app-users-query.dto';
 import { RedeemPasswordResetDto } from './dto/reset-password.dto';
+import { passwordResetUrl } from '../lib/tracking-urls';
+import { decrypt } from '../lib/crypto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import * as nodemailer from 'nodemailer';
+import { Logger } from '@nestjs/common';
 import type { AppUser, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AppUsersService {
+  private readonly logger = new Logger(AppUsersService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -277,6 +283,126 @@ export class AppUsersService {
     });
 
     return { message: 'Contraseña actualizada.' };
+  }
+
+  // F5 — App-user-initiated password reset.
+  //
+  // Separate from `initiatePasswordReset` (merchant-initiated 6-digit code
+  // for manual delivery): this generates a long, URL-safe random token and
+  // delivers it by email via the app's SMTP. The redeem endpoint
+  // (`redeemPasswordReset` above) is reused as-is — it doesn't care whether
+  // the incoming token came from a 6-digit code or this 32-char string,
+  // since both are SHA256-hashed and compared the same way.
+  //
+  // Returns the same generic success regardless of whether the email exists.
+  // This is the standard anti-enumeration defense for forgot-password flows
+  // — don't leak which emails are registered. The endpoint is also rate-
+  // limited at the controller (3/min) to prevent farming via timing.
+  async requestPasswordResetByEmail(appId: string, email: string) {
+    const genericResponse = {
+      message:
+        'Si existe una cuenta con ese email, te hemos enviado las instrucciones para restablecer tu contraseña.',
+    };
+
+    await this.ensureAppExists(appId);
+
+    const user = await this.prisma.appUser.findUnique({
+      where: { appId_email: { appId, email } },
+    });
+
+    if (!user || user.status === 'BANNED') {
+      // Silent no-op for non-existent or banned accounts.
+      return genericResponse;
+    }
+
+    // 32-char URL-safe random token. base64url avoids '+' and '/' which
+    // would need percent-encoding in the URL.
+    const rawToken = crypto.randomBytes(24).toString('base64url');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    // 1h TTL — industry standard for email-link reset. Long enough to
+    // accommodate normal email delivery latency, short enough to limit the
+    // window if the email account is compromised.
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.prisma.appUser.update({
+      where: { id: user.id },
+      data: { resetToken: hashedToken, resetTokenExpiry },
+    });
+
+    // Send email. Fire-and-forget pattern matches bookings/orders — we don't
+    // block the response on the SMTP delivery, and any error is logged but
+    // never surfaced to the caller (would otherwise leak email existence).
+    this.sendPasswordResetEmail(appId, user, rawToken).catch((err) =>
+      this.logger.warn(
+        `Password reset email failed for app-user ${user.id} (${appId}): ${err.message}`,
+      ),
+    );
+
+    return genericResponse;
+  }
+
+  private async sendPasswordResetEmail(
+    appId: string,
+    user: AppUser,
+    rawToken: string,
+  ): Promise<void> {
+    const smtpConfig = await this.prisma.appSmtpConfig.findUnique({
+      where: { appId },
+    });
+    if (!smtpConfig) {
+      this.logger.warn(
+        `App ${appId} has no SMTP configured — password reset email cannot be sent for user ${user.id}`,
+      );
+      return;
+    }
+
+    const app = await this.prisma.app.findUnique({
+      where: { id: appId },
+      select: { name: true },
+    });
+    const appName = app?.name ?? 'AppForge';
+
+    let password: string;
+    try {
+      password = decrypt(smtpConfig.encryptedPass);
+    } catch (err) {
+      this.logger.warn(`SMTP decrypt failed for app ${appId}: ${(err as Error).message}`);
+      return;
+    }
+
+    const transport = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port,
+      secure: smtpConfig.secure,
+      auth: { user: smtpConfig.username, pass: password },
+    });
+
+    const resetUrl = passwordResetUrl(appId, user.email, rawToken);
+    const greeting = user.firstName ? `Hola ${user.firstName},` : 'Hola,';
+
+    await transport.sendMail({
+      from: `"${smtpConfig.fromName}" <${smtpConfig.fromEmail}>`,
+      to: user.email,
+      subject: `Recupera tu contraseña en ${appName}`,
+      html: `
+<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
+  <div style="background:linear-gradient(to right,#6366f1,#8b5cf6);color:white;padding:20px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:22px">Recuperar contraseña</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${appName}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p>${greeting}</p>
+    <p>Has solicitado restablecer tu contraseña. Pulsa el botón para crear una nueva:</p>
+    <div style="text-align:center;margin:32px 0">
+      <a href="${resetUrl}" style="display:inline-block;background:#6366f1;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600">
+        Restablecer contraseña
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:13px">Este enlace caduca en <strong>1 hora</strong>. Si no fuiste tú, ignora este email — tu contraseña actual seguirá funcionando.</p>
+    <p style="color:#9ca3af;font-size:11px;margin-top:24px;word-break:break-all">Si el botón no funciona, copia este enlace en tu navegador:<br>${resetUrl}</p>
+  </div>
+</div>`,
+    });
   }
 
   async exportUsersCsv(appId: string, tenantId?: string, role?: string): Promise<string> {

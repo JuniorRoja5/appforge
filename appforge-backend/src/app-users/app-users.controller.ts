@@ -25,6 +25,7 @@ import { LoginAppUserDto } from './dto/login-app-user.dto';
 import { UpdateAppUserDto } from './dto/update-app-user.dto';
 import { ListAppUsersQueryDto } from './dto/list-app-users-query.dto';
 import { RedeemPasswordResetDto } from './dto/reset-password.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 
 @Controller('apps/:appId/users')
 export class AppUsersController {
@@ -62,6 +63,20 @@ export class AppUsersController {
     @Body() dto: RedeemPasswordResetDto,
   ) {
     return this.appUsersService.redeemPasswordReset(appId, dto);
+  }
+
+  // App-user-initiated password reset (F5 email-link flow). Public, throttled.
+  // Returns a generic success regardless of whether the email exists, so
+  // attackers can't enumerate registered emails via this endpoint.
+  @Post('forgot-password')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  requestPasswordReset(
+    @Param('appId') appId: string,
+    @Body() dto: RequestPasswordResetDto,
+  ) {
+    return this.appUsersService.requestPasswordResetByEmail(appId, dto.email);
   }
 
   // ──────────────────── Authenticated app-user ────────────────────
