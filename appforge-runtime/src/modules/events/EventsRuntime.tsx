@@ -7,6 +7,7 @@ import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
+import { HorizontalCarousel, carouselItemStyle } from '../../components/HorizontalCarousel';
 
 type Event = Awaited<ReturnType<typeof getEvents>>[number];
 
@@ -230,12 +231,12 @@ const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
   return (
     <div>
       <ModuleHeader title={title} icon={Calendar} />
-      <div className="space-y-3">
+      <HorizontalCarousel>
         {displayed.map((event, idx) => (
           <div
             key={event.id}
             className="overflow-hidden cursor-pointer"
-            style={{ borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)' }}
+            style={{ ...carouselItemStyle(), borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)' }}
             onClick={() => setSelectedIndex(idx)}
           >
             {showImage && event.imageUrl && <img src={resolveAssetUrl(event.imageUrl)} alt={event.title} className="w-full h-36 object-cover" onError={imgFallback} />}
@@ -258,7 +259,7 @@ const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
             </div>
           </div>
         ))}
-      </div>
+      </HorizontalCarousel>
     </div>
   );
 };

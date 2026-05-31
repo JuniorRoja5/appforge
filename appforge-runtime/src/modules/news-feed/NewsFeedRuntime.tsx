@@ -9,6 +9,7 @@ import { registerRuntimeModule } from '../registry';
 import { imgFallback } from '../../lib/img-fallback';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
+import { HorizontalCarousel, carouselItemStyle } from '../../components/HorizontalCarousel';
 
 type Article = Awaited<ReturnType<typeof getNews>>[number];
 
@@ -220,12 +221,12 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
       {displayed.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay noticias disponibles.</p>
       ) : (
-        <div className="space-y-3">
+        <HorizontalCarousel>
           {displayed.map((article, idx) => (
             <div
               key={article.id}
               className="overflow-hidden cursor-pointer"
-              style={{ borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)', ...highlightStyle(idx) }}
+              style={{ ...carouselItemStyle(), borderRadius: 'var(--radius-card, 16px)', backgroundColor: 'var(--color-surface-card)', boxShadow: 'var(--shadow-sm)', ...highlightStyle(idx) }}
               onClick={() => setSelectedIndex(idx)}
             >
               {showImage && article.imageUrl && (
@@ -256,7 +257,7 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
               </div>
             </div>
           ))}
-        </div>
+        </HorizontalCarousel>
       )}
     </div>
   );
