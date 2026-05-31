@@ -228,6 +228,40 @@ export class BookingService {
   }
 
   // ─────────────────────────────────────────────────────
+  // APP USER ENDPOINTS (logged-in end-user via AppUserAuthGuard)
+  // ─────────────────────────────────────────────────────
+
+  // Returns the user's CONFIRMED bookings from today onwards, soonest first.
+  // Filtering happens in the query so the `take` cap operates on the correct
+  // subset — see the B7 review note for why `desc + filter on client` is
+  // broken when a user has 50+ past bookings.
+  async listForAppUser(appId: string, appUserId: string) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        appId,
+        appUserId,
+        status: BookingStatus.CONFIRMED,
+        date: { gte: startOfToday },
+      },
+      orderBy: { date: 'asc' },
+      take: 50,
+    });
+
+    return bookings.map((b) => ({
+      id: b.id,
+      shortCode: b.shortCode,
+      date: b.date,
+      timeSlot: b.timeSlot,
+      duration: b.duration,
+      status: b.status,
+      trackingUrl: bookingTrackingUrl(appId, b.id, b.trackingToken),
+    }));
+  }
+
+  // ─────────────────────────────────────────────────────
   // PROTECTED ENDPOINTS (panel del comerciante)
   // ─────────────────────────────────────────────────────
 

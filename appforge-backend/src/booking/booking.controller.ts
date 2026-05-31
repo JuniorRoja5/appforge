@@ -18,6 +18,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role, BookingStatus } from '@prisma/client';
 import { OptionalAppUserAuthGuard } from '../push/optional-app-user.guard';
+import { AppUserAuthGuard } from '../app-users/app-user-auth.guard';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 @Controller('apps/:appId/bookings')
@@ -52,6 +53,19 @@ export class BookingController {
   ) {
     if (!token) throw new NotFoundException();
     return this.bookingService.cancelByCustomer(appId, id, token);
+  }
+
+  // ─── App user: list my upcoming bookings (declared BEFORE :id routes) ───
+
+  // Returns the authenticated app-user's CONFIRMED + future bookings,
+  // sorted by date ascending. Backend filters in the query so the take
+  // operates on the correct subset — putting the filter on the client side
+  // with desc + take:50 produces a silent bug for users with many past
+  // bookings whose future ones get cut from the slice (B7 review).
+  @Get('mine')
+  @UseGuards(AppUserAuthGuard)
+  listMine(@Param('appId') appId: string, @Request() req: any) {
+    return this.bookingService.listForAppUser(appId, req.user.appUserId);
   }
 
   // ─── Create booking (público, JWT opcional para asociar AppUser) ───
