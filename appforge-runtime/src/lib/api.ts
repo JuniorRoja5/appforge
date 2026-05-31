@@ -82,6 +82,21 @@ export const getCoupons = () =>
 export const getAvailableSlots = (date: string) =>
   apiFetch<string[]>(`/apps/${getAppId()}/bookings/available?date=${date}`);
 
+// Lists the authenticated app-user's CONFIRMED + future bookings (sorted
+// soonest first, capped at 50 by the backend). Each item carries a
+// server-built trackingUrl so the runtime doesn't construct any URL
+// itself — avoids the Capacitor "https://localhost" trap.
+export const getMyBookings = () =>
+  apiFetch<Array<{
+    id: string;
+    shortCode: string;
+    date: string;
+    timeSlot: string;
+    duration: number;
+    status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+    trackingUrl: string;
+  }>>(`/apps/${getAppId()}/bookings/mine`);
+
 export const createBooking = (data: { date: string; timeSlot: string; formData: Record<string, string> }) =>
   // Backend includes a server-built `trackingUrl` so the runtime doesn't
   // construct one from window.location.origin (which is `https://localhost`

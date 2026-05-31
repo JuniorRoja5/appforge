@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Check, Calendar } from 'lucide-react';
 import { BrowserShim as Browser } from '../../lib/platform';
-import { getAvailableSlots, createBooking } from '../../lib/api';
+import { getAvailableSlots, createBooking, getMyBookings } from '../../lib/api';
+import { isAuthenticated } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+
+type MyBooking = Awaited<ReturnType<typeof getMyBookings>>[number];
 
 interface BookingField {
   id: string;
@@ -71,6 +74,12 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
+  // User's upcoming bookings (CONFIRMED + future, server-filtered). Empty
+  // by default; the useEffect below populates if the app-user is logged in.
+  // Note: state declared here, fetch is in the useEffect right after the
+  // useBackButton call. Both hooks BEFORE any conditional return — rule #54.
+  const [myBookings, setMyBookings] = useState<MyBooking[]>([]);
+
   // Hardware back button: step one state machine state backward.
   // - 'form' -> 'select' (release the slot, keep the date)
   // - 'success' / 'error' -> 'select' (full reset, same as "Hacer otra reserva")
@@ -92,6 +101,22 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
     },
     status !== 'select' && status !== 'sending',
   );
+
+  // Fetch the user's upcoming bookings on mount when logged in. If the
+  // token is expired, isAuthenticated() may still be true (it only checks
+  // presence) — the endpoint then 401s, the catch swallows it with a
+  // warn, and the section just doesn't render. No throw -> the
+  // RuntimeErrorBoundary stays out of this. Hook count is constant across
+  // renders (same as the auth/getAvailableSlots useEffects).
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    getMyBookings()
+      .then(setMyBookings)
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[booking] my bookings failed:', err);
+      });
+  }, []);
 
   // Determine available days for the calendar (next bookingHorizonDays, respecting weekdays + blocked)
   const availableDays = new Set<string>();
@@ -235,6 +260,8 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   // Determine which slots to show: configured timeSlots, or fallback from API
   const slotsToShow = timeSlots.length > 0 ? timeSlots : availableSlots;
 
+  const authedAndHasUpcoming = isAuthenticated() && myBookings.length > 0;
+
   return (
     <div>
       {/* Header */}
@@ -242,6 +269,39 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
         <Calendar size={18} style={{ color: 'var(--color-primary)' }} />
         <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
       </div>
+
+      {/* Tus próximas reservas — solo si hay alguna y el usuario está logueado.
+          Backend ya filtra a CONFIRMED + date >= today, runtime solo pinta. */}
+      {authedAndHasUpcoming && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>
+            Tus próximas reservas
+          </h4>
+          <div className="space-y-2">
+            {myBookings.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => { Browser.open({ url: b.trackingUrl }).catch(() => {}); }}
+                className="w-full flex items-center justify-between p-3"
+                style={{
+                  backgroundColor: 'var(--color-surface-card)',
+                  borderRadius: 'var(--radius-card, 12px)',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <div className="text-left">
+                  <div className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                    {new Date(b.date).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}{b.timeSlot}
+                  </div>
+                  <div className="text-xs font-mono" style={{ color: 'var(--color-primary)' }}>{b.shortCode}</div>
+                </div>
+                <span className="text-xs underline" style={{ color: 'var(--color-primary)' }}>Ver</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {description && (
         <p className="text-xs mb-4" style={{ color: 'var(--color-text-secondary)' }}>{description}</p>
       )}
