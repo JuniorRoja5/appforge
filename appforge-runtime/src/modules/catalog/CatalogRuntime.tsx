@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ShoppingCart, ArrowLeft, Check, Minus, Plus, LogIn } from 'lucide-react';
+import { ShoppingCart, ShoppingBag, ArrowLeft, Check, Minus, Plus, LogIn } from 'lucide-react';
 import { getCatalogCollections, createOrder } from '../../lib/api';
 import { getCurrentUser, isAuthenticated, login as appUserLogin, register as appUserRegister, onAuthChange } from '../../lib/auth';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type Collections = Awaited<ReturnType<typeof getCatalogCollections>>;
 type Product = Collections[number]['products'][number];
@@ -427,9 +428,9 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
-        {enableCart && cartCount > 0 && (
+      <ModuleHeader title={title} icon={ShoppingBag} />
+      {enableCart && cartCount > 0 && (
+        <div className="flex justify-end mb-3">
           <button
             onClick={() => setView('cart')}
             className="relative flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
@@ -438,8 +439,8 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
             <ShoppingCart size={14} />
             {cartCount}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Collection tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4" style={{ scrollbarWidth: 'none' }}>

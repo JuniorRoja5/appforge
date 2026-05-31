@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, UtensilsCrossed } from 'lucide-react';
 import { getMenuCategories } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type Categories = Awaited<ReturnType<typeof getMenuCategories>>;
 type MenuItem = Categories[number]['items'][number];
@@ -111,7 +112,7 @@ const MenuRestaurantRuntime: React.FC<{ data: Record<string, unknown> }> = ({ da
 
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={UtensilsCrossed} />
 
       {/* ── TABS layout ── */}
       {layout === 'tabs' && (

@@ -5,6 +5,7 @@ import { getCoupons } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Cupones';
@@ -47,7 +48,7 @@ const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ da
   if (layout === 'list') {
     return (
       <div>
-        <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+        <ModuleHeader title={title} icon={Gift} />
         <div className="space-y-1">
           {activeCoupons.map((coupon) => (
             <div
@@ -85,7 +86,7 @@ const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ da
   // ── Cards layout (default) ──
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Gift} />
       <div className="space-y-3">
         {activeCoupons.map((coupon) => (
           <div

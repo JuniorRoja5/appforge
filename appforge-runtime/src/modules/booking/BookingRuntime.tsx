@@ -5,6 +5,7 @@ import { getAvailableSlots, createBooking, getMyBookings } from '../../lib/api';
 import { isAuthenticated } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type MyBooking = Awaited<ReturnType<typeof getMyBookings>>[number];
 
@@ -265,10 +266,7 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
-        <Calendar size={18} style={{ color: 'var(--color-primary)' }} />
-        <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
-      </div>
+      <ModuleHeader title={title} icon={Calendar} />
 
       {/* Tus próximas reservas — solo si hay alguna y el usuario está logueado.
           Backend ya filtra a CONFIRMED + date >= today, runtime solo pinta. */}

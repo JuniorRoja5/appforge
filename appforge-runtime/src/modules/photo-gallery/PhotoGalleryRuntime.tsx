@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Images } from 'lucide-react';
 import { getGallery } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type GalleryImage = Awaited<ReturnType<typeof getGallery>>[number];
 
@@ -41,7 +42,7 @@ const PhotoGalleryRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data
 
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Images} />
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap }}>
         {images.map((img, i) => (
           <div

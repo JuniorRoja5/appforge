@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Share2, Newspaper } from 'lucide-react';
 import { Share } from '@capacitor/share';
 import { getNews } from '../../lib/api';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
@@ -8,6 +8,7 @@ import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
 import { imgFallback } from '../../lib/img-fallback';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type Article = Awaited<ReturnType<typeof getNews>>[number];
 
@@ -161,7 +162,7 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
   if (layout === 'list') {
     return (
       <div>
-        <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+        <ModuleHeader title={title} icon={Newspaper} />
         {displayed.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay noticias disponibles.</p>
         ) : (
@@ -215,7 +216,7 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
   // ── Cards layout (default) ──
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Newspaper} />
       {displayed.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay noticias disponibles.</p>
       ) : (

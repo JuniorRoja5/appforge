@@ -6,6 +6,7 @@ import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 type Event = Awaited<ReturnType<typeof getEvents>>[number];
 
@@ -189,7 +190,7 @@ const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
   if (layout === 'list') {
     return (
       <div>
-        <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+        <ModuleHeader title={title} icon={Calendar} />
         <div className="space-y-1">
           {displayed.map((event, idx) => (
             <div
@@ -228,7 +229,7 @@ const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
   // ── Cards layout (default) ──
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Calendar} />
       <div className="space-y-3">
         {displayed.map((event, idx) => (
           <div

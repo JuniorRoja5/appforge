@@ -5,6 +5,7 @@ import { getMyLoyaltyCard, redeemLoyalty, stampLoyalty } from '../../lib/api';
 import { isAuthenticated, onAuthChange, getCurrentUser } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 const STAMP_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
   star: Star, coffee: Coffee, heart: Heart, check: Check, gift: Gift,
@@ -122,7 +123,7 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
 
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Star} />
 
       {/* Card */}
       <div className="relative overflow-hidden p-5" style={{ borderRadius: 'var(--radius-card, 16px)', backgroundColor: cardColor }}>

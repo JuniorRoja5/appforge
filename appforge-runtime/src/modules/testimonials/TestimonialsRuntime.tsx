@@ -1,7 +1,8 @@
 import React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Quote } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 interface TestimonialRaw {
   authorName?: string;
@@ -40,7 +41,7 @@ const TestimonialsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data
 
   return (
     <div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
+      <ModuleHeader title={title} icon={Quote} />
       <div className="space-y-3">
         {items.map((item, i) => (
           <div

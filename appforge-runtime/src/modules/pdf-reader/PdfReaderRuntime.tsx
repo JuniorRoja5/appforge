@@ -4,6 +4,7 @@ import { BrowserShim as Browser } from '../../lib/platform';
 import { FileText, ExternalLink } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
+import { ModuleHeader } from '../../components/ModuleHeader';
 
 const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Documento';
@@ -34,7 +35,7 @@ const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data })
   if (!pdfUrl) {
     return (
       <div className="text-center py-8">
-        {showTitle && <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>}
+        {showTitle && <ModuleHeader title={title} icon={FileText} />}
         <FileText size={32} className="mx-auto mb-2" style={{ color: 'var(--color-text-secondary)' }} />
         <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No hay documento configurado.</p>
       </div>
@@ -43,9 +44,7 @@ const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data })
 
   return (
     <div>
-      {showTitle && (
-        <h3 className="text-lg font-bold mb-3" style={{ color: 'var(--color-text-primary)' }}>{title}</h3>
-      )}
+      {showTitle && <ModuleHeader title={title} icon={FileText} />}
 
       {/* Embedded PDF viewer (PWA only — native WebView can't render PDFs in iframe) */}
       {showIframe && (
