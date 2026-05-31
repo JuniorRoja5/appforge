@@ -1060,7 +1060,15 @@ export interface BookingRecord {
   date: string;
   timeSlot: string;
   duration: number;
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+  shortCode: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerNotes: string | null;
+  cancelledAt: string | null;
+  cancelledBy: 'CUSTOMER' | 'MERCHANT' | null;
+  appUserId: string | null;
   formData: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -1107,7 +1115,7 @@ export const getBookings = async (
 export const updateBookingStatus = async (
   appId: string,
   bookingId: string,
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED',
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW',
   token: string,
 ): Promise<BookingRecord> => {
   const response = await fetch(`${API_URL}/apps/${appId}/bookings/${bookingId}/status`, {
