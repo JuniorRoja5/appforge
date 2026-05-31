@@ -264,10 +264,23 @@ export class AppUsersService {
     const user = await this.prisma.appUser.findUnique({
       where: { appId_email: { appId, email: dto.email } },
     });
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
 
+    // Hash regardless of whether the user exists, so the work done on the
+    // unknown-email branch matches the known-email branch. SHA256 cost is
+    // dominated by RTT in practice, but doing it unconditionally is the
+    // cheap defense against timing-based enumeration.
     const hashedToken = crypto.createHash('sha256').update(dto.token).digest('hex');
+
+    // Single generic failure response for every invalid case — unknown email,
+    // missing token row, hash mismatch, or expired token. Without this unified
+    // branch, an attacker could distinguish "email not registered" (was a 404)
+    // from "email registered, token wrong" (was a 401) and farm a list of
+    // registered emails by polling this endpoint with random tokens. The
+    // /forgot-password endpoint was already hardened against enumeration (it
+    // always returns the same generic 200); this closes the matching leak on
+    // the redeem side. Symmetric anti-enumeration on both reset endpoints.
     if (
+      !user ||
       !user.resetToken ||
       !user.resetTokenExpiry ||
       user.resetToken !== hashedToken ||
