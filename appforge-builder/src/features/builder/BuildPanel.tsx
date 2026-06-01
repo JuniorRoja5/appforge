@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
   X, Smartphone, Download, RefreshCw, CheckCircle2, XCircle,
-  Clock, Loader2, AlertTriangle, ChevronDown, ChevronRight,
+  Clock, Loader2, AlertTriangle,
   Shield, Key, Apple, Package, Globe, Copy, ExternalLink,
 } from 'lucide-react';
 import {
@@ -52,7 +52,6 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState('');
-  const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<BuildType>('debug');
   const [keystoreInfo, setKeystoreInfo] = useState<KeystoreInfo | null>(null);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
@@ -382,7 +381,6 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   const config = STATUS_CONFIG[build.status] ?? STATUS_CONFIG.QUEUED;
                   const StatusIcon = config.icon;
                   const isActive = ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING'].includes(build.status);
-                  const isExpanded = expandedLog === build.id;
                   const typeLabel = BUILD_TYPE_LABELS[build.buildType] ?? build.buildType.toUpperCase();
 
                   return (
@@ -465,30 +463,25 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                             </button>
                           )}
 
-                          {(build.logOutput || build.errorMessage) && (
-                            <button
-                              onClick={() => setExpandedLog(isExpanded ? null : build.id)}
-                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
-                            >
-                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            </button>
-                          )}
+                          {/* Expand button removed (TECH_DEBT #46): the
+                              expanded view rendered build.logOutput verbatim,
+                              leaking VPS paths and tooling internals. Backend
+                              now stores logOutput as null; frontend stops
+                              offering the expand affordance entirely. */}
                         </div>
                       </div>
 
-                      {/* Error message */}
-                      {build.status === 'FAILED' && build.errorMessage && (
+                      {/* Error message — hardcoded generic (TECH_DEBT #46).
+                          We deliberately ignore build.errorMessage here so
+                          that old failed builds in the DB (with raw
+                          error.message stored before the backend
+                          sanitization landed) also render the generic
+                          string. The raw error is in pm2 logs for support. */}
+                      {build.status === 'FAILED' && (
                         <div className="px-4 py-2 bg-red-50 border-t border-red-100">
-                          <p className="text-[11px] text-red-700 font-mono">{build.errorMessage}</p>
-                        </div>
-                      )}
-
-                      {/* Expanded log */}
-                      {isExpanded && build.logOutput && (
-                        <div className="px-4 py-3 bg-gray-900 border-t border-gray-200">
-                          <pre className="text-[10px] text-green-400 font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
-                            {build.logOutput}
-                          </pre>
+                          <p className="text-[11px] text-red-700">
+                            No se pudo completar el build. Reintenta en unos minutos. Si el problema persiste, contacta con soporte.
+                          </p>
                         </div>
                       )}
                     </div>
