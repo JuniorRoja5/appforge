@@ -889,7 +889,10 @@ cuando push.ts evolucione (nuevos métodos para topics, deeplinks,
 etc.) y el equipo crezca más allá del desarrollador único.
 
 ### #46 — Sanitización del campo Build.errorMessage según rol
-**Estado**: OPEN
+**Estado**: RESUELTO 2026-06-01 (commits `bc5e1e1` backend + `af74e92` builder).
+La resolución final fue MÁS ESTRICTA que el fix propuesto original — ver
+nota "Resolución final" al pie de esta entrada.
+
 **Origen**: Sesión 2026-05-13, observación del cliente al ver builds
 fallidos previos en el panel.
 
@@ -926,6 +929,48 @@ D. UI `BuildPanel.tsx` deja de renderizar `logOutput` si rol === CLIENT.
 
 **Prioridad**: MEDIA — antes del primer cliente externo, después de
 cerrar los críticos de smoke y los GAPs documentados de admin.
+
+**Resolución final (2026-06-01)** — más estricta que el fix propuesto:
+Junior reabrió esto al ver un screenshot del BuildPanel con un build
+fallido mostrando stack trace de rollup + rutas `/opt/appforge/...`
+en plano. Su directiva fue inequívoca: **errores genéricos para
+TODOS, incluyendo "alguien con conocimiento avanzado"**. Eso descarta
+el plan A/B/C/D original (role-based con SUPER_ADMIN viendo verbatim)
+a favor de:
+
+- **Backend (`bc5e1e1`)**: la única catch site del processor escribe
+  un mensaje fijo en `errorMessage` ("No se pudo completar el build.
+  Reintenta en unos minutos. Si el problema persiste, contacta con
+  soporte.") y nunca persiste `logOutput`, ni en fallos ni en éxitos.
+  Los 3 success paths (debug/release/aab, ios-export, pwa) también
+  dejan `logOutput` sin escribir. La info forense raw (mensaje +
+  stack + tail del log array interno) va a pm2 logs vía
+  `this.logger.error`. La DB nunca contiene material expuesto.
+
+- **Builder (`af74e92`)**: el BuildPanel ignora `build.errorMessage`
+  de la BD y renderiza siempre el mismo string genérico. Esto cierra
+  el leak para builds antiguos que ya están en BD con `errorMessage`
+  raw, sin necesidad de migración SQL. El botón de expandir log y
+  el bloque terminal-style `<pre>` se eliminaron por completo —
+  unused imports (`ChevronDown`, `ChevronRight`) y state
+  (`expandedLog`/`setExpandedLog`/`isExpanded`) limpios al pasar.
+
+- **Mapping por categoría de error** (parte C del fix original):
+  descartado. Genérico único es la dirección elegida — la categoría
+  expone implícitamente qué tooling se usó (gradle, vite, xcodebuild)
+  y es accionable solo si el usuario tiene acceso al servidor, en
+  cuyo caso ya puede pm2 logs.
+
+- **Datos viejos en BD**: no se migra. El frontend defensivo cubre
+  la lectura. La columna `errorMessage` raw queda en BD para builds
+  pre-fix, accesible solo por psql (admin). Si en algún momento
+  hay valor de borrarlos, una UPDATE simple basta:
+  `UPDATE "AppBuild" SET "errorMessage" = null, "logOutput" = null
+   WHERE status = 'FAILED';`. No urgente.
+
+**`truncateBuildLog` helper**: técnicamente unused después de `bc5e1e1`.
+Se deja en el archivo (cleanup follow-up trivial cuando convenga,
+expansión de diff no compensa hoy).
 
 ---
 
