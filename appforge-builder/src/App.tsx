@@ -13,6 +13,7 @@ import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AppUsersPage } from './pages/AppUsersPage';
 import { BookingsPage } from './pages/BookingsPage';
+import { PwaPage } from './pages/PwaPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
 import { AccountPage } from './pages/AccountPage';
 import { PricingPage } from './pages/PricingPage';
@@ -52,6 +53,7 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/analytics', element: <AnalyticsPage /> },
       { path: '/apps/:appId/users', element: <AppUsersPage /> },
       { path: '/apps/:appId/bookings', element: <BookingsPage /> },
+      { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
       { path: '/pricing', element: <PricingPage /> },
       { path: '/payment/success', element: <PaymentSuccessPage /> },

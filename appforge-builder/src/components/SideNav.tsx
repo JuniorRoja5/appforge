@@ -75,6 +75,15 @@ const getAppNavItems = (appId: string): AppNavItem[] => [
       </svg>
     ),
   },
+  {
+    to: `/apps/${appId}/pwa`,
+    label: 'PWA',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.6 9h16.8M3.6 15h16.8M12 3a14.95 14.95 0 014.5 9 14.95 14.95 0 01-4.5 9M12 3a14.95 14.95 0 00-4.5 9 14.95 14.95 0 004.5 9z" />
+      </svg>
+    ),
+  },
 ];
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
