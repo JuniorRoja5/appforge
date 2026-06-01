@@ -1708,6 +1708,22 @@ El patrón es idéntico al de campos opcionales: el compilador deja pasar
 omisiones porque no entiende la intención semántica. La única defensa es
 el grep manual disciplinado al añadir el valor.
 
+**Verificado en producción 2026-06-01** — síntoma agudo cerrado:
+- Commit del fix: `f25ac51` (`fix(backend): exclude PWA from FCM gate`).
+- Build de prueba: `a65dd33d-22e0-4595-8f45-18f2e3659cfb` para app
+  `2c04d1c2-6679-4e16-9219-e8ce81f544d4`. POST `/builds` → 201 Created,
+  transición `QUEUED → PREPARING → BUILDING → COMPLETED` sin caer en el
+  throw del gate FCM.
+- BD tras COMPLETED: `App.pwaEnabled = true`,
+  `App.pwaUrl = https://api.creatu.app/pwa/test-app/`,
+  `App.pwaLastDeployedAt = 2026-06-01 06:21:07.762`.
+- Worker log clave: `"PWA build completed: https://api.creatu.app/pwa/test-app/"`.
+
+La regla de "auditar condicionales al añadir un valor al enum" queda
+fichada para cualquier futuro `BuildType` (DESKTOP_ELECTRON, WEB_BUNDLE,
+etc.) y para enums equivalentes (`Role`, `SubscriptionPlan.tier`, etc.).
+El refactor de raíz vive en #56 y se ejecutará en su propio diff.
+
 ---
 
 ### #56 — Helper `isNativeBuild(buildType): boolean` para centralizar gates
