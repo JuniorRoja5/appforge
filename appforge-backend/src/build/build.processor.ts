@@ -249,15 +249,27 @@ export default config;
       await this.buildAndroid(buildId, appId, app, appConfig, androidConfig, buildType, packageName, versionName, versionCode, buildDir, logs, log, includePushPlugin);
 
     } catch (error: any) {
-      this.logger.error(`Build ${buildId} failed: ${error.message}`, error.stack);
+      // Forensics go to pm2 logs (stack + last lines of the in-memory log
+      // array). The DB record stays clean — neither the raw error message
+      // nor the build log is exposed to the builder UI, the Client, or any
+      // future API consumer. See TECH_DEBT #46 for the reasoning: the
+      // previous code wrote `errorMessage: error.message?.slice(0, 2000)`
+      // and `logOutput: truncateBuildLog(logs)`, both of which the
+      // BuildPanel then rendered verbatim — exposing VPS paths, rollup
+      // internals, env var names, and other internals to anyone with
+      // access to the Client builder.
       logs.push(`[ERROR] ${error.message}`);
+      this.logger.error(
+        `Build ${buildId} failed: ${error.message}\n--- build log tail ---\n${logs.slice(-50).join('\n')}`,
+        error.stack,
+      );
 
       await this.prisma.appBuild.update({
         where: { id: buildId },
         data: {
           status: 'FAILED',
-          errorMessage: error.message?.slice(0, 2000),
-          logOutput: truncateBuildLog(logs),
+          errorMessage:
+            'No se pudo completar el build. Reintenta en unos minutos. Si el problema persiste, contacta con soporte.',
           completedAt: new Date(),
         },
       }).catch(() => {});
@@ -466,14 +478,16 @@ export default config;
       data: appUpdateData as any,
     });
 
-    // COMPLETED — update build record AFTER versionCode is persisted
+    // COMPLETED — update build record AFTER versionCode is persisted.
+    // logOutput intentionally not stored (TECH_DEBT #46) — even success
+    // logs can contain VPS paths and tooling internals that don't belong
+    // in the builder UI.
     await this.prisma.appBuild.update({
       where: { id: buildId },
       data: {
         status: 'COMPLETED',
         artifactUrl: storageKey,
         artifactSize,
-        logOutput: truncateBuildLog(logs),
         completedAt: new Date(),
       },
     });
@@ -541,13 +555,13 @@ export default config;
     await this.storage.upload(storageKey, zipPath);
     log(`Xcode project saved: ${zipName} (${(artifactSize / 1024 / 1024).toFixed(2)} MB)`);
 
+    // logOutput intentionally not stored (TECH_DEBT #46).
     await this.prisma.appBuild.update({
       where: { id: buildId },
       data: {
         status: 'COMPLETED',
         artifactUrl: storageKey,
         artifactSize,
-        logOutput: truncateBuildLog(logs),
         completedAt: new Date(),
       },
     });
@@ -985,12 +999,12 @@ export default config;
       data: { pwaEnabled: true, pwaUrl, pwaLastDeployedAt: new Date() },
     });
 
-    // 10. Mark build as completed
+    // 10. Mark build as completed. logOutput intentionally not stored
+    // (TECH_DEBT #46).
     await this.prisma.appBuild.update({
       where: { id: buildId },
       data: {
         status: 'COMPLETED',
-        logOutput: truncateBuildLog(logs),
         artifactUrl: pwaUrl,
       },
     });
