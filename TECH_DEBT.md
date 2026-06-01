@@ -1791,3 +1791,52 @@ no haber hecho este refactor se materializa como un puñado de bugs como
 los de hoy. Cuando aparezca un cuarto tipo no-Android o un segundo tipo
 no-FCM, esto pasa a alta.
 
+---
+
+### #57 — Type `AppInfo` del builder se desincroniza silenciosamente del modelo Prisma `App`
+**Estado**: OPEN.
+**Origen**: Sesión 2026-06-01, durante Gate 0 del nuevo tab PWA. Al
+añadir los campos `pwaEnabled`/`pwaUrl`/`pwaLastDeployedAt` al modelo
+Prisma (commits del pipeline PWA) y al endpoint `GET /apps/:id` (que los
+expone automáticamente vía spread `{...rest}` sin `select:`), el type
+`AppInfo` declarado a mano en
+[appforge-builder/src/lib/api.ts](appforge-builder/src/lib/api.ts:108-124)
+no se actualizó. Resultado: los tres campos viajaban en el JSON pero
+TypeScript no los conocía, así que el código del builder no podía
+referenciarlos sin un cast manual. No es bug en runtime — los datos
+estaban — pero el frontend "no los veía".
+
+**Diagnóstico**: `AppInfo` es una declaración manual, copia parcial del
+modelo Prisma. No hay generación automática ni validación de paridad. El
+patrón se repetirá con cualquier campo nuevo que se añada al modelo
+`App` (o, por extensión, a cualquier otro modelo cuyo type se replique a
+mano en el builder).
+
+**Fix propuesto** — dos caminos posibles, ambos no triviales:
+
+1. **DTO de respuesta explícito en el backend con `class-transformer`**:
+   crear `apps/dto/app-response.dto.ts`, marcar el controller con
+   `@SerializeOptions({ type: AppResponseDto })`, y exportar el shape
+   para que el frontend lo importe (o lo replique con disciplina). El
+   beneficio es doble: respuesta predecible + un único sitio del que
+   leer la forma del JSON.
+2. **Tipo generado por Prisma compartido entre packages**: requiere
+   convertir el monorepo a workspaces (yarn/npm/pnpm) y publicar un
+   package interno `@appforge/types` con el output de `prisma generate`.
+   Más invasivo. Reservar para cuando el dolor justifique el cambio
+   estructural.
+
+**Test del fix**: añadir un campo al modelo `App`, sin tocar
+`AppInfo`. Con DTO explícito o tipo compartido, el frontend debería
+verlo automáticamente (o el TypeScript debería protestar señalando la
+desincronización).
+
+**Por qué no se arregla ahora**: el fix de hoy (3 líneas a `AppInfo`)
+cierra el síntoma agudo para PWA. El refactor estructural toca decisiones
+de monorepo / arquitectura del DTO de respuesta y merece su propio diff.
+Mezclarlo con la feature PWA rompe "una variable a la vez".
+
+**Prioridad**: media-baja. No morderá hasta el próximo campo nuevo que
+el builder quiera usar. Pero cuando ese momento llegue, el diagnóstico
+costará tiempo precisamente porque no hay error — solo silencio.
+

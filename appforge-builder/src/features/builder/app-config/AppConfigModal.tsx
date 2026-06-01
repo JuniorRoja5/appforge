@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAppConfigStore } from '../../../store/useAppConfigStore';
 import {
-  X, Image, Smartphone, SlidersHorizontal, FileText, Mail, Shield, TabletSmartphone,
+  X, Image, Smartphone, SlidersHorizontal, FileText, Mail, Shield, TabletSmartphone, Globe,
 } from 'lucide-react';
 import { AppIconTab } from './tabs/AppIconTab';
 import { SplashScreenTab } from './tabs/SplashScreenTab';
@@ -12,6 +12,7 @@ import { TermsTab } from './tabs/TermsTab';
 import { SmtpTab } from './tabs/SmtpTab';
 import { IosPermissionsTab } from './tabs/IosPermissionsTab';
 import { AndroidConfigTab } from './tabs/AndroidConfigTab';
+import { PwaTab } from './tabs/PwaTab';
 
 interface Props {
   isOpen: boolean;
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'smtp', label: 'Email (SMTP)', icon: Mail },
   { id: 'android', label: 'Android', icon: TabletSmartphone },
   { id: 'ios', label: 'Permisos iOS', icon: Shield },
+  { id: 'pwa', label: 'PWA', icon: Globe },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -93,6 +95,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
       case 'smtp': return <SmtpTab />;
       case 'android': return <AndroidConfigTab />;
       case 'ios': return <IosPermissionsTab />;
+      case 'pwa': return <PwaTab />;
     }
   };
 

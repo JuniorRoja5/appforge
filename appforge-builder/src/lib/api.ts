@@ -118,6 +118,9 @@ export interface AppInfo {
   hasKeystore: boolean;
   createdAt: string;
   updatedAt: string;
+  pwaEnabled: boolean;
+  pwaUrl: string | null;
+  pwaLastDeployedAt: string | null;
 }
 
 export const getApps = async (token: string): Promise<AppInfo[]> => {
