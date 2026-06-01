@@ -434,8 +434,9 @@ export class AdminService {
       throw new ForbiddenException('Solo se pueden reintentar builds fallidos.');
     }
 
-    // Validate subscription limits
-    const buildCheck = await this.subscriptionService.canBuild(build.app.tenantId);
+    // Validate subscription limits (per-type policy — pass the existing build's type so the
+    // retry is gated identically to a fresh request of the same type)
+    const buildCheck = await this.subscriptionService.canBuild(build.app.tenantId, build.buildType);
     if (!buildCheck.allowed) {
       throw new ForbiddenException(buildCheck.reason);
     }

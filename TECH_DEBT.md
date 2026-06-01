@@ -1765,11 +1765,23 @@ export function requiresAndroidConfig(t: BuildType): boolean {
     || t === BuildType.RELEASE
     || t === BuildType.AAB;
 }
+
+/** Builds que descuentan del límite mensual del plan (`maxBuildsPerMonth`).
+ *  Excluye DEBUG (privilegio de pago pero sin coste de cuota) y PWA (gratis,
+ *  oferta del plan FREE). Añadido en sesión 2026-06-01; hoy vive como
+ *  constante local `QUOTA_COUNTING_BUILD_TYPES` en `subscription.service.ts`
+ *  — migra aquí cuando se cree este archivo. */
+export function countsTowardQuota(t: BuildType): boolean {
+  return t === BuildType.RELEASE
+    || t === BuildType.AAB
+    || t === BuildType.IOS_EXPORT;
+}
 ```
 
 Refactorizar los call sites:
 - `build.processor.ts:147` → `if (hasPushModule && !fcmConfig && requiresFcmIfPushModulePresent(buildType)) throw ...`
 - `build.service.ts:86` → `if (requiresAndroidConfig(buildType) && !app.androidConfig) throw ...`
+- `subscription.service.ts` → reemplazar `QUOTA_COUNTING_BUILD_TYPES.includes(t)` por `countsTowardQuota(t)` en `canBuild()` y `getTenantUsage()`.
 - Cualquier otro `buildType !== X` que dependa de "qué tipo de build es".
 
 **Beneficio**: al añadir un nuevo `BuildType` (e.g. `DESKTOP_ELECTRON`,

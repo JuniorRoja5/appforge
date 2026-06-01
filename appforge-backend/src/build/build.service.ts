@@ -67,8 +67,8 @@ export class BuildService {
     }
     const app = await this.ensureOwnership(appId, tenantId, role);
 
-    // Subscription enforcement: check if tenant can build
-    const buildCheck = await this.subscriptionService.canBuild(tenantId);
+    // Subscription enforcement: check if tenant can build (per-type policy)
+    const buildCheck = await this.subscriptionService.canBuild(tenantId, buildType);
     if (!buildCheck.allowed) {
       throw new ForbiddenException(buildCheck.reason);
     }

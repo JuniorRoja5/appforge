@@ -1,6 +1,25 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PlanType } from '@prisma/client';
+import { PlanType, BuildType } from '@prisma/client';
+
+/**
+ * Tipos de build que consumen cuota mensual del plan.
+ *
+ * Quedan fuera:
+ * - DEBUG: privilegio de pago, pero NO descuenta cuota — sirve para probar el
+ *   binario antes de gastar una entrega final.
+ * - PWA: gratis para todos los planes (incluso FREE), no genera artefacto físico
+ *   y no toca el límite mensual ni el de storage.
+ *
+ * TODO #56: cuando se extraigan helpers `isNativeBuild` / `requiresFcm` /
+ * `countsTowardQuota` a `build/lib/build-type-traits.ts`, esta constante
+ * migrará allí (cura de raíz del patrón "X !== VALUE" disperso).
+ */
+const QUOTA_COUNTING_BUILD_TYPES: BuildType[] = [
+  BuildType.RELEASE,
+  BuildType.AAB,
+  BuildType.IOS_EXPORT,
+];
 
 export interface UsageStats {
   appsCount: number;
@@ -97,12 +116,17 @@ export class SubscriptionService {
   async getTenantUsage(tenantId: string): Promise<UsageStats> {
     const appsCount = await this.countBillableApps(tenantId);
 
-    // Builds this calendar month
+    // Builds this calendar month — solo los tipos que consumen cuota.
+    // Debe filtrar exactamente con la misma lista que canBuild() para que el
+    // contador "2/5" de la UI coincida con el momento en que el backend
+    // empieza a rechazar con 403. Si esto diverge de canBuild, enforcement y
+    // display dejan de cuadrar y el cliente ve un contador irreal.
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const buildsThisMonth = await this.prisma.appBuild.count({
       where: {
         app: { tenantId },
+        buildType: { in: QUOTA_COUNTING_BUILD_TYPES },
         createdAt: { gte: startOfMonth },
         status: { in: ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING', 'COMPLETED'] },
       },
@@ -180,8 +204,29 @@ export class SubscriptionService {
     return { allowed: true };
   }
 
-  /** Check if a tenant can request a build */
-  async canBuild(tenantId: string): Promise<{ allowed: boolean; reason?: string }> {
+  /**
+   * Comprueba si el tenant puede lanzar un build del tipo solicitado.
+   *
+   * Política por tipo (decidida en sesión 2026-06-01):
+   * - PWA → permitida a todos (incluido FREE). NO cuenta cuota ni storage.
+   * - DEBUG → requiere plan de pago (`plan.canBuild === true`). NO cuenta cuota.
+   * - RELEASE / AAB / IOS_EXPORT → requieren plan de pago Y descuentan del
+   *   límite mensual del plan (`maxBuildsPerMonth`). Son las "entregas finales".
+   *
+   * `buildType` es OBLIGATORIO. Si fuese opcional, un caller olvidado
+   * compilaría sin error y contaría mal en silencio. El compilador es la red
+   * de seguridad: cualquier nuevo call site debe pasarlo explícitamente.
+   *
+   * Edge case consciente: el auto-downgrade de un plan expirado (paso 1) se
+   * ejecuta ANTES del bypass PWA (paso 2). Si un usuario justo-expirado pide
+   * PWA en ese instante, ese único request se rechaza con "suscripción
+   * expirada"; los siguientes ya pasan (ya es FREE, PWA es libre). Mover el
+   * bypass antes añadiría complejidad para evitar un solo rechazo marginal.
+   */
+  async canBuild(
+    tenantId: string,
+    buildType: BuildType,
+  ): Promise<{ allowed: boolean; reason?: string }> {
     let subscription = await this.prisma.subscription.findUnique({
       where: { tenantId },
       include: { plan: true },
@@ -213,29 +258,39 @@ export class SubscriptionService {
       return { allowed: false, reason: 'Tu suscripción ha expirado. Tu plan ha sido cambiado a Free.' };
     }
 
+    // PWA bypass — la oferta gratuita. Ni plan ni cuota ni storage la limitan.
+    if (buildType === BuildType.PWA) {
+      return { allowed: true };
+    }
+
+    // Plan gate — aplica a DEBUG/RELEASE/AAB/IOS_EXPORT (FREE no puede generar binarios nativos)
     if (!subscription.plan.canBuild) {
       return {
         allowed: false,
-        reason: `Tu plan ${subscription.plan.name} no incluye builds. Actualiza a Starter o superior para generar tu app.`,
+        reason: `Tu plan ${subscription.plan.name} no incluye builds nativos. Actualiza a Starter o superior para generar tu app.`,
       };
     }
 
-    // Check monthly build limit
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const buildsThisMonth = await this.prisma.appBuild.count({
-      where: {
-        app: { tenantId },
-        createdAt: { gte: startOfMonth },
-        status: { in: ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING', 'COMPLETED'] },
-      },
-    });
+    // Monthly build limit — solo cuenta los tipos que descuentan cuota.
+    // DEBUG NO está en QUOTA_COUNTING_BUILD_TYPES, así que esta rama lo deja pasar.
+    if (QUOTA_COUNTING_BUILD_TYPES.includes(buildType)) {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const buildsThisMonth = await this.prisma.appBuild.count({
+        where: {
+          app: { tenantId },
+          buildType: { in: QUOTA_COUNTING_BUILD_TYPES },
+          createdAt: { gte: startOfMonth },
+          status: { in: ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING', 'COMPLETED'] },
+        },
+      });
 
-    if (buildsThisMonth >= subscription.plan.maxBuildsPerMonth) {
-      return {
-        allowed: false,
-        reason: `Has alcanzado el límite de ${subscription.plan.maxBuildsPerMonth} builds/mes en tu plan ${subscription.plan.name}. Actualiza tu plan para más builds.`,
-      };
+      if (buildsThisMonth >= subscription.plan.maxBuildsPerMonth) {
+        return {
+          allowed: false,
+          reason: `Has alcanzado el límite de ${subscription.plan.maxBuildsPerMonth} entregas/mes en tu plan ${subscription.plan.name}. Actualiza tu plan para más entregas.`,
+        };
+      }
     }
 
     // Check storage limit — exclude soft-deleted apps, paralleling getTenantUsage.
