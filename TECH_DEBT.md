@@ -1671,3 +1671,107 @@ al añadir un campo opcional a un type del state o de la API:
 Aplica a code review, a IA-assisted edits, y especialmente a fixes
 mecánicos que tocan un type y dejan los call sites "para después".
 
+**Variante 2026-06-01 — añadir valor a enum sin auditar condicionales
+`X !== VALUE` dispersas.** El mismo género que las "tres caras", pero
+para enums en vez de campos opcionales. Cuando se añadió `BuildType.PWA`
+al schema Prisma, tres sitios quedaron desalineados con la asunción
+"native vs debug" que era cierta cuando el enum tenía 4 valores:
+
+1. `appforge-backend/src/build/dto/request-build.dto.ts:5` — el `@IsIn([...])`
+   y el union type omitieron `'pwa'`. ValidationPipe global rechazó el body
+   con 400 antes de llegar al controller. Fix: commit `0ae7232`.
+2. `appforge-backend/src/build/build.processor.ts:147` —
+   `else if (buildType !== BuildType.DEBUG)` trataba PWA como release nativo
+   y abortaba con "Push notification module requires FCM configuration"
+   aunque PWA no usa Capacitor push. Fix: añadir `&& buildType !== BuildType.PWA`
+   (este commit).
+3. `appforge-backend/src/build/build.service.ts:86` —
+   `buildType !== BuildType.PWA` para skip de Android config (este sí
+   estaba bien desde el inicio, pero por la misma razón merece auditarse
+   cuando aparezca un cuarto tipo no-Android).
+
+**Regla al añadir un valor a un enum del schema** (obligatoria de aquí en
+adelante, complementaria a las "tres caras"):
+
+1. Migrar el schema Prisma + regenerar el cliente.
+2. **Greppear el enum por nombre** (`BuildType.`, `Role.`, etc.) en todo
+   el monorepo. Cada `X !== VALUE` y cada `X === VALUE` que aparezca debe
+   re-evaluarse: ¿esa condicional sigue siendo correcta con el nuevo
+   valor en juego?
+3. **Greppear también los DTOs**: cualquier `@IsIn([...])`, `@IsEnum(...)`,
+   o union type `'a' | 'b' | 'c'` que liste valores del mismo dominio
+   debe actualizarse en sincronía.
+4. **Greppear los frontends**: dropdowns, switches, selectores. El builder
+   ya muestra el botón "PWA", pero un futuro tipo podría quedarse fuera.
+
+El patrón es idéntico al de campos opcionales: el compilador deja pasar
+omisiones porque no entiende la intención semántica. La única defensa es
+el grep manual disciplinado al añadir el valor.
+
+---
+
+### #56 — Helper `isNativeBuild(buildType): boolean` para centralizar gates
+**Estado**: OPEN.
+**Origen**: Sesión 2026-06-01. Tres bugs del mismo género en el mismo día
+(commit `0ae7232` para el DTO `@IsIn`, este commit para el gate FCM en
+`build.processor.ts:147`, y el chequeo `androidConfig` preventivo en
+`build.service.ts:86` que sí estaba bien pero por la misma frágil razón).
+La causa común: cada condicional `buildType !== X` re-encoda implícitamente
+el conocimiento "qué builds son nativos / requieren FCM / requieren
+keystore / requieren packageName". Cada nuevo valor del enum obliga a
+auditar a mano N condicionales dispersas.
+
+**Fix propuesto**: extraer un helper único en
+`appforge-backend/src/build/lib/build-type-traits.ts` (o similar):
+
+```ts
+import { BuildType } from '@prisma/client';
+
+/** Builds que producen un binario nativo (APK / AAB / IPA). */
+export function isNativeBuild(t: BuildType): boolean {
+  return t === BuildType.DEBUG
+    || t === BuildType.RELEASE
+    || t === BuildType.AAB
+    || t === BuildType.IOS_EXPORT;
+}
+
+/** Builds que requieren FCM/google-services.json para no crashear en
+ *  runtime. Excluye DEBUG porque puede correr sin FCM con stub de push.ts. */
+export function requiresFcmIfPushModulePresent(t: BuildType): boolean {
+  return t === BuildType.RELEASE
+    || t === BuildType.AAB
+    || t === BuildType.IOS_EXPORT;
+}
+
+/** Builds que requieren `App.androidConfig` (packageName, versionCode, etc). */
+export function requiresAndroidConfig(t: BuildType): boolean {
+  return t === BuildType.DEBUG
+    || t === BuildType.RELEASE
+    || t === BuildType.AAB;
+}
+```
+
+Refactorizar los call sites:
+- `build.processor.ts:147` → `if (hasPushModule && !fcmConfig && requiresFcmIfPushModulePresent(buildType)) throw ...`
+- `build.service.ts:86` → `if (requiresAndroidConfig(buildType) && !app.androidConfig) throw ...`
+- Cualquier otro `buildType !== X` que dependa de "qué tipo de build es".
+
+**Beneficio**: al añadir un nuevo `BuildType` (e.g. `DESKTOP_ELECTRON`,
+`WEB_BUNDLE`), basta con extender los tres helpers en un solo archivo.
+Sin grep manual disperso. El compilador catch el `default` faltante si
+se usa `switch` exhaustivo internamente.
+
+**Test del fix**: existing build flows (debug + release + pwa) deben
+seguir funcionando idénticos. Smoke en VPS tras cada refactor de call
+site.
+
+**Por qué no se arregla ahora**: este commit cierra el síntoma agudo
+(gate FCM bloqueando PWA). El refactor toca varios sitios y merece su
+propio diff revisable. Mezclar refactor con fix rompe la regla "una
+variable a la vez". Estimación: 1-2h incluyendo tests y smoke.
+
+**Prioridad**: media. Cada vez que se añada un `BuildType`, el coste de
+no haber hecho este refactor se materializa como un puñado de bugs como
+los de hoy. Cuando aparezca un cuarto tipo no-Android o un segundo tipo
+no-FCM, esto pasa a alta.
+

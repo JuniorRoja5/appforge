@@ -144,7 +144,7 @@ export class BuildProcessor extends WorkerHost {
         const fcmConfig = await this.prisma.platformFcmConfig.findFirst();
         if (fcmConfig) {
           includePushPlugin = true;
-        } else if (buildType !== BuildType.DEBUG) {
+        } else if (buildType !== BuildType.DEBUG && buildType !== BuildType.PWA) {
           throw new Error('Push notification module requires FCM configuration. Configure it in Admin > Settings.');
         } else {
           log('WARNING: Push module present but FCM not configured. Excluding @capacitor/push-notifications from debug build to prevent native crash.');
