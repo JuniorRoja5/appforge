@@ -39,7 +39,7 @@ export const PwaContent: React.FC = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setShareError('No se pudo copiar al portapapeles');
+      setShareError('No pudimos copiar el enlace. Inténtalo de nuevo o cópialo a mano.');
     }
   };
 
@@ -55,7 +55,7 @@ export const PwaContent: React.FC = () => {
       } catch (err) {
         // AbortError = el usuario canceló el diálogo nativo; silenciar.
         if ((err as Error).name !== 'AbortError') {
-          setShareError('No se pudo compartir');
+          setShareError('No pudimos compartir el enlace. Inténtalo de nuevo.');
         }
       }
     } else {
@@ -84,7 +84,7 @@ export const PwaContent: React.FC = () => {
   if (!app) {
     return (
       <div className="flex items-center justify-center min-h-[200px] text-sm text-gray-500">
-        No se pudo cargar la información de la app.
+        No pudimos cargar tu app. Vuelve a intentarlo en un momento.
       </div>
     );
   }
@@ -95,9 +95,9 @@ export const PwaContent: React.FC = () => {
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
           <Globe size={20} className="text-gray-400" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Aún no has generado la PWA</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Aún no has publicado tu app como web</h3>
         <p className="text-xs text-gray-500 leading-relaxed">
-          Genera una build de tipo <span className="font-mono text-gray-700">PWA</span> desde el panel de Build para publicar tu app como sitio web instalable.
+          Usa el botón <span className="font-medium text-gray-700">Generar app</span> para publicarla, y aquí aparecerán el enlace y el código QR para compartir con tus clientes.
         </p>
       </div>
     );
@@ -117,13 +117,13 @@ export const PwaContent: React.FC = () => {
         <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 leading-relaxed">
-            <span className="font-semibold">PWA desactualizada.</span> El schema cambió desde el último build. Regenera la PWA desde el panel de Build para publicar los cambios.
+            <span className="font-semibold">Tienes cambios sin publicar.</span> Has cambiado tu app desde la última publicación. Tus clientes seguirán viendo la versión anterior hasta que publiques una nueva.
           </div>
         </div>
       )}
 
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-2">URL pública</label>
+        <label className="block text-xs font-medium text-gray-500 mb-2">Enlace de tu app</label>
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -137,14 +137,14 @@ export const PwaContent: React.FC = () => {
             target="_blank"
             rel="noopener noreferrer"
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Abrir en nueva pestaña"
+            title="Abrir el enlace en una pestaña nueva"
           >
             <ExternalLink size={16} />
           </a>
         </div>
         {formattedDate && (
           <p className="text-[11px] text-gray-400 mt-1.5">
-            Publicada el {formattedDate}
+            Última publicación: {formattedDate}
           </p>
         )}
       </div>
@@ -162,7 +162,7 @@ export const PwaContent: React.FC = () => {
           ) : (
             <>
               <Copy size={14} />
-              Copiar URL
+              Copiar enlace
             </>
           )}
         </button>
@@ -194,14 +194,14 @@ export const PwaContent: React.FC = () => {
           </div>
           <div className="flex-1 space-y-2">
             <p className="text-xs text-gray-600 leading-relaxed">
-              Imprime el QR en folletos, ponlo en el escaparate, o pégalo en publicaciones de redes sociales. Al escanearlo, el cliente abrirá tu app directamente en el navegador.
+              Imprime este código y ponlo en tu escaparate, repártelo en folletos o úsalo en redes sociales. Cualquiera que lo escanee con la cámara del móvil abrirá tu app al instante.
             </p>
             <button
               onClick={() => handleDownloadQR(app.slug)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
             >
               <Download size={14} />
-              Descargar PNG
+              Descargar QR
             </button>
           </div>
         </div>
