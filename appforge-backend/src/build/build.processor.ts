@@ -946,6 +946,11 @@ export default config;
     // Description del preview social. Fallback al nombre de la app si el
     // cliente no ha rellenado el campo, para que el preview nunca quede vacío.
     const description = (appConfig?.description?.trim() || appName);
+    // Base URL pública de las PWAs. Subdominio dedicado (apps.creatu.app)
+    // servido por nginx estático desde /var/www/apps. Fallback localhost para
+    // dev — en producción la env DEBE estar puesta o las URLs grabadas en BD
+    // saldrían rotas.
+    const pwaBaseUrl = process.env.PUBLIC_PWA_URL || 'http://localhost:3000';
 
     // 1. npm ci (with persistent cache)
     await fs.mkdir(NPM_CACHE_DIR, { recursive: true });
@@ -957,7 +962,7 @@ export default config;
 
     // 2. Vite build with PWA platform and base path
     log('Building PWA web assets...');
-    await this.exec(`npx vite build --base=/pwa/${slug}/`, buildDir, 600000, {
+    await this.exec(`npx vite build --base=/${slug}/`, buildDir, 600000, {
       VITE_PLATFORM: 'pwa',
     });
     log('PWA web assets built');
@@ -988,8 +993,8 @@ export default config;
       short_name: appName.length > 12 ? appName.slice(0, 12) : appName,
       // JSON.stringify se encarga del escape para JSON — no aplicar escapeHtml aquí.
       description,
-      start_url: `/pwa/${slug}/`,
-      scope: `/pwa/${slug}/`,
+      start_url: `/${slug}/`,
+      scope: `/${slug}/`,
       display: 'standalone',
       background_color: '#ffffff',
       theme_color: primaryColor,
@@ -1019,8 +1024,8 @@ export default config;
     const safeName = escapeHtml(appName);
     const safeDesc = escapeHtml(description);
     const safeColor = escapeHtml(primaryColor);
-    const pageUrl = `${apiUrl}/pwa/${slug}/`;
-    const ogImage = `${apiUrl}/pwa/${slug}/icons/icon-512.png`;
+    const pageUrl = `${pwaBaseUrl}/${slug}/`;
+    const ogImage = `${pwaBaseUrl}/${slug}/icons/icon-512.png`;
 
     // Reemplazar el <title> heredado del template del runtime ("AppForge App")
     // con el nombre real de la app. Regex en vez de acoplar a la literal:
@@ -1029,7 +1034,7 @@ export default config;
     html = html.replace(/<title>[^<]*<\/title>/i, `<title>${safeName}</title>`);
 
     const pwaHead = [
-      `<link rel="manifest" href="/pwa/${slug}/manifest.webmanifest">`,
+      `<link rel="manifest" href="/${slug}/manifest.webmanifest">`,
       `<meta name="theme-color" content="${safeColor}">`,
       `<meta name="description" content="${safeDesc}">`,
       `<meta property="og:title" content="${safeName}">`,
@@ -1040,20 +1045,24 @@ export default config;
       `<meta property="og:site_name" content="AppForge">`,
     ].join('\n    ');
 
-    const swScript = `<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/pwa/${slug}/sw.js',{scope:'/pwa/${slug}/'})}</script>`;
+    const swScript = `<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/${slug}/sw.js',{scope:'/${slug}/'})}</script>`;
     html = html.replace('</head>', `    ${pwaHead}\n  </head>`);
     html = html.replace('</body>', `  ${swScript}\n  </body>`);
     await fs.writeFile(indexPath, html);
 
-    // 8. Deploy: copy dist/ to public/pwa/{slug}/
+    // 8. Deploy: copy dist/ to /var/www/apps/{slug}/ (served by nginx static).
+    // El dir base (/var/www/apps) lo crea el operador una vez durante el
+    // setup de nginx; copyDir hace mkdir recursive del subdir del slug.
+    // En dev local sin /var/www/apps escribible, el mkdir recursive fallará
+    // — aceptable porque buildPwa es un flujo de producción.
     log('Deploying PWA files...');
-    const pwaDir = path.join(process.cwd(), 'public', 'pwa', slug);
+    const pwaDir = path.join('/var/www/apps', slug);
     await fs.rm(pwaDir, { recursive: true, force: true });
     await this.copyDir(distDir, pwaDir, new Set());
-    log(`PWA deployed to /pwa/${slug}/`);
+    log(`PWA deployed to /var/www/apps/${slug}/`);
 
     // 9. Update database
-    const pwaUrl = `${apiUrl}/pwa/${slug}/`;
+    const pwaUrl = `${pwaBaseUrl}/${slug}/`;
     await this.prisma.app.update({
       where: { id: appId },
       data: { pwaEnabled: true, pwaUrl, pwaLastDeployedAt: new Date() },
@@ -1123,7 +1132,7 @@ export default config;
 
   private generateServiceWorker(slug: string, cacheVersion: number): string {
     return `const CACHE_NAME = 'pwa-${slug}-${cacheVersion}';
-const SCOPE = '/pwa/${slug}/';
+const SCOPE = '/${slug}/';
 
 self.addEventListener('install', () => { self.skipWaiting(); });
 

@@ -76,50 +76,14 @@ async function bootstrap() {
     next();
   });
 
-  // PWA static files — cache strategy per file type (Agente 5: Security)
-  app.use('/pwa', (req: any, res: any, next: any) => {
-    const swMatch = req.path.match(/^\/([^/]+)\/sw\.js$/);
-    if (swMatch) {
-      // Service workers MUST not be cached
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Service-Worker-Allowed', `/pwa/${swMatch[1]}/`);
-    } else if (req.path.endsWith('.webmanifest')) {
-      res.setHeader('Cache-Control', 'no-cache');
-    } else {
-      // Static assets: aggressive caching (hashed filenames)
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    next();
-  });
-
-  // PWA SPA fallback — serve index.html for non-file routes (Agente 6: Serving)
-  // Mounted on /pwa, extracts slug manually to avoid path-to-regexp wildcard issues
-  const fsNode = await import('fs');
-  const pathNode = await import('path');
-  app.use('/pwa', (req: any, res: any, next: any) => {
-    if (req.path.includes('.')) return next();
-    const parts = req.path.split('/').filter(Boolean);
-    if (parts.length === 0) return next();
-    const slug = parts[0];
-    const indexPath = pathNode.join(process.cwd(), 'public', 'pwa', slug, 'index.html');
-    if (fsNode.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      next();
-    }
-  });
+  // PWA serving migrated to apps.creatu.app (nginx static, /var/www/apps).
+  // El middleware /pwa anterior + mkdir de public/pwa retirados — la API ya
+  // no participa del servido de PWAs.
 
   // Raw body for Stripe webhook signature verification (MUST be before json middleware)
   app.use('/stripe/webhook', raw({ type: 'application/json' }));
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
-
-  // Ensure PWA directory exists
-  const pwaDirPath = pathNode.join(process.cwd(), 'public', 'pwa');
-  if (!fsNode.existsSync(pwaDirPath)) {
-    fsNode.mkdirSync(pwaDirPath, { recursive: true });
-  }
 
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
