@@ -1727,7 +1727,7 @@ El refactor de raíz vive en #56 y se ejecutará en su propio diff.
 ---
 
 ### #56 — Helper `isNativeBuild(buildType): boolean` para centralizar gates
-**Estado**: RESUELTO 2026-06-02 (commit pendiente — se completa con hash tras `git commit`).
+**Estado**: RESUELTO 2026-06-02 (commit `b929f30`).
 
 **Resolución**: extraído `appforge-backend/src/build/lib/build-type-traits.ts`
 con tres rasgos centrales por lista afirmativa: `countsTowardQuota`,
