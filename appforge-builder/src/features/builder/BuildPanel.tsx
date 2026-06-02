@@ -20,12 +20,44 @@ interface Props {
 type BuildType = 'debug' | 'release' | 'aab' | 'ios-export' | 'pwa';
 
 const BUILD_TYPES: { value: BuildType; label: string; description: string; icon: React.FC<{ size?: number; className?: string }> }[] = [
-  { value: 'debug', label: 'Debug APK', description: 'Para pruebas (sin firmar)', icon: Smartphone },
-  { value: 'release', label: 'Release APK', description: 'APK firmado para distribución directa', icon: Shield },
-  { value: 'aab', label: 'AAB Play Store', description: 'Bundle firmado para Google Play', icon: Package },
-  { value: 'ios-export', label: 'Proyecto Xcode', description: 'Descarga ZIP para compilar en macOS', icon: Apple },
-  { value: 'pwa', label: 'Progressive Web App', description: 'App web instalable sin descargar', icon: Globe },
+  { value: 'debug', label: 'Versión de prueba', description: 'Para probarla en tu móvil antes de publicarla', icon: Smartphone },
+  { value: 'release', label: 'App nativa para Android', description: 'Archivo .apk para instalar directamente, sin pasar por la tienda', icon: Shield },
+  { value: 'aab', label: 'App para Google Play', description: 'Lista para subirla a la tienda de Google', icon: Package },
+  { value: 'ios-export', label: 'App para iPhone', description: 'Necesitarás un Mac y una cuenta de desarrollador de Apple', icon: Apple },
+  { value: 'pwa', label: 'App web (PWA)', description: 'Tus clientes la abren en el navegador, sin instalar nada', icon: Globe },
 ];
+
+type LockReason = 'plan' | 'debug-required' | null;
+
+/**
+ * Determina por qué un tipo de build queda bloqueado para el cliente (o null
+ * si está libre). Tres dimensiones se evalúan en este orden:
+ *
+ * 1. PWA nunca se bloquea — es la oferta del plan FREE, accesible siempre.
+ * 2. Sin plan que permita builds nativos → 'plan' (FREE: todo bloqueado salvo PWA).
+ * 3. Con plan pero sin DEBUG previo completado → 'debug-required' para RELEASE/
+ *    AAB/IOS_EXPORT (DEBUG sí está disponible porque es la puerta para el resto).
+ *
+ * Las dimensiones PWA y 'plan' espejan `subscription.service.canBuild()`: si
+ * cambias la política de PWA o de plan aquí, cambia también canBuild — UI y
+ * enforcement deben moverse juntos.
+ *
+ * La dimensión 'debug-required' es solo-frontend (UX para guiar al usuario):
+ * el backend NO la verifica — encola un RELEASE sin DEBUG previo si hay
+ * cuota. Si lees este helper y vas a canBuild buscando el gate de
+ * debug-required, no lo encontrarás, y eso NO es un bug del backend. Vive
+ * solo aquí. No "arregles" canBuild añadiéndolo sin decisión explícita.
+ */
+function getLockReason(
+  buildType: BuildType,
+  canBuild: boolean,
+  hasCompletedDebug: boolean,
+): LockReason {
+  if (buildType === 'pwa') return null;
+  if (!canBuild) return 'plan';
+  if (buildType !== 'debug' && !hasCompletedDebug) return 'debug-required';
+  return null;
+}
 
 const BUILD_TYPE_LABELS: Record<string, string> = {
   debug: 'DEBUG',
@@ -159,6 +191,26 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const buildsUsed = subscriptionInfo?.usage.buildsThisMonth ?? 0;
   const buildsLimit = subscriptionInfo?.subscription.plan.maxBuildsPerMonth ?? 999;
 
+  const mainLockReason = getLockReason(selectedType, canBuild, hasCompletedDebug);
+  const isMainLocked = mainLockReason !== null;
+
+  // Preselect PWA para planes que no permiten builds nativos. Coherente con
+  // "PWA es el anzuelo": un FREE entra al panel y ve el botón habilitado, no
+  // uno bloqueado con upsell. Debe ir en useEffect (no en el initial de
+  // useState) porque `subscriptionInfo` llega asincrónicamente y el default
+  // 'debug' está intacto en ese momento.
+  //
+  // El guard `selectedType === 'debug'` evita pisar una selección manual:
+  // - FREE no puede clicar 'debug' (queda bloqueado), así que si sigue en
+  //   'debug' es que el usuario no ha tocado nada → seguro preseleccionar.
+  // - Si el usuario ya clicó 'pwa' u otro (en plan de pago), no hacemos nada.
+  useEffect(() => {
+    if (!subscriptionInfo) return;
+    if (!canBuild && selectedType === 'debug') {
+      setSelectedType('pwa');
+    }
+  }, [subscriptionInfo, canBuild, selectedType]);
+
   const handleDownload = (buildId: string) => {
     if (!appId || !token) return;
     downloadBuildArtifact(appId, buildId, token);
@@ -197,20 +249,24 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Subscription info bar */}
-          {subscriptionInfo && (
+          {subscriptionInfo && canBuild && (
             <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-xl text-[12px]">
               <span className="font-semibold text-gray-700">
                 Plan {subscriptionInfo.subscription.plan.name}
               </span>
               <span className="text-gray-400">|</span>
               <span className="text-gray-600">
-                Builds: {buildsUsed}/{buildsLimit} este mes
+                Entregas: {buildsUsed}/{buildsLimit} este mes
               </span>
-              {!canBuild && (
-                <span className="ml-auto text-amber-600 font-semibold">
-                  Tu plan no incluye builds
-                </span>
-              )}
+            </div>
+          )}
+
+          {subscriptionInfo && !canBuild && (
+            <div className="flex items-start gap-2.5 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-amber-800 leading-relaxed">
+                Tu plan {subscriptionInfo.subscription.plan.name} permite publicar tu app web. Para generar tu app nativa, mejora tu plan.
+              </div>
             </div>
           )}
 
@@ -218,7 +274,16 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="grid grid-cols-2 gap-2 mb-4">
             {BUILD_TYPES.map((bt) => {
               const BtIcon = bt.icon;
-              const isLocked = bt.value !== 'debug' && !hasCompletedDebug;
+              const lockReason = getLockReason(bt.value, canBuild, hasCompletedDebug);
+              const isLocked = lockReason !== null;
+              const lockedTitle = lockReason === 'plan'
+                ? 'Mejora tu plan para desbloquear esta opción'
+                : lockReason === 'debug-required'
+                  ? 'Necesitas generar primero una versión de prueba'
+                  : undefined;
+              const lockedDescription = lockReason === 'plan'
+                ? 'Disponible al mejorar tu plan'
+                : 'Genera primero una versión de prueba';
               return (
                 <button
                   key={bt.value}
@@ -231,7 +296,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                         ? 'border-indigo-500 bg-indigo-50'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
-                  title={isLocked ? 'Genera primero un Debug APK para habilitar esta opción' : undefined}
+                  title={lockedTitle}
                 >
                   <BtIcon size={18} className={isLocked ? 'text-gray-300' : selectedType === bt.value ? 'text-indigo-600' : 'text-gray-400'} />
                   <div>
@@ -240,7 +305,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                       {isLocked && <span className="ml-1.5 text-[9px] font-normal text-gray-400 align-middle">🔒</span>}
                     </p>
                     <p className="text-[10px] text-gray-500">
-                      {isLocked ? 'Primero genera un Debug APK' : bt.description}
+                      {isLocked ? lockedDescription : bt.description}
                     </p>
                   </div>
                 </button>
@@ -315,20 +380,22 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
             {!showKeystoreWarning && (
               <button
                 onClick={handleBuild}
-                disabled={requesting || isBuilding || !canBuild}
+                disabled={requesting || isBuilding || isMainLocked}
                 className="w-full py-3.5 bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-gray-300 disabled:to-gray-400 text-white text-[14px] font-bold rounded-xl shadow-lg transition-all disabled:shadow-none flex items-center justify-center gap-2"
               >
                 {requesting ? (
                   <><Loader2 size={16} className="animate-spin" /> Solicitando...</>
                 ) : isBuilding ? (
                   <><Loader2 size={16} className="animate-spin" /> Build en progreso...</>
-                ) : !canBuild ? (
-                  <>Tu plan no incluye builds</>
+                ) : mainLockReason === 'plan' ? (
+                  <>Mejora tu plan para generar tu app nativa</>
+                ) : mainLockReason === 'debug-required' ? (
+                  <>Genera primero una versión de prueba</>
                 ) : (
                   <>
                     {BUILD_TYPES.find((bt) => bt.value === selectedType)?.icon &&
                       React.createElement(BUILD_TYPES.find((bt) => bt.value === selectedType)!.icon, { size: 16 })}
-                    {' '}Construir {BUILD_TYPES.find((bt) => bt.value === selectedType)?.label}
+                    {' '}Generar {BUILD_TYPES.find((bt) => bt.value === selectedType)?.label}
                   </>
                 )}
               </button>
