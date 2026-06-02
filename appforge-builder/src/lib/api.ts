@@ -213,6 +213,11 @@ export const uploadDocument = async (file: File, token: string) => {
 
 export interface AppConfig {
   icon?: { url: string };
+  // Texto del preview cuando se comparte el enlace de la PWA (WhatsApp,
+  // redes, etc.). Inyectado en <meta name="description">, og:description y
+  // manifest.webmanifest durante buildPwa. Backend limita a 200 chars en
+  // UpdateAppConfigDto.description.
+  description?: string;
   splash?: {
     enabled: boolean;
     type: 'color' | 'image';

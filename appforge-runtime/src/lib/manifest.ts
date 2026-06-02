@@ -60,6 +60,10 @@ export interface AppManifest {
   designTokens: DesignTokens;
   appConfig: {
     icon?: { url: string };
+    // Texto que el backend inyecta en los OG meta tags del PWA deployed.
+    // El runtime nativo no lo renderiza; declarado aquí solo para mantener
+    // el shape coherente con AppConfig del builder (evita drift #57).
+    description?: string;
     splash?: {
       enabled: boolean;
       type: 'color' | 'image';

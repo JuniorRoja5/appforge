@@ -163,6 +163,25 @@ export const AppIconTab: React.FC = () => {
           ))}
         </ul>
       </div>
+
+      {/* App description (for PWA share previews + meta tags) */}
+      <div className="border-t border-gray-100 pt-6">
+        <h4 className="text-sm font-semibold text-gray-900 mb-1">Descripción de la app</h4>
+        <p className="text-[12px] text-gray-500 mb-3">
+          Esta descripción aparecerá en el preview cuando compartas el enlace de tu app por WhatsApp, redes sociales o por correo.
+        </p>
+        <textarea
+          value={config?.description ?? ''}
+          onChange={(e) => updateSection('description', e.target.value)}
+          placeholder="Breve descripción que aparecerá cuando alguien comparta tu app en WhatsApp, redes sociales o por enlace"
+          maxLength={200}
+          rows={3}
+          className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 resize-none"
+        />
+        <p className="text-[11px] text-gray-400 mt-1.5 text-right">
+          {(config?.description ?? '').length}/200
+        </p>
+      </div>
     </div>
   );
 };
