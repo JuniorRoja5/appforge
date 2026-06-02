@@ -59,6 +59,14 @@ export class UpdateAppConfigDto {
   @IsOptional() @IsObject()
   iosPermissions?: Record<string, string>;
 
+  // Texto que se inyecta en <meta name="description"> + og:description + el
+  // manifest.webmanifest del PWA deployed. Límite 200: margen sobre los ~160
+  // de meta description ideal sin permitir abuso. Sin el decorador, el
+  // ValidationPipe global con whitelist:true lo elimina silenciosamente
+  // (TECH_DEBT #47).
+  @IsOptional() @IsString() @MaxLength(200)
+  description?: string;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => AndroidConfigDto)
