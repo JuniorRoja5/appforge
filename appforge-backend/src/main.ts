@@ -37,6 +37,7 @@ async function bootstrap() {
   const allowedOrigins = [
     process.env.PUBLIC_BUILDER_URL,
     process.env.PUBLIC_ADMIN_URL,
+    process.env.PUBLIC_PWA_URL,
   ].filter(Boolean) as string[];
 
   // SECURITY NOTE (C4): CORS allows !origin (null Origin) intentionally.
