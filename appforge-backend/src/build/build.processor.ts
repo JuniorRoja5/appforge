@@ -32,6 +32,28 @@ function truncateBuildLog(logs: string[]): string {
   return full.slice(-MAX_LOG_SIZE) + '\n[... truncated]';
 }
 
+/**
+ * Escape mínimo de atributos HTML. Cubre los 5 caracteres que rompen
+ * atributos entre comillas dobles o el contenido de `<title>`.
+ *
+ * NO confundir con `lib/sanitize-html.ts` (DOMPurify, para contenido
+ * rich HTML del cliente). Este escape es para inyectar valores
+ * controlados por el usuario (app.name, appConfig.description,
+ * designTokens.colors.primary.main) en meta tags y title del PWA
+ * deployed, no para sanear HTML rico.
+ *
+ * Orden importa: `&` se procesa primero para no doble-escapar las
+ * entidades que las siguientes reglas introducen.
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface BuildJobData {
   buildId: string;
   appId: string;
@@ -921,6 +943,9 @@ export default config;
     const designTokens = (app.designTokens as Record<string, any>) ?? {};
     const primaryColor = designTokens?.colors?.primary?.main || '#4F46E5';
     const appName = app.name;
+    // Description del preview social. Fallback al nombre de la app si el
+    // cliente no ha rellenado el campo, para que el preview nunca quede vacío.
+    const description = (appConfig?.description?.trim() || appName);
 
     // 1. npm ci (with persistent cache)
     await fs.mkdir(NPM_CACHE_DIR, { recursive: true });
@@ -961,6 +986,8 @@ export default config;
     const webManifest = {
       name: appName,
       short_name: appName.length > 12 ? appName.slice(0, 12) : appName,
+      // JSON.stringify se encarga del escape para JSON — no aplicar escapeHtml aquí.
+      description,
       start_url: `/pwa/${slug}/`,
       scope: `/pwa/${slug}/`,
       display: 'standalone',
@@ -979,10 +1006,40 @@ export default config;
     const swContent = this.generateServiceWorker(slug, Date.now());
     await fs.writeFile(path.join(distDir, 'sw.js'), swContent);
 
-    // 7. Inject manifest + SW registration into index.html
+    // 7. Inject SEO meta + manifest + SW registration into index.html
     const indexPath = path.join(distDir, 'index.html');
     let html = await fs.readFile(indexPath, 'utf-8');
-    const pwaHead = `<link rel="manifest" href="/pwa/${slug}/manifest.webmanifest">\n    <meta name="theme-color" content="${primaryColor}">`;
+
+    // Valores escapados para inyectar en atributos HTML. primaryColor también
+    // se escapa: sale de designTokens.colors.primary.main, y designTokens se
+    // persiste vía PUT /apps/:id/schema sin DTO ni validación (cast directo a
+    // JSON). Un cliente que envíe por API saltándose el color picker podría
+    // meter HTML arbitrario; el escape lo neutraliza. Para un hex `#RRGGBB`
+    // válido es no-op.
+    const safeName = escapeHtml(appName);
+    const safeDesc = escapeHtml(description);
+    const safeColor = escapeHtml(primaryColor);
+    const pageUrl = `${apiUrl}/pwa/${slug}/`;
+    const ogImage = `${apiUrl}/pwa/${slug}/icons/icon-512.png`;
+
+    // Reemplazar el <title> heredado del template del runtime ("AppForge App")
+    // con el nombre real de la app. Regex en vez de acoplar a la literal:
+    // si el template cambia el placeholder, esto sigue encontrándolo. `[^<]*`
+    // garantiza match exactamente del contenido de la tag, no de algo después.
+    html = html.replace(/<title>[^<]*<\/title>/i, `<title>${safeName}</title>`);
+
+    const pwaHead = [
+      `<link rel="manifest" href="/pwa/${slug}/manifest.webmanifest">`,
+      `<meta name="theme-color" content="${safeColor}">`,
+      `<meta name="description" content="${safeDesc}">`,
+      `<meta property="og:title" content="${safeName}">`,
+      `<meta property="og:description" content="${safeDesc}">`,
+      `<meta property="og:type" content="website">`,
+      `<meta property="og:url" content="${pageUrl}">`,
+      `<meta property="og:image" content="${ogImage}">`,
+      `<meta property="og:site_name" content="AppForge">`,
+    ].join('\n    ');
+
     const swScript = `<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/pwa/${slug}/sw.js',{scope:'/pwa/${slug}/'})}</script>`;
     html = html.replace('</head>', `    ${pwaHead}\n  </head>`);
     html = html.replace('</body>', `  ${swScript}\n  </body>`);
