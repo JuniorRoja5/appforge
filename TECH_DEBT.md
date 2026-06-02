@@ -1872,3 +1872,70 @@ Mezclarlo con la feature PWA rompe "una variable a la vez".
 el builder quiera usar. Pero cuando ese momento llegue, el diagnóstico
 costará tiempo precisamente porque no hay error — solo silencio.
 
+---
+
+### #58 — Service worker generado puede resolver `respondWith(undefined)` en modo offline sin cache
+**Estado**: OPEN.
+**Origen**: Sesión 2026-06-02, smoke de Tarea 4 (subdominio
+`apps.creatu.app`). El navegador emitió `A ServiceWorker passed a
+promise to FetchEvent.respondWith() that resolved with 'undefined'` en
+la primera carga tras la migración. La causa raíz inmediata era CORS
+(commit `d92e2ec` la cerró), pero el comportamiento del `.catch` queda
+abierto como debilidad propia del SW.
+
+**Diagnóstico**: el handler `fetch` generado por
+`generateServiceWorker()` en `appforge-backend/src/build/build.processor.ts`
+hace:
+
+```js
+if (url.pathname.startsWith('/apps/') || ...) {
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+}
+```
+
+`caches.match(e.request)` resuelve a `undefined` cuando no hay match.
+`respondWith(undefined)` es inválido — el navegador lo loguea como
+warning y deja la request en limbo. En el caso de Tarea 4 fue
+consecuencia del CORS (el `fetch` fallaba, entraba al `.catch`, no
+había cache para datos), pero el patrón sigue siendo frágil para
+escenarios legítimos: usuario offline + request a una URL nunca
+cacheada (e.g. una primera visita a un módulo concreto).
+
+**Fix propuesto** (en `generateServiceWorker`):
+
+```js
+e.respondWith(
+  fetch(e.request).catch(() =>
+    caches.match(e.request).then((r) =>
+      r ?? new Response('Network error and not in cache', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    )
+  )
+);
+```
+
+Mantiene el cache-on-miss como primera línea, pero garantiza una
+Response real en el peor caso. La UI del runtime puede decidir cómo
+renderizar el 503 (mensaje de "sin conexión" más útil que un fetch
+silencioso que nunca resuelve).
+
+**Test del fix**: regenerar la PWA, simular offline en DevTools
+(Network → Offline), navegar a una ruta `/apps/...` no cacheada
+previamente, confirmar que la respuesta es 503 explícita en vez de
+fetch colgado.
+
+**Por qué no se arregla ahora**: el síntoma agudo del smoke quedó
+cerrado al arreglar CORS (commit `d92e2ec`). El comportamiento del SW
+es debilidad latente que solo se manifiesta en modo offline con request
+no cacheada — escenario marginal. Además tocar `generateServiceWorker`
+implica regenerar la PWA para validar (build real, no test unitario),
+así que merece su propio commit. Estimación: 30 min incluyendo el
+smoke offline.
+
+**Prioridad**: baja. Si más adelante se trabaja la experiencia offline
+de las PWAs en serio, sube a media — un 503 explícito es la base
+mínima para que la UI pueda mostrar "sin conexión" en condiciones.
+
