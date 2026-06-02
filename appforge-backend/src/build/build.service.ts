@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { BuildType } from '@prisma/client';
+import { requiresAndroidConfig } from './lib/build-type-traits';
 import { createHash } from 'crypto';
 import stableStringify from 'json-stable-stringify';
 
@@ -82,8 +83,11 @@ export class BuildService {
       throw new BadRequestException('La app necesita al menos un módulo para construir.');
     }
 
-    // Android builds require packageName; iOS export and PWA do not
-    if (buildType !== BuildType.IOS_EXPORT && buildType !== BuildType.PWA && !androidConfig?.packageName) {
+    // Solo los targets Android (DEBUG/RELEASE/AAB) requieren packageName.
+    // Lista afirmativa centralizada en build-type-traits — IOS_EXPORT y PWA
+    // quedan fuera por defecto, junto con cualquier BuildType futuro que no
+    // sea explícitamente declarado como Android.
+    if (requiresAndroidConfig(buildType) && !androidConfig?.packageName) {
       throw new BadRequestException('Configura el nombre de paquete Android antes de construir.');
     }
 

@@ -1727,7 +1727,27 @@ El refactor de raíz vive en #56 y se ejecutará en su propio diff.
 ---
 
 ### #56 — Helper `isNativeBuild(buildType): boolean` para centralizar gates
-**Estado**: OPEN.
+**Estado**: RESUELTO 2026-06-02 (commit pendiente — se completa con hash tras `git commit`).
+
+**Resolución**: extraído `appforge-backend/src/build/lib/build-type-traits.ts`
+con tres rasgos centrales por lista afirmativa: `countsTowardQuota`,
+`requiresAndroidConfig`, `requiresFcmIfPushModulePresent`. Tests unitarios
+en `appforge-backend/src/build/__tests__/build-type-traits.spec.ts`
+(4 describes, incluido el de drift entre función y array para el `in` de
+Prisma). Tres call sites migrados: `subscription.service.ts` (canBuild +
+getTenantUsage), `build.service.ts:86` (gate packageName Android),
+`build.processor.ts:147` (gate FCM). `isNativeBuild` queda anotado como
+comentario reservado en el helper (YAGNI: sin consumidor real hoy).
+
+Lo que NO se tocó y por qué (auditado): el router de dispatch en
+`build.processor.ts:224/243` (es `if` de "qué función llamar", no rasgo
+booleano), los detalles concretos del pipeline Android en
+`build.processor.ts:385+` (versionCode bump, assembleRelease vs
+bundleRelease, extensiones de artefacto — distinguir dos tipos
+concretos no se beneficia de un helper genérico), mappers/persistencia/
+logs (no preguntan categoría).
+
+**Estado original**: OPEN.
 **Origen**: Sesión 2026-06-01. Tres bugs del mismo género en el mismo día
 (commit `0ae7232` para el DTO `@IsIn`, este commit para el gate FCM en
 `build.processor.ts:147`, y el chequeo `androidConfig` preventivo en

@@ -7,6 +7,7 @@ import { StorageService } from '../storage/storage.service';
 import { PlatformEmailService } from '../platform/platform-email.service';
 import { decryptKeystore } from '../lib/crypto';
 import { BuildType } from '@prisma/client';
+import { requiresFcmIfPushModulePresent } from './lib/build-type-traits';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
@@ -144,7 +145,9 @@ export class BuildProcessor extends WorkerHost {
         const fcmConfig = await this.prisma.platformFcmConfig.findFirst();
         if (fcmConfig) {
           includePushPlugin = true;
-        } else if (buildType !== BuildType.DEBUG && buildType !== BuildType.PWA) {
+        } else if (requiresFcmIfPushModulePresent(buildType)) {
+          // Solo los builds nativos finales (RELEASE/AAB/IOS_EXPORT) crashean
+          // sin FCM. DEBUG y PWA caen en la rama `else` y siguen con el stub.
           throw new Error('Push notification module requires FCM configuration. Configure it in Admin > Settings.');
         } else {
           log('WARNING: Push module present but FCM not configured. Excluding @capacitor/push-notifications from debug build to prevent native crash.');

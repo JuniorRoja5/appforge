@@ -1,25 +1,10 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlanType, BuildType } from '@prisma/client';
-
-/**
- * Tipos de build que consumen cuota mensual del plan.
- *
- * Quedan fuera:
- * - DEBUG: privilegio de pago, pero NO descuenta cuota — sirve para probar el
- *   binario antes de gastar una entrega final.
- * - PWA: gratis para todos los planes (incluso FREE), no genera artefacto físico
- *   y no toca el límite mensual ni el de storage.
- *
- * TODO #56: cuando se extraigan helpers `isNativeBuild` / `requiresFcm` /
- * `countsTowardQuota` a `build/lib/build-type-traits.ts`, esta constante
- * migrará allí (cura de raíz del patrón "X !== VALUE" disperso).
- */
-const QUOTA_COUNTING_BUILD_TYPES: BuildType[] = [
-  BuildType.RELEASE,
-  BuildType.AAB,
-  BuildType.IOS_EXPORT,
-];
+import {
+  countsTowardQuota,
+  QUOTA_COUNTING_BUILD_TYPES,
+} from '../build/lib/build-type-traits';
 
 export interface UsageStats {
   appsCount: number;
@@ -126,7 +111,11 @@ export class SubscriptionService {
     const buildsThisMonth = await this.prisma.appBuild.count({
       where: {
         app: { tenantId },
-        buildType: { in: QUOTA_COUNTING_BUILD_TYPES },
+        // Spread del array readonly del helper: Prisma exige mutable
+        // `BuildType[]` en `where.buildType.in` y rechaza el `readonly`.
+        // El spread materializa una copia mutable manteniendo la fuente
+        // única (build-type-traits.ts) como autoridad sobre qué cuenta.
+        buildType: { in: [...QUOTA_COUNTING_BUILD_TYPES] },
         createdAt: { gte: startOfMonth },
         status: { in: ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING', 'COMPLETED'] },
       },
@@ -272,14 +261,19 @@ export class SubscriptionService {
     }
 
     // Monthly build limit — solo cuenta los tipos que descuentan cuota.
-    // DEBUG NO está en QUOTA_COUNTING_BUILD_TYPES, así que esta rama lo deja pasar.
-    if (QUOTA_COUNTING_BUILD_TYPES.includes(buildType)) {
+    // DEBUG y PWA no cuentan (ver build-type-traits.ts), así que esta rama
+    // los deja pasar sin tocar el contador.
+    if (countsTowardQuota(buildType)) {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const buildsThisMonth = await this.prisma.appBuild.count({
         where: {
           app: { tenantId },
-          buildType: { in: QUOTA_COUNTING_BUILD_TYPES },
+          // Spread del array readonly del helper: Prisma exige mutable
+          // `BuildType[]` en `where.buildType.in` y rechaza el `readonly`.
+          // El spread materializa una copia mutable manteniendo la fuente
+          // única (build-type-traits.ts) como autoridad sobre qué cuenta.
+          buildType: { in: [...QUOTA_COUNTING_BUILD_TYPES] },
           createdAt: { gte: startOfMonth },
           status: { in: ['QUEUED', 'PREPARING', 'BUILDING', 'SIGNING', 'COMPLETED'] },
         },
