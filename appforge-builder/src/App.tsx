@@ -14,6 +14,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AppUsersPage } from './pages/AppUsersPage';
 import { BookingsPage } from './pages/BookingsPage';
 import { PwaPage } from './pages/PwaPage';
+import { BillingPage } from './pages/BillingPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
 import { AccountPage } from './pages/AccountPage';
 import { PricingPage } from './pages/PricingPage';
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/bookings', element: <BookingsPage /> },
       { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
+      { path: '/billing', element: <BillingPage /> },
       { path: '/pricing', element: <PricingPage /> },
       { path: '/payment/success', element: <PaymentSuccessPage /> },
       { path: '/payment/cancel', element: <PaymentCancelPage /> },

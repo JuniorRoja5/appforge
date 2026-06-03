@@ -312,6 +312,7 @@ export class StripeService {
         created: new Date(inv.created * 1000).toISOString(),
         dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
         hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+        invoicePdf: inv.invoice_pdf ?? null,
         tenantId: tenant?.id ?? null,
         tenantName: tenant?.name ?? null,
       };
@@ -332,6 +333,72 @@ export class StripeService {
     ]);
     return this.mapInvoicesToDtos([...openInvoices.data, ...uncollectibleInvoices.data]);
   }
+
+  // ─── Customer billing queries (Tarea 5) ──────────────────────
+
+  /**
+   * Map Stripe invoices a la forma que ve el cliente — sin tenant lookup
+   * (innecesario porque el endpoint ya filtra por su propio stripeCustomerId).
+   * Incluye invoicePdf para el botón de descarga directa.
+   */
+  private mapCustomerInvoicesToDtos(invoices: Stripe.Invoice[]): StripeInvoiceDto[] {
+    return invoices.map((inv) => ({
+      id: inv.id,
+      number: inv.number,
+      status: inv.status,
+      amountDue: inv.amount_due / 100,
+      amountPaid: inv.amount_paid / 100,
+      currency: inv.currency,
+      created: new Date(inv.created * 1000).toISOString(),
+      dueDate: inv.due_date ? new Date(inv.due_date * 1000).toISOString() : null,
+      hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+      invoicePdf: inv.invoice_pdf ?? null,
+      tenantId: null,   // vista cliente: no expone tenant info
+      tenantName: null,
+    }));
+  }
+
+  /**
+   * Lista las facturas del cliente actual con cursor pagination + filtro de fecha.
+   *
+   * El cliente se identifica por el `stripeCustomerId` del tenant del JWT —
+   * imposible que un param de query amplíe el listado a otro customer
+   * (los params solo restringen, nunca cambian el customer base).
+   *
+   * Si el tenant no tiene `stripeCustomerId` (FREE puro, sin Stripe) →
+   * devuelve la página vacía sin llamar a Stripe.
+   */
+  async listCustomerInvoices(
+    tenantId: string,
+    opts: ListCustomerInvoicesOptions = {},
+  ): Promise<StripeInvoicesPage> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { stripeCustomerId: true },
+    });
+    if (!tenant?.stripeCustomerId) {
+      return { invoices: [], hasMore: false, nextCursor: null };
+    }
+
+    const params: Stripe.InvoiceListParams = {
+      customer: tenant.stripeCustomerId,
+      limit: Math.min(opts.limit ?? 25, 100),
+    };
+    if (opts.startingAfter) params.starting_after = opts.startingAfter;
+    if (opts.createdAfter || opts.createdBefore) {
+      params.created = {};
+      if (opts.createdAfter) params.created.gte = Math.floor(opts.createdAfter.getTime() / 1000);
+      if (opts.createdBefore) params.created.lte = Math.floor(opts.createdBefore.getTime() / 1000);
+    }
+
+    const page = await this.stripe.invoices.list(params);
+    const invoices = this.mapCustomerInvoicesToDtos(page.data);
+    return {
+      invoices,
+      hasMore: page.has_more,
+      nextCursor: invoices.length > 0 ? invoices[invoices.length - 1].id : null,
+    };
+  }
 }
 
 export interface StripeInvoiceDto {
@@ -344,6 +411,20 @@ export interface StripeInvoiceDto {
   created: string;
   dueDate: string | null;
   hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
   tenantId: string | null;
   tenantName: string | null;
+}
+
+export interface StripeInvoicesPage {
+  invoices: StripeInvoiceDto[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface ListCustomerInvoicesOptions {
+  limit?: number;          // default 25, max 100
+  startingAfter?: string;  // cursor — id de la última factura de la página previa
+  createdAfter?: Date;     // filtro: solo facturas con created >= esta fecha
+  createdBefore?: Date;    // filtro: solo facturas con created <= esta fecha
 }

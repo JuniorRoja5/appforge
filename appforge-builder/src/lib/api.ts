@@ -1372,6 +1372,51 @@ export const createPortalSession = async (token: string): Promise<{ url: string 
   return response.json();
 };
 
+// ─── Stripe Invoices (cliente) ──────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  number: string | null;
+  status: string | null;     // 'paid' | 'open' | 'void' | 'uncollectible' | 'draft'
+  amountDue: number;         // ya en unidad mayor (€, $)
+  amountPaid: number;
+  currency: string;          // 'eur', 'usd', etc.
+  created: string;           // ISO date
+  dueDate: string | null;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+}
+
+export interface InvoicesPage {
+  invoices: Invoice[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface ListInvoicesOpts {
+  limit?: number;
+  startingAfter?: string;    // cursor
+  createdAfter?: string;     // YYYY-MM-DD
+  createdBefore?: string;
+}
+
+export const getInvoices = async (token: string, opts: ListInvoicesOpts = {}): Promise<InvoicesPage> => {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.startingAfter) params.set('startingAfter', opts.startingAfter);
+  if (opts.createdAfter) params.set('createdAfter', opts.createdAfter);
+  if (opts.createdBefore) params.set('createdBefore', opts.createdBefore);
+  const qs = params.toString();
+  const response = await fetch(`${API_URL}/stripe/invoices${qs ? '?' + qs : ''}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al cargar facturas');
+  }
+  return response.json();
+};
+
 // ─── Push Notifications ─────────────────────────────────────────────────────
 
 export interface PushNotificationItem {

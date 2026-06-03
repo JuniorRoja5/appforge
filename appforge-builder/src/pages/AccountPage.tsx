@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { resolveAssetUrl } from '../lib/resolve-asset-url';
 import {
@@ -8,11 +8,7 @@ import {
   changePassword,
   requestAccountDeletion,
   uploadAvatar,
-  getSubscription,
-  cancelStripeSubscription,
-  createPortalSession,
   type UserProfile,
-  type SubscriptionInfo,
 } from '../lib/api';
 
 export const AccountPage: React.FC = () => {
@@ -37,11 +33,6 @@ export const AccountPage: React.FC = () => {
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  // Billing state
-  const [sub, setSub] = useState<SubscriptionInfo | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [billingMsg, setBillingMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
   // Deletion state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -50,14 +41,8 @@ export const AccountPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) return;
-    Promise.all([
-      getProfile(token),
-      getSubscription(token).catch(() => null),
-    ])
-      .then(([profileData, subData]) => {
-        setProfile(profileData);
-        setSub(subData);
-      })
+    getProfile(token)
+      .then((profileData) => setProfile(profileData))
       .catch(() => setProfileMsg({ type: 'error', text: 'Error al cargar el perfil.' }))
       .finally(() => setLoading(false));
   }, [token]);
@@ -180,7 +165,7 @@ export const AccountPage: React.FC = () => {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 pb-20">
       <div>
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Configuración de Cuenta</h1>
-        <p className="text-[15px] text-gray-500 mt-2 font-medium">Gestiona tu perfil personal, preferencias de seguridad y facturación</p>
+        <p className="text-[15px] text-gray-500 mt-2 font-medium">Gestiona tu perfil personal y preferencias de seguridad</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -370,121 +355,6 @@ export const AccountPage: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Section 3: Billing & Plan — always show if subscription loaded */}
-        {sub ? (
-        <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 space-y-6">
-          <h2 className="text-lg font-bold text-gray-900">Facturación y Plan</h2>
-
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 text-sm font-bold rounded-lg border border-indigo-100">
-              {sub.subscription.plan.name}
-            </span>
-            {sub.subscription.plan.priceMonthly > 0 && (
-              <span className="text-sm font-semibold text-gray-600 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg">
-                {'$'}{sub.subscription.plan.priceMonthly}/mes
-              </span>
-            )}
-            {sub.subscription.cancelAtPeriodEnd && sub.subscription.stripeCurrentPeriodEnd && (
-              <span className="text-xs text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full">
-                Se cancela el {new Date(sub.subscription.stripeCurrentPeriodEnd).toLocaleDateString('es-ES')}
-              </span>
-            )}
-          </div>
-
-            {/* Usage bars */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 py-4">
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Aplicaciones</p>
-                <p className="text-xl font-extrabold text-gray-900">
-                  {sub.usage.appsCount} <span className="text-sm font-medium text-gray-400">/ {sub.subscription.plan.maxApps} limit</span>
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Builds / mes</p>
-                <p className="text-xl font-extrabold text-gray-900">
-                  {sub.usage.buildsThisMonth} <span className="text-sm font-medium text-gray-400">/ {sub.subscription.plan.maxBuildsPerMonth} limit</span>
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Almacenamiento</p>
-                <p className="text-xl font-extrabold text-gray-900">
-                  {(sub.usage.storageBytes / 1024 / 1024).toFixed(1)} <span className="text-sm font-medium text-gray-400">MB / {sub.subscription.plan.storageGb} GB</span>
-                </p>
-              </div>
-            </div>
-
-          {billingMsg && (
-            <div className={`text-sm px-3 py-2 rounded-lg ${billingMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-              {billingMsg.text}
-            </div>
-          )}
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <Link
-                to="/pricing"
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-indigo-200"
-              >
-                {sub.subscription.plan.planType === 'FREE' ? 'Ver todos los planes' : 'Cambiar de plan'}
-              </Link>
-
-              {sub.subscription.stripeSubscriptionId && (
-                <>
-                  <button
-                    onClick={async () => {
-                      try {
-                        const { url } = await createPortalSession(token!);
-                        window.location.href = url;
-                      } catch {
-                        setBillingMsg({ type: 'error', text: 'Error al abrir portal.' });
-                      }
-                    }}
-                    className="px-5 py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 text-sm font-semibold rounded-xl transition-all"
-                  >
-                    Portal de facturación (Stripe)
-                  </button>
-
-                  {!sub.subscription.cancelAtPeriodEnd && (
-                    <button
-                      onClick={async () => {
-                        if (!confirm('¿Seguro que quieres cancelar tu suscripción? Tu plan permanecerá activo hasta el final del período actual.')) return;
-                        setCancelling(true);
-                        setBillingMsg(null);
-                        try {
-                          await cancelStripeSubscription(token!);
-                          setSub((prev) => prev ? {
-                            ...prev,
-                            subscription: { ...prev.subscription, cancelAtPeriodEnd: true },
-                          } : prev);
-                          setBillingMsg({ type: 'success', text: 'Suscripción cancelada. Tu plan permanecerá activo hasta el final del período.' });
-                        } catch (err) {
-                          setBillingMsg({ type: 'error', text: err instanceof Error ? err.message : 'Error al cancelar.' });
-                        } finally {
-                          setCancelling(false);
-                        }
-                      }}
-                      disabled={cancelling}
-                      className="px-5 py-2.5 text-red-600 hover:bg-red-50 hover:text-red-700 text-sm font-semibold rounded-xl transition-all disabled:opacity-50 ml-auto"
-                    >
-                      {cancelling ? 'Procesando...' : 'Cancelar suscripción'}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        ) : !loading ? (
-          <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Facturación y Plan</h2>
-            <p className="text-sm font-medium text-gray-500">Actualmente no estás suscrito a ningún plan de pago.</p>
-            <Link
-              to="/pricing"
-              className="inline-flex items-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-indigo-200"
-            >
-              Explorar planes
-            </Link>
-          </div>
-        ) : null}
       </div>
 
       {/* Derecha (Columna lateral 1/3) */}

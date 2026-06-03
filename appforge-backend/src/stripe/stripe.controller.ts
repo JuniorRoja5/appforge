@@ -1,7 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Query,
   Request,
   Req,
   Headers,
@@ -10,6 +12,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlanType } from '@prisma/client';
 import { StripeService } from './stripe.service';
+import { ListInvoicesQueryDto } from './dto/list-invoices-query.dto';
 
 @Controller('stripe')
 export class StripeController {
@@ -55,5 +58,21 @@ export class StripeController {
   @UseGuards(JwtAuthGuard)
   createPortal(@Request() req) {
     return this.stripeService.createPortalSession(req.user.tenantId);
+  }
+
+  /**
+   * Lista las facturas del cliente autenticado, con cursor pagination + filtro
+   * de fecha. El cliente se identifica por el `stripeCustomerId` del tenant del
+   * JWT — los query params solo restringen el listado, nunca cambian de cliente.
+   */
+  @Get('invoices')
+  @UseGuards(JwtAuthGuard)
+  listInvoices(@Request() req, @Query() q: ListInvoicesQueryDto) {
+    return this.stripeService.listCustomerInvoices(req.user.tenantId, {
+      limit: q.limit,
+      startingAfter: q.startingAfter,
+      createdAfter: q.createdAfter ? new Date(q.createdAfter) : undefined,
+      createdBefore: q.createdBefore ? new Date(q.createdBefore) : undefined,
+    });
   }
 }
