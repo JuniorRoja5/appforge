@@ -38,7 +38,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido de vuelta</h2>
         <p className="text-sm text-gray-500 mt-2">Ingresa tus credenciales para continuar al panel.</p>
@@ -59,7 +59,7 @@ export const LoginPage: React.FC = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="tu@email.com"
           />
         </div>
@@ -67,14 +67,14 @@ export const LoginPage: React.FC = () => {
         <div>
           <div className="flex justify-between items-center mb-1.5">
             <label className="block text-sm font-semibold text-gray-700">Contraseña</label>
-            <Link to="/forgot-password" className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">¿Olvidaste tu contraseña?</Link>
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:opacity-80 transition-colors">¿Olvidaste tu contraseña?</Link>
           </div>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="••••••••"
           />
         </div>
@@ -82,7 +82,7 @@ export const LoginPage: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 mt-2 bg-[#0A0A0A] hover:bg-black text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed group"
+          className="w-full py-3.5 mt-2 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed group"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -130,7 +130,7 @@ export const LoginPage: React.FC = () => {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         ¿No tienes cuenta?{' '}
-        <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
+        <Link to="/register" className="text-primary hover:opacity-80 font-medium">
           Regístrate
         </Link>
       </p>
