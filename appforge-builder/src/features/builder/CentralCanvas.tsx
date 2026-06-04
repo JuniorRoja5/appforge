@@ -110,6 +110,7 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
               key={tab.index}
               onClick={(e) => { e.stopPropagation(); setActiveTabIndex(tab.index); }}
               className="flex flex-col items-center transition-all active:scale-95 py-2 px-1 relative"
+              style={{ color: isActive ? navActive : navInactive }}
             >
               {/* Active indicator: pill */}
               {isActive && activeIndicator === 'pill' && (
@@ -144,11 +145,6 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
                   style={{ backgroundColor: navActive }}
                 />
               )}
-
-              {/* Color the icon+label */}
-              <style>{`
-                [data-tab-idx="${tab.index}"] { color: ${isActive ? navActive : navInactive}; }
-              `}</style>
             </button>
           );
         })}
