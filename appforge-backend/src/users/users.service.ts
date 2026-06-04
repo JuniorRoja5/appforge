@@ -60,21 +60,32 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
+    // Construir `data` solo con los campos realmente presentes en el body.
+    // El ValidationPipe global con `transform: true` + `enableImplicitConversion`
+    // materializa las props ausentes del DTO como `null` (no como `undefined`),
+    // y Prisma trata `null` como "escribir NULL" en el update — borraría el campo
+    // en BD. Filtrar `null` y `undefined` aquí evita ese borrado accidental para
+    // CUALQUIER campo no enviado, no solo avatarUrl. Confirmado por medición:
+    // sesión 2026-06-04, columna `User.avatarUrl` salía NULL tras un Guardar que
+    // no incluía la clave en el body.
+    //
+    // Contrato: para vaciar un campo de texto, mandar cadena vacía `""` (Prisma
+    // lo escribe). El endpoint NO permite borrar un campo a NULL explícitamente.
+    const fields = [
+      'firstName', 'lastName', 'company', 'avatarUrl', 'phone',
+      'address', 'address2', 'zipCode', 'city', 'country', 'stateProvince',
+    ] as const;
+
+    const data: Prisma.UserUpdateInput = {};
+    for (const key of fields) {
+      if (dto[key] !== undefined && dto[key] !== null) {
+        data[key] = dto[key];
+      }
+    }
+
     return this.prisma.user.update({
       where: { id: userId },
-      data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        company: dto.company,
-        avatarUrl: dto.avatarUrl,
-        phone: dto.phone,
-        address: dto.address,
-        address2: dto.address2,
-        zipCode: dto.zipCode,
-        city: dto.city,
-        country: dto.country,
-        stateProvince: dto.stateProvince,
-      },
+      data,
       select: publicSelect,
     });
   }
