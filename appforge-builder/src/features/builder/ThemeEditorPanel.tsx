@@ -2,6 +2,7 @@ import React from 'react';
 import { CollapsibleSection } from './theme-editor/CollapsibleSection';
 import { ColorGroupEditor } from './theme-editor/ColorGroupEditor';
 import { SurfaceColorEditor } from './theme-editor/SurfaceColorEditor';
+import { NavigationColorEditor } from './theme-editor/NavigationColorEditor';
 import { FontSelector } from './theme-editor/FontSelector';
 import { ShapePresetPicker } from './theme-editor/ShapePresetPicker';
 import { NavigationConfigurator } from './theme-editor/NavigationConfigurator';
@@ -31,6 +32,9 @@ export const ThemeEditorPanel: React.FC = () => {
         <ColorGroupEditor label="Acento" path={['colors', 'accent']} />
         <div className="border-t border-gray-100 pt-3">
           <SurfaceColorEditor />
+        </div>
+        <div className="border-t border-gray-100 pt-3">
+          <NavigationColorEditor />
         </div>
       </CollapsibleSection>
 
