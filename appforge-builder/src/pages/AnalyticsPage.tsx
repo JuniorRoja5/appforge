@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { getModule } from '../modules/registry';
 import {
   getAppAnalyticsOverview,
   getAppAnalyticsModules,
@@ -155,7 +156,7 @@ export const AnalyticsPage: React.FC = () => {
             icon={<Clock size={18} />}
           />
           <KpiCard
-            label="Vistas de pantalla"
+            label="Pantallas vistas"
             value={overview.totalScreenViews}
             icon={<Eye size={18} />}
           />
@@ -200,12 +201,15 @@ export const AnalyticsPage: React.FC = () => {
             <p className="text-sm text-gray-400 text-center py-12">Sin datos en este periodo</p>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={modules} layout="vertical">
+              <BarChart
+                data={modules.map((m) => ({ ...m, name: getModule(m.moduleId)?.name ?? m.moduleId }))}
+                layout="vertical"
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                 <YAxis
                   type="category"
-                  dataKey="moduleId"
+                  dataKey="name"
                   tick={{ fontSize: 11, fill: '#64748b' }}
                   width={120}
                 />
@@ -251,13 +255,13 @@ export const AnalyticsPage: React.FC = () => {
 
         {/* Retention */}
         <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8">
-          <h2 className="text-[15px] font-bold text-gray-900 mb-4">Retención</h2>
+          <h2 className="text-[15px] font-bold text-gray-900 mb-4">Usuarios activos</h2>
           {retention && (
             <div className="grid grid-cols-3 gap-3 mb-4">
               {[
-                { label: 'DAU', value: retention.dau },
-                { label: 'WAU', value: retention.wau },
-                { label: 'MAU', value: retention.mau },
+                { label: 'Por día',    value: retention.dau },
+                { label: 'Por semana', value: retention.wau },
+                { label: 'Por mes',    value: retention.mau },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-blue-50 rounded-xl p-3 text-center">
                   <p className="text-lg font-bold text-blue-700">{value}</p>
@@ -293,7 +297,7 @@ export const AnalyticsPage: React.FC = () => {
         <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
           <div className="px-8 py-6 border-b border-gray-100 flex items-center gap-2">
             <Smartphone size={16} className="text-gray-400" />
-            <h2 className="text-[15px] font-bold text-gray-900">Top dispositivos</h2>
+            <h2 className="text-[15px] font-bold text-gray-900">Dispositivos más usados</h2>
           </div>
           <table className="w-full text-sm">
             <thead>
