@@ -55,7 +55,7 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Crear cuenta</h2>
         <p className="text-sm text-gray-500 mt-2">Únete a cientos de creadores y agencias de primer nivel hoy mismo.</p>
@@ -76,7 +76,7 @@ export const RegisterPage: React.FC = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="tu@email.com"
           />
         </div>
@@ -89,7 +89,7 @@ export const RegisterPage: React.FC = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="Mínimo 6 caracteres"
           />
         </div>
@@ -101,7 +101,7 @@ export const RegisterPage: React.FC = () => {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="Repite tu contraseña"
           />
         </div>
@@ -109,7 +109,7 @@ export const RegisterPage: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 mt-2 bg-[#0A0A0A] hover:bg-black text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed group"
+          className="w-full py-3.5 mt-2 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed group"
         >
           {loading ? (
              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -157,7 +157,7 @@ export const RegisterPage: React.FC = () => {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         ¿Ya tienes cuenta?{' '}
-        <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+        <Link to="/login" className="text-primary hover:opacity-80 font-medium">
           Inicia sesión
         </Link>
       </p>
