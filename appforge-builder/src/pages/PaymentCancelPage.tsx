@@ -18,7 +18,7 @@ export const PaymentCancelPage: React.FC = () => {
         <div className="pt-2 flex items-center justify-center gap-3">
           <Link
             to="/pricing"
-            className="inline-flex items-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors"
+            className="inline-flex items-center px-6 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-xl transition-colors"
           >
             Ver planes
           </Link>
