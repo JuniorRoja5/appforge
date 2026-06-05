@@ -44,7 +44,7 @@ export const NavigationConfigurator: React.FC = () => {
               onClick={() => updateTokens(['navigation', 'style'], opt.value)}
               className={`flex flex-col items-center gap-1.5 p-2.5 rounded-lg border-2 transition-all text-xs ${
                 navStyle === opt.value
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                  ? 'border-primary bg-primary/10 text-primary'
                   : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
               }`}
             >
@@ -61,7 +61,7 @@ export const NavigationConfigurator: React.FC = () => {
         <button
           onClick={() => updateTokens(['navigation', 'show_labels'], !showLabels)}
           className={`relative w-10 h-5 rounded-full transition-colors ${
-            showLabels ? 'bg-indigo-500' : 'bg-gray-300'
+            showLabels ? 'bg-primary' : 'bg-gray-300'
           }`}
         >
           <span
@@ -82,7 +82,7 @@ export const NavigationConfigurator: React.FC = () => {
               onClick={() => updateTokens(['navigation', 'active_indicator'], ind.value)}
               className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
                 activeIndicator === ind.value
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
