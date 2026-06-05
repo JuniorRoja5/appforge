@@ -110,7 +110,7 @@ const UserDetailPanel: React.FC<{
           <div className="p-6 space-y-6">
             {/* Profile */}
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-lg shrink-0 overflow-hidden">
+              <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0 overflow-hidden">
                 {detail.avatarUrl ? (
                   <img src={resolveAssetUrl(detail.avatarUrl)} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -196,12 +196,12 @@ const UserDetailPanel: React.FC<{
 
             {/* Reset password result */}
             {resetResult && (
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                <p className="text-xs font-bold text-blue-700 mb-1">Token de reset generado</p>
-                <p className="text-2xl font-mono font-bold text-blue-900 tracking-widest text-center my-2">
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                <p className="text-xs font-bold text-primary mb-1">Token de reset generado</p>
+                <p className="text-2xl font-mono font-bold text-primary tracking-widest text-center my-2">
                   {resetResult.token}
                 </p>
-                <p className="text-[10px] text-blue-600">
+                <p className="text-[10px] text-primary">
                   Comunica este código al usuario. Expira: {new Date(resetResult.expiresAt).toLocaleString('es-ES')}
                 </p>
               </div>
@@ -225,7 +225,7 @@ const UserDetailPanel: React.FC<{
               </button>
               <button
                 onClick={handleResetPassword}
-                className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               >
                 <KeyRound size={16} /> Reset contraseña
               </button>
@@ -368,13 +368,13 @@ export const AppUsersPage: React.FC = () => {
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Buscar por email o nombre..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); }}
-          className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-purple-300"
+          className="px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:border-primary"
         >
           <option value="">Todos los estados</option>
           <option value="ACTIVE">Activos</option>
@@ -416,7 +416,7 @@ export const AppUsersPage: React.FC = () => {
                   >
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-xs font-bold shrink-0 overflow-hidden">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0 overflow-hidden">
                           {user.avatarUrl ? (
                             <img src={resolveAssetUrl(user.avatarUrl)} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -510,7 +510,7 @@ export const AppUsersPage: React.FC = () => {
                         onClick={() => loadData(p)}
                         className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${
                           p === page
-                            ? 'bg-purple-500 text-white'
+                            ? 'bg-primary text-white'
                             : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
