@@ -40,7 +40,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200/50 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-200/50 transition-all duration-300 group flex flex-col h-full relative overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-200/50 shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 hover:border-primary/30 transition-all duration-300 group flex flex-col h-full relative overflow-hidden">
       {/* Settings Dots (Top Right) */}
       <div className="absolute top-3 right-3 z-10">
         <div className="relative">
@@ -87,7 +87,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
 
       {/* Preview area */}
       <div
-        className="h-[160px] bg-gradient-to-br from-[#f8fafc] to-[#f1f5f9] flex items-center justify-center cursor-pointer border-b border-gray-100 group-hover:from-blue-50/50 group-hover:to-indigo-50/50 transition-colors"
+        className="h-[160px] bg-gradient-to-br from-[#f8fafc] to-[#f1f5f9] flex items-center justify-center cursor-pointer border-b border-gray-100 group-hover:from-primary/5 group-hover:to-primary/10 transition-colors"
         onClick={() => navigate(`/apps/${app.id}/edit`)}
       >
         {app.appConfig?.icon?.url ? (
@@ -97,7 +97,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
             className="w-[72px] h-[72px] rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform duration-300 ring-4 ring-white"
           />
         ) : (
-          <div className="w-[72px] h-[72px] rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform duration-300 ring-4 ring-white">
+          <div className="w-[72px] h-[72px] rounded-2xl bg-primary flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-300 ring-4 ring-white">
             {app.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -106,7 +106,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onDelete }) => {
       {/* Info */}
       <div className="p-5 flex flex-col flex-1">
         <h3
-          className="text-base font-bold text-gray-900 truncate cursor-pointer hover:text-blue-600 transition-colors"
+          className="text-base font-bold text-gray-900 truncate cursor-pointer hover:text-primary transition-colors"
           onClick={() => navigate(`/apps/${app.id}/edit`)}
         >
           {app.name}
