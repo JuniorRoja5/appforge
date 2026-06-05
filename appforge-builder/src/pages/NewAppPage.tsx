@@ -132,7 +132,7 @@ export const NewAppPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] w-full px-4 sm:px-8 lg:px-12 max-w-[1600px] mx-auto py-12">
+    <div className="min-h-screen bg-gray-50 w-full px-4 sm:px-8 lg:px-12 max-w-[1600px] mx-auto py-12">
       <div className="mb-10">
         <button
           onClick={() => navigate('/dashboard')}
@@ -155,7 +155,7 @@ export const NewAppPage: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-8 xl:gap-12 pl-2">
         {/* Left Column: Form & Details (Sticky) */}
         <div className="w-full lg:w-[420px] shrink-0">
-          <div className="bg-white rounded-[24px] border border-gray-100 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sticky top-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] sticky top-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-gray-900 tracking-tight">Configuración Inicial</h2>
               {appsUsed !== null && appsLimit !== null && (
@@ -188,7 +188,7 @@ export const NewAppPage: React.FC = () => {
                   value={name}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder={selectedTemplate?.suggested_app_name ?? 'Mi Primera App'}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
                 />
               </div>
 
@@ -201,7 +201,7 @@ export const NewAppPage: React.FC = () => {
                   value={slug}
                   onChange={(e) => { setSlugManual(true); setSlug(e.target.value); }}
                   placeholder="mi-primera-app"
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-500 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-gray-500 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />
                 <p className="text-[11px] text-gray-400 mt-2 font-medium">Identificador único. Solo minúsculas, números y guiones.</p>
               </div>
@@ -237,7 +237,7 @@ export const NewAppPage: React.FC = () => {
                 <button
                   onClick={handleCreate}
                   disabled={creating || !name.trim() || !slug.trim() || atLimit}
-                  className="w-full py-3 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-[15px] font-bold rounded-xl shadow-[0_4px_14px_0_rgba(0,118,255,0.39)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 disabled:shadow-none"
+                  className="w-full py-3 bg-primary hover:opacity-90 text-white text-[15px] font-bold rounded-xl shadow-sm shadow-primary/20 transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 disabled:shadow-none"
                 >
                   {creating ? 'Construyendo...' : 'Crear Proyecto'}
                 </button>
@@ -251,7 +251,7 @@ export const NewAppPage: React.FC = () => {
            <div className="bg-white rounded-2xl border border-gray-200/80 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
              <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Selecciona una Plantilla</h2>
-                <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full">Recomendado</span>
+                <span className="bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full">Recomendado</span>
              </div>
              
                <ThemeSelector
