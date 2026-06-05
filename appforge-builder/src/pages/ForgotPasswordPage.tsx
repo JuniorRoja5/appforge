@@ -25,7 +25,7 @@ export const ForgotPasswordPage: React.FC = () => {
 
   if (sent) {
     return (
-      <div className="bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
         <div className="mb-6 text-center">
           <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -40,20 +40,20 @@ export const ForgotPasswordPage: React.FC = () => {
 
         <button
           onClick={() => navigate('/reset-password', { state: { email } })}
-          className="w-full py-3.5 bg-[#0A0A0A] hover:bg-black text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all"
+          className="w-full py-3.5 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all"
         >
           Tengo el código
         </button>
 
         <p className="mt-4 text-center text-xs text-gray-400">
           ¿No recibiste el email? Revisa tu carpeta de spam o{' '}
-          <button onClick={() => setSent(false)} className="text-blue-600 hover:text-blue-700 font-medium">
+          <button onClick={() => setSent(false)} className="text-primary hover:opacity-80 font-medium">
             intenta de nuevo
           </button>
         </p>
 
         <p className="mt-4 text-center text-sm text-gray-500">
-          <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+          <Link to="/login" className="text-primary hover:opacity-80 font-medium">
             Volver al inicio de sesión
           </Link>
         </p>
@@ -62,7 +62,7 @@ export const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border border-gray-100 p-8 sm:p-10">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Recuperar contraseña</h2>
         <p className="text-sm text-gray-500 mt-2">Ingresa tu email y te enviaremos un código de recuperación.</p>
@@ -85,7 +85,7 @@ export const ForgotPasswordPage: React.FC = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="tu@email.com"
           />
         </div>
@@ -93,7 +93,7 @@ export const ForgotPasswordPage: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 mt-2 bg-[#0A0A0A] hover:bg-black text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full py-3.5 mt-2 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl shadow-[0_4px_10px_rgba(0,0,0,0.1)] transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -104,7 +104,7 @@ export const ForgotPasswordPage: React.FC = () => {
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-500">
-        <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+        <Link to="/login" className="text-primary hover:opacity-80 font-medium">
           Volver al inicio de sesión
         </Link>
       </p>
