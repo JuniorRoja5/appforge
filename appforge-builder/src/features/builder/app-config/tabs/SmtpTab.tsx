@@ -78,7 +78,7 @@ export const SmtpTab: React.FC = () => {
             value={smtp.host}
             onChange={(e) => update({ host: e.target.value })}
             placeholder="smtp.gmail.com"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
 
@@ -90,7 +90,7 @@ export const SmtpTab: React.FC = () => {
               type="number"
               value={smtp.port}
               onChange={(e) => update({ port: parseInt(e.target.value) || 587 })}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
             <div className="flex gap-1 shrink-0">
               {[587, 465, 25].map((p) => (
@@ -99,7 +99,7 @@ export const SmtpTab: React.FC = () => {
                   onClick={() => update({ port: p, secure: p === 465 })}
                   className={`px-2 py-1 text-[10px] rounded border transition-colors ${
                     smtp.port === p
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-200 text-gray-500 hover:border-gray-300'
                   }`}
                 >
@@ -119,7 +119,7 @@ export const SmtpTab: React.FC = () => {
           <button
             onClick={() => update({ secure: !smtp.secure })}
             className={`relative w-10 h-5 rounded-full transition-colors ${
-              smtp.secure ? 'bg-indigo-500' : 'bg-gray-300'
+              smtp.secure ? 'bg-primary' : 'bg-gray-300'
             }`}
           >
             <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -136,7 +136,7 @@ export const SmtpTab: React.FC = () => {
             value={smtp.username}
             onChange={(e) => update({ username: e.target.value })}
             placeholder="tu@email.com"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
 
@@ -148,7 +148,7 @@ export const SmtpTab: React.FC = () => {
             value={smtp.password ?? ''}
             onChange={(e) => update({ password: e.target.value })}
             placeholder={smtp.hasPassword ? '••••••••' : 'Contraseña SMTP'}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
           {smtp.hasPassword && !smtp.password && (
             <p className="text-[10px] text-gray-400 mt-1">Ya hay una contraseña guardada. Deja vacío para mantenerla.</p>
@@ -163,7 +163,7 @@ export const SmtpTab: React.FC = () => {
             value={smtp.fromEmail}
             onChange={(e) => update({ fromEmail: e.target.value })}
             placeholder="noreply@tuapp.com"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
 
@@ -175,7 +175,7 @@ export const SmtpTab: React.FC = () => {
             value={smtp.fromName}
             onChange={(e) => update({ fromName: e.target.value })}
             placeholder="Mi App"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
       </div>
@@ -185,7 +185,7 @@ export const SmtpTab: React.FC = () => {
         <button
           onClick={handleTest}
           disabled={testing || !smtp.host}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[13px] font-medium rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           {testing ? <Loader2 size={14} className="animate-spin" /> : null}
           {testing ? 'Probando...' : 'Probar conexión'}
@@ -212,8 +212,8 @@ export const SmtpTab: React.FC = () => {
       </div>
 
       {/* Help */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-[12px] text-blue-800">
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+        <p className="text-[12px] text-gray-700">
           <strong>Gmail:</strong> Usa smtp.gmail.com, puerto 587, y genera una "Contraseña de aplicación" en la configuración de seguridad de Google.
           No uses tu contraseña normal de Gmail.
         </p>
