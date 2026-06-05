@@ -69,7 +69,7 @@ const AutoDetectPermissionsButton: React.FC<{
   return (
     <button
       onClick={handleAutoDetect}
-      className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all"
+      className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all"
     >
       <Wand2 size={14} />
       Auto-detectar permisos según módulos ({detectedCount} detectados)
@@ -139,7 +139,7 @@ export const AndroidConfigTab: React.FC = () => {
               placeholder="com.empresa.miapp"
               className={`w-full border rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 transition-colors ${
                 packageNameValid
-                  ? 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'
+                  ? 'border-gray-300 focus:ring-primary/20 focus:border-primary'
                   : 'border-red-300 focus:ring-red-200 focus:border-red-400 bg-red-50'
               }`}
             />
@@ -166,7 +166,7 @@ export const AndroidConfigTab: React.FC = () => {
                 placeholder="1.0.0"
                 className={`w-full border rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 transition-colors ${
                   versionNameValid
-                    ? 'border-gray-300 focus:ring-indigo-200 focus:border-indigo-400'
+                    ? 'border-gray-300 focus:ring-primary/20 focus:border-primary'
                     : 'border-red-300 focus:ring-red-200 focus:border-red-400 bg-red-50'
                 }`}
               />
@@ -186,7 +186,7 @@ export const AndroidConfigTab: React.FC = () => {
                   min={1}
                   value={androidConfig.versionCode}
                   onChange={(e) => updateAndroidConfig({ versionCode: Math.max(1, parseInt(e.target.value) || 1) })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-1">Número interno. Se auto-incrementa en builds release/AAB exitosos.</p>
@@ -212,7 +212,7 @@ export const AndroidConfigTab: React.FC = () => {
         <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-indigo-500 rounded-full transition-all"
+              className="h-full bg-primary rounded-full transition-all"
               style={{ width: `${(enabledCount / ANDROID_PERMISSIONS.length) * 100}%` }}
             />
           </div>
@@ -229,7 +229,7 @@ export const AndroidConfigTab: React.FC = () => {
                 key={perm.key}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
                   enabled
-                    ? 'bg-indigo-50/50 border-indigo-200'
+                    ? 'bg-primary/10 border-primary/20'
                     : 'bg-white border-gray-200 hover:border-gray-300'
                 } ${perm.alwaysOn ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
@@ -238,7 +238,7 @@ export const AndroidConfigTab: React.FC = () => {
                   checked={enabled}
                   onChange={() => togglePermission(perm.key)}
                   disabled={perm.alwaysOn}
-                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary disabled:cursor-not-allowed"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -259,8 +259,8 @@ export const AndroidConfigTab: React.FC = () => {
       </div>
 
       {/* ─── Info box ─── */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-[12px] text-blue-800">
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+        <p className="text-[12px] text-gray-700">
           <strong>Nota:</strong> El nombre de paquete no puede cambiar una vez que publiques tu app en Google Play.
           Elige uno que represente tu marca. Los permisos se pueden ajustar en futuras versiones.
         </p>
