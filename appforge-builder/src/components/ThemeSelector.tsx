@@ -26,7 +26,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ onSelect, onSelect
             onClick={() => setActiveCategory(cat.id)}
             className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
               activeCategory === cat.id
-                ? 'bg-gray-900 text-white shadow-sm'
+                ? 'bg-primary text-white shadow-sm'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -43,7 +43,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ onSelect, onSelect
             onClick={() => onSelectBlank?.()}
             className={`group text-left rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
               selectedId === '__blank'
-                ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-lg'
+                ? 'border-primary ring-2 ring-primary/20 shadow-lg'
                 : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
             }`}
           >
@@ -83,7 +83,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ onSelect, onSelect
               onClick={() => onSelect(template)}
               className={`group text-left rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
                 isSelected
-                  ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-lg'
+                  ? 'border-primary ring-2 ring-primary/20 shadow-lg'
                   : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
               }`}
             >
