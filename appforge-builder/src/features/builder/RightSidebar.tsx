@@ -51,7 +51,7 @@ const TabAssignment: React.FC<{ elementId: string; moduleId: string; currentTabI
       <select
         value={currentTabIndex == null ? '__all__' : String(currentTabIndex)}
         onChange={(e) => handleChange(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
       >
         {tabs.map((tab) => (
           <option key={tab.index} value={String(tab.index)}>
