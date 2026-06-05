@@ -65,7 +65,7 @@ const IosAutoDetectButton: React.FC<{
   return (
     <button
       onClick={handleAutoDetect}
-      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all"
+      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:opacity-90 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all"
     >
       <Wand2 size={14} />
       Auto-detectar permisos según módulos ({detectedCount} detectados)
@@ -116,14 +116,14 @@ export const IosPermissionsTab: React.FC = () => {
 
       {/* Variable hint + fill all */}
       <div className="flex items-center justify-between">
-        <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 flex-1 mr-3">
-          <p className="text-[11px] text-indigo-700">
-            Usa <code className="bg-indigo-100 px-1 rounded font-mono text-[10px]">#APP_NAME</code> como variable — se reemplazará automáticamente por el nombre de tu app al compilar.
+        <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex-1 mr-3">
+          <p className="text-[11px] text-gray-700">
+            Usa <code className="bg-primary/10 px-1 rounded font-mono text-[10px]">#APP_NAME</code> como variable — se reemplazará automáticamente por el nombre de tu app al compilar.
           </p>
         </div>
         <button
           onClick={fillAllDefaults}
-          className="shrink-0 px-3 py-2 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+          className="shrink-0 px-3 py-2 text-[11px] font-medium text-primary border border-primary/20 rounded-lg hover:bg-primary/5 transition-colors"
         >
           Rellenar vacíos
         </button>
@@ -133,7 +133,7 @@ export const IosPermissionsTab: React.FC = () => {
       <div className="flex items-center gap-3">
         <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-indigo-500 rounded-full transition-all"
+            className="h-full bg-primary rounded-full transition-all"
             style={{ width: `${(filledCount / IOS_PERMISSIONS.length) * 100}%` }}
           />
         </div>
@@ -154,7 +154,7 @@ export const IosPermissionsTab: React.FC = () => {
               {permissions[perm.key] !== perm.defaultText && (
                 <button
                   onClick={() => resetToDefault(perm.key, perm.defaultText)}
-                  className="text-[10px] text-gray-400 hover:text-indigo-600 transition-colors"
+                  className="text-[10px] text-gray-400 hover:text-primary transition-colors"
                 >
                   Restaurar
                 </button>
@@ -165,7 +165,7 @@ export const IosPermissionsTab: React.FC = () => {
               onChange={(e) => updatePermission(perm.key, e.target.value)}
               placeholder={perm.defaultText}
               rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[12px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[12px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             />
           </div>
         ))}
