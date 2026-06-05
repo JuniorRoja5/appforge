@@ -54,7 +54,7 @@ export const SplashScreenTab: React.FC = () => {
         <button
           onClick={() => update({ enabled: !splash.enabled })}
           className={`relative w-10 h-5 rounded-full transition-colors ${
-            splash.enabled ? 'bg-indigo-500' : 'bg-gray-300'
+            splash.enabled ? 'bg-primary' : 'bg-gray-300'
           }`}
         >
           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -75,7 +75,7 @@ export const SplashScreenTab: React.FC = () => {
                   onClick={() => update({ type: t })}
                   className={`flex-1 py-2 text-[12px] font-medium rounded-lg border-2 transition-all ${
                     splash.type === t
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
@@ -123,7 +123,7 @@ export const SplashScreenTab: React.FC = () => {
               ) : (
                 <button
                   onClick={() => bgImageRef.current?.click()}
-                  className="w-full py-6 border-2 border-dashed border-gray-300 rounded-lg text-[12px] text-gray-500 hover:border-indigo-400 transition-colors"
+                  className="w-full py-6 border-2 border-dashed border-gray-300 rounded-lg text-[12px] text-gray-500 hover:border-primary transition-colors"
                 >
                   {uploading === 'bg' ? 'Subiendo...' : 'Click para subir imagen de fondo'}
                 </button>
@@ -143,7 +143,7 @@ export const SplashScreenTab: React.FC = () => {
                 </div>
                 <button
                   onClick={() => logoRef.current?.click()}
-                  className="text-[12px] text-indigo-600 hover:underline"
+                  className="text-[12px] text-primary hover:underline"
                 >
                   Cambiar
                 </button>
@@ -157,7 +157,7 @@ export const SplashScreenTab: React.FC = () => {
             ) : (
               <button
                 onClick={() => logoRef.current?.click()}
-                className="py-3 px-4 border border-gray-300 rounded-lg text-[12px] text-gray-600 hover:border-indigo-400 transition-colors"
+                className="py-3 px-4 border border-gray-300 rounded-lg text-[12px] text-gray-600 hover:border-primary transition-colors"
               >
                 {uploading === 'logo' ? 'Subiendo...' : 'Subir logo'}
               </button>
@@ -179,7 +179,7 @@ export const SplashScreenTab: React.FC = () => {
               step={0.5}
               value={splash.duration}
               onChange={(e) => update({ duration: parseFloat(e.target.value) })}
-              className="w-full accent-indigo-500"
+              className="w-full accent-[hsl(var(--primary))]"
             />
             <div className="flex justify-between text-[10px] text-gray-400 mt-1">
               <span>1s</span>
