@@ -98,7 +98,7 @@ export const AppIconTab: React.FC = () => {
         onDrop={handleDrop}
         onClick={() => fileRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-          uploading ? 'border-indigo-300 bg-indigo-50/50' : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30'
+          uploading ? 'border-primary bg-primary/5' : 'border-gray-300 hover:border-primary hover:bg-primary/5'
         }`}
       >
         {iconUrl ? (
@@ -111,7 +111,7 @@ export const AppIconTab: React.FC = () => {
         ) : (
           <div className="flex flex-col items-center gap-3">
             {uploading ? (
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             ) : (
               <Upload size={32} className="text-gray-400" />
             )}
@@ -176,7 +176,7 @@ export const AppIconTab: React.FC = () => {
           placeholder="Breve descripción que aparecerá cuando alguien comparta tu app en WhatsApp, redes sociales o por enlace"
           maxLength={200}
           rows={3}
-          className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 resize-none"
+          className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
         />
         <p className="text-[11px] text-gray-400 mt-1.5 text-right">
           {(config?.description ?? '').length}/200
