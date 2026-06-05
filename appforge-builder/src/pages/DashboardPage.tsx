@@ -58,7 +58,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] w-full px-4 sm:px-8 lg:px-12 max-w-[1600px] mx-auto py-12">
+    <div className="min-h-screen bg-gray-50 w-full px-4 sm:px-8 lg:px-12 max-w-[1600px] mx-auto py-12">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Proyectos</h1>
@@ -68,7 +68,7 @@ export const DashboardPage: React.FC = () => {
         </div>
         <button
           onClick={() => navigate('/apps/new')}
-          className="flex items-center justify-center px-6 py-3 bg-[#0A0A0A] hover:bg-black text-white text-[14px] font-semibold rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all group"
+          className="flex items-center justify-center px-6 py-3 bg-primary hover:opacity-90 text-white text-[14px] font-semibold rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all group"
         >
           <svg className="w-5 h-5 mr-2 opacity-80 group-hover:rotate-90 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
           Nuevo Proyecto
@@ -77,18 +77,18 @@ export const DashboardPage: React.FC = () => {
 
       {/* Upgrade banner for FREE plan */}
       {sub && sub.subscription.plan.planType === 'FREE' && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="mb-6 p-4 bg-primary/5 rounded-xl border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-indigo-900">
+            <p className="text-sm font-semibold text-primary">
               Estás en el plan Free
             </p>
-            <p className="text-xs text-indigo-600 mt-0.5">
+            <p className="text-xs text-primary mt-0.5">
               Actualiza para crear más apps, generar builds y desbloquear todas las funciones.
             </p>
           </div>
           <Link
             to="/pricing"
-            className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shrink-0"
+            className="inline-flex items-center px-4 py-2 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-lg transition-colors shrink-0"
           >
             Ver planes
           </Link>
@@ -99,7 +99,7 @@ export const DashboardPage: React.FC = () => {
       {sub && (
         <div className="mb-8 p-4 bg-white rounded-xl border border-gray-200/60 shadow-sm">
           <div className="flex flex-wrap items-center gap-4">
-            <span className="inline-flex items-center px-3 py-1 bg-indigo-100 text-indigo-700 text-[13px] font-bold rounded-lg">
+            <span className="inline-flex items-center px-3 py-1 bg-primary/10 text-primary text-[13px] font-bold rounded-lg">
               {sub.subscription.plan.name}
             </span>
             <div className="flex items-center gap-6 text-[13px] text-gray-600">
@@ -158,7 +158,7 @@ export const DashboardPage: React.FC = () => {
           <p className="text-sm text-gray-500 mb-6">Crea tu primera app seleccionando una plantilla</p>
           <button
             onClick={() => navigate('/apps/new')}
-            className="px-6 py-2.5 bg-gradient-to-b from-gray-800 to-gray-900 hover:from-gray-900 hover:to-black text-white text-sm font-medium rounded-lg shadow-sm transition-all"
+            className="px-6 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-lg shadow-sm transition-all"
           >
             + Crear mi primera app
           </button>
