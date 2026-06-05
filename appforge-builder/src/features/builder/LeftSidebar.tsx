@@ -17,10 +17,10 @@ const DraggableModule: React.FC<{ definition: any }> = ({ definition }) => {
       {...listeners}
       {...attributes}
       className={`group flex items-center space-x-3 p-3 mx-4 my-2 bg-white rounded-xl cursor-grab transition-all duration-200 select-none border ${
-        isDragging ? 'opacity-50 ring-2 ring-indigo-500 shadow-lg scale-95 border-indigo-500' : 'border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md'
+        isDragging ? 'opacity-50 ring-2 ring-primary shadow-lg scale-95 border-primary' : 'border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md'
       }`}
     >
-      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-50 text-gray-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors shrink-0">
+      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-50 text-gray-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
         <span className="text-xl leading-none">{definition.icon}</span>
       </div>
       <div className="min-w-0 pr-2">
