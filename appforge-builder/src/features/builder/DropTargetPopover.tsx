@@ -57,13 +57,13 @@ export const DropTargetPopover: React.FC<DropTargetPopoverProps> = ({
             <button
               key={tab.index}
               onClick={() => onSelectTab(tab.index)}
-              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left group"
+              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-primary/5 transition-colors text-left group"
             >
-              <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-blue-100 flex items-center justify-center transition-colors">
-                <LucideIconByName name={tab.icon} size={16} className="text-gray-500 group-hover:text-blue-600" />
+              <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                <LucideIconByName name={tab.icon} size={16} className="text-gray-500 group-hover:text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="text-[13px] font-medium text-gray-700 group-hover:text-blue-700 truncate block">
+                <span className="text-[13px] font-medium text-gray-700 group-hover:text-primary truncate block">
                   Añadir a "{tab.label}"
                 </span>
               </div>
