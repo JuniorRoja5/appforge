@@ -244,7 +244,7 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
         {/* App Content Area — design tokens applied here only */}
         <div
           ref={setNodeRef}
-          className={`flex-1 overflow-x-hidden overflow-y-auto transition-colors ${isOver ? 'bg-blue-50/50' : ''}`}
+          className={`flex-1 overflow-x-hidden overflow-y-auto transition-colors ${isOver ? 'bg-primary/5' : ''}`}
           style={{
             ...tokenStyles,
             backgroundColor: bgColor,
