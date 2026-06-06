@@ -54,7 +54,7 @@ const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageMod
       <ImageInputField
         value={data.url}
         onChange={(url) => onChange({ ...data, url })}
-        accentColor="blue"
+        accentColor="indigo"
         shape="video"
         previewSize="lg"
         label="Imagen"
@@ -88,7 +88,7 @@ const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageMod
           <input 
             type="number"
             min="0"
-            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-primary focus:border-primary"
             value={parseFloat(data.radius) || 0}
             onChange={(e) => {
               const unit = data.radius.includes('%') ? '%' : 'px';
@@ -96,7 +96,7 @@ const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageMod
             }}
           />
           <select 
-            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
+            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-primary focus:border-primary"
             value={data.radius.includes('%') ? '%' : 'px'}
             onChange={(e) => {
               const val = parseFloat(data.radius) || 0;
@@ -114,7 +114,7 @@ const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageMod
           <input 
             type="number"
             min="10"
-            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-primary focus:border-primary"
             value={parseFloat(data.height) || 200}
             onChange={(e) => {
               const unit = data.height.includes('vh') ? 'vh' : data.height.includes('%') ? '%' : 'px';
@@ -122,7 +122,7 @@ const SettingsPanel: React.FC<{ data: ImageModuleData; onChange: (data: ImageMod
             }}
           />
           <select 
-            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
+            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-primary focus:border-primary"
             value={data.height.includes('vh') ? 'vh' : data.height.includes('%') ? '%' : 'px'}
             onChange={(e) => {
               const val = parseFloat(data.height) || 200;
