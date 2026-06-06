@@ -219,26 +219,26 @@ const PhotoEditor: React.FC<{
   };
 
   return (
-    <div className="p-2 space-y-2 bg-blue-50 rounded-md">
+    <div className="p-2 space-y-2 bg-violet-50 rounded-md">
       <input
         type="text"
         placeholder="Título (opcional)"
         value={title}
         onChange={e => setTitle(e.target.value)}
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-blue-500 focus:border-blue-500"
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-violet-500 focus:border-violet-500"
       />
       <textarea
         placeholder="Descripción (opcional)"
         value={description}
         onChange={e => setDescription(e.target.value)}
         rows={2}
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-blue-500 focus:border-blue-500 resize-none"
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-violet-500 focus:border-violet-500 resize-none"
       />
       <div className="flex gap-1">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-1 px-2 py-1 bg-violet-600 text-white text-xs rounded hover:bg-violet-700 disabled:opacity-50"
         >
           <Save size={10} /> {saving ? '...' : 'Guardar'}
         </button>
@@ -548,7 +548,7 @@ const SettingsPanel: React.FC<{ data: PhotoGalleryConfig; onChange: (data: Photo
                         <div className="flex flex-col gap-0.5 shrink-0">
                           <button
                             onClick={() => setEditingId(photo.id)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            className="p-1 text-violet-600 hover:bg-violet-50 rounded transition-colors"
                             title="Editar"
                           >
                             <Save size={12} />
