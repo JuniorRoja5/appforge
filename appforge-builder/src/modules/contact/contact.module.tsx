@@ -484,7 +484,7 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
                     </button>
                     <button
                       onClick={() => setEditingFieldId(field.id)}
-                      className="p-1 text-blue-500 hover:text-blue-700"
+                      className="p-1 text-purple-500 hover:text-purple-700"
                       title="Editar"
                     >
                       <Pencil size={12} />
