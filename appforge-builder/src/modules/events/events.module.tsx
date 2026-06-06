@@ -789,14 +789,14 @@ const SettingsPanel: React.FC<{ data: EventsConfig; onChange: (data: EventsConfi
                                 <span className="text-[8px] font-bold px-1 py-0.5 rounded-full bg-teal-100 text-teal-700">{event.price}</span>
                               )}
                               {event.ticketUrl && (
-                                <span className="text-[8px] font-medium px-1 py-0.5 rounded-full bg-blue-100 text-blue-700 flex items-center gap-0.5">
+                                <span className="text-[8px] font-medium px-1 py-0.5 rounded-full bg-teal-100 text-teal-700 flex items-center gap-0.5">
                                   <Ticket size={8} /> Entradas
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="flex flex-col gap-1 shrink-0">
-                            <button onClick={() => setEditingId(event.id)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md" title="Editar">
+                            <button onClick={() => setEditingId(event.id)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-md" title="Editar">
                               <Pencil size={14} />
                             </button>
                             <button onClick={() => handleDelete(event.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-md" title="Eliminar">
