@@ -37,7 +37,7 @@ const SettingsPanel: React.FC<{ data: TextModuleData; onChange: (data: TextModul
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Contenido</label>
         <textarea 
-          className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+          className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-primary focus:border-primary"
           rows={4}
           value={data.content}
           onChange={(e) => onChange({ ...data, content: e.target.value })}
