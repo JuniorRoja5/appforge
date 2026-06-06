@@ -503,7 +503,7 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
       <ImageInputField
         value={itemForm.imageUrl}
         onChange={(url) => setItemForm(prev => ({ ...prev, imageUrl: url }))}
-        accentColor="blue"
+        accentColor="amber"
         shape="square"
         previewSize="sm"
         label="Imagen del plato"
@@ -663,7 +663,7 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
                       <button onClick={() => setEditingCatId(null)} className="text-gray-400 p-0.5"><X size={10} /></button>
                     </>
                   ) : (
-                    <button onClick={() => { setEditingCatId(cat.id); setCatName(cat.name); }} className="text-blue-500 p-0.5"><Pencil size={10} /></button>
+                    <button onClick={() => { setEditingCatId(cat.id); setCatName(cat.name); }} className="text-amber-600 p-0.5"><Pencil size={10} /></button>
                   )}
                   <button onClick={() => handleDeleteCategory(cat.id)} className="text-red-400 hover:text-red-600 p-0.5"><Trash2 size={10} /></button>
                 </div>
@@ -700,7 +700,7 @@ const SettingsPanel: React.FC<{ data: MenuRestaurantConfig; onChange: (d: MenuRe
                               available: item.available,
                             });
                           }}
-                          className="text-blue-500 p-0.5"
+                          className="text-amber-600 p-0.5"
                         ><Pencil size={9} /></button>
                         <button onClick={() => handleDeleteItem(cat.id, item.id)} className="text-red-400 p-0.5"><Trash2 size={9} /></button>
                       </div>
