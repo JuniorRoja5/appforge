@@ -223,7 +223,7 @@ const SettingsPanel: React.FC<{ data: LinksConfig; onChange: (data: LinksConfig)
                 type="text"
                 value={data.title}
                 onChange={e => onChange({ ...data, title: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
                 placeholder="Nuestras redes"
               />
             </div>
@@ -242,7 +242,7 @@ const SettingsPanel: React.FC<{ data: LinksConfig; onChange: (data: LinksConfig)
                     onClick={() => onChange({ ...data, style: opt.value })}
                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                       data.style === opt.value
-                        ? 'bg-indigo-600 text-white'
+                        ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -322,7 +322,7 @@ const SettingsPanel: React.FC<{ data: LinksConfig; onChange: (data: LinksConfig)
 
         <button
           onClick={addLink}
-          className="w-full mt-2 flex items-center justify-center gap-1 px-3 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition-colors"
+          className="w-full mt-2 flex items-center justify-center gap-1 px-3 py-2.5 bg-primary text-white text-sm font-medium rounded-md hover:opacity-90 transition-colors"
         >
           <Plus size={14} /> Agregar Enlace
         </button>
