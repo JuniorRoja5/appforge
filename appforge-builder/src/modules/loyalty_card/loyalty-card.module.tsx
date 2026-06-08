@@ -235,7 +235,7 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
   const stampPageUrl = data.appId ? `${window.location.origin}/stamp/${data.appId}` : '';
 
   const labelCls = 'block text-xs font-semibold text-gray-600 mb-1';
-  const inputCls = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white';
+  const inputCls = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white';
 
   return (
     <div className="space-y-5">
@@ -262,7 +262,7 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
             <button
               onClick={handleSavePin}
               disabled={saving || (!pin && !configExists)}
-              className="w-full py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-2 bg-primary text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
               {configExists ? 'Actualizar configuración' : 'Guardar configuración'}
@@ -273,16 +273,16 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
 
             {/* Stamp page link */}
             {configExists && stampPageUrl && (
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <LinkIcon size={12} className="text-blue-500" />
-                  <span className="text-xs font-semibold text-blue-700">Página de sellado</span>
+                  <LinkIcon size={12} className="text-primary" />
+                  <span className="text-xs font-semibold text-primary">Página de sellado</span>
                 </div>
-                <p className="text-[10px] text-blue-600 break-all font-mono">{stampPageUrl}</p>
+                <p className="text-[10px] text-primary break-all font-mono">{stampPageUrl}</p>
                 <div className="flex gap-3 mt-1.5">
                   <button
                     onClick={() => navigator.clipboard.writeText(stampPageUrl)}
-                    className="text-[10px] text-blue-500 hover:text-blue-700 font-medium"
+                    className="text-[10px] text-primary hover:opacity-80 font-medium"
                   >
                     Copiar enlace
                   </button>
@@ -290,7 +290,7 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
                     href={stampPageUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-blue-500 hover:text-blue-700 font-medium"
+                    className="text-[10px] text-primary hover:opacity-80 font-medium"
                   >
                     Abrir página ↗
                   </a>
@@ -367,7 +367,7 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
               max={20}
               value={data.totalStamps}
               onChange={(e) => update('totalStamps', Number(e.target.value))}
-              className="w-full accent-blue-600"
+              className="w-full accent-[hsl(var(--primary))]"
             />
             <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
               <span>4</span>
@@ -385,7 +385,7 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
                   onClick={() => update('stampIcon', icon)}
                   className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all ${
                     data.stampIcon === icon
-                      ? 'border-blue-500 bg-blue-50 text-blue-600'
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-100 hover:border-gray-200 text-gray-500'
                   }`}
                 >
