@@ -239,23 +239,23 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
           <div className="p-4 space-y-3">
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Módulo activo</span>
-              <input type="checkbox" checked={data.enabled} onChange={(e) => onChange({ ...data, enabled: e.target.checked })} className="w-4 h-4 rounded text-blue-500" />
+              <input type="checkbox" checked={data.enabled} onChange={(e) => onChange({ ...data, enabled: e.target.checked })} className="w-4 h-4 rounded text-primary" />
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Permitir imágenes</span>
-              <input type="checkbox" checked={data.allowImages} onChange={(e) => onChange({ ...data, allowImages: e.target.checked })} className="w-4 h-4 rounded text-blue-500" />
+              <input type="checkbox" checked={data.allowImages} onChange={(e) => onChange({ ...data, allowImages: e.target.checked })} className="w-4 h-4 rounded text-primary" />
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Permitir likes</span>
-              <input type="checkbox" checked={data.allowLikes !== false} onChange={(e) => onChange({ ...data, allowLikes: e.target.checked })} className="w-4 h-4 rounded text-blue-500" />
+              <input type="checkbox" checked={data.allowLikes !== false} onChange={(e) => onChange({ ...data, allowLikes: e.target.checked })} className="w-4 h-4 rounded text-primary" />
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Permitir comentarios</span>
-              <input type="checkbox" checked={data.allowComments !== false} onChange={(e) => onChange({ ...data, allowComments: e.target.checked })} className="w-4 h-4 rounded text-blue-500" />
+              <input type="checkbox" checked={data.allowComments !== false} onChange={(e) => onChange({ ...data, allowComments: e.target.checked })} className="w-4 h-4 rounded text-primary" />
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Mostrar encabezado</span>
-              <input type="checkbox" checked={data.showHeader !== false} onChange={(e) => onChange({ ...data, showHeader: e.target.checked })} className="w-4 h-4 rounded text-blue-500" />
+              <input type="checkbox" checked={data.showHeader !== false} onChange={(e) => onChange({ ...data, showHeader: e.target.checked })} className="w-4 h-4 rounded text-primary" />
             </label>
 
             <hr className="border-gray-100" />
@@ -273,7 +273,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                     onClick={() => onChange({ ...data, displayMode: opt.value as 'default' | 'fullwidth' })}
                     className={`p-2.5 rounded-lg border-2 text-left transition-all ${
                       (data.displayMode || 'default') === opt.value
-                        ? 'border-blue-500 bg-blue-50'
+                        ? 'border-primary bg-primary/10'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -298,7 +298,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                     onClick={() => onChange({ ...data, postLayout: opt.value as 'list' | 'cards' | 'compact' })}
                     className={`p-2 rounded-lg border-2 text-center transition-all ${
                       (data.postLayout || 'list') === opt.value
-                        ? 'border-blue-500 bg-blue-50'
+                        ? 'border-primary bg-primary/10'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -318,7 +318,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                 max={50}
                 value={data.postsPerPage ?? 10}
                 onChange={(e) => onChange({ ...data, postsPerPage: parseInt(e.target.value) || 10 })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
               />
             </div>
 
@@ -331,7 +331,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                 type="text"
                 value={data.title ?? 'Social Wall'}
                 onChange={(e) => onChange({ ...data, title: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
                 placeholder="Social Wall"
               />
             </div>
@@ -350,7 +350,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                   type="text"
                   value={data.backgroundColor ?? '#f9fafb'}
                   onChange={(e) => onChange({ ...data, backgroundColor: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-primary focus:border-primary"
                   placeholder="#f9fafb"
                 />
               </div>
@@ -370,7 +370,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                   type="text"
                   value={data.headerColor ?? ''}
                   onChange={(e) => onChange({ ...data, headerColor: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-primary focus:border-primary"
                   placeholder="Vacío = gradiente del tema"
                 />
               </div>
@@ -391,7 +391,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                   type="text"
                   value={data.textColor ?? '#1f2937'}
                   onChange={(e) => onChange({ ...data, textColor: e.target.value })}
-                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-primary focus:border-primary"
                   placeholder="#1f2937"
                 />
               </div>
@@ -454,7 +454,7 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
                   </div>
                 ))}
                 {posts.length < postsTotal && (
-                  <button onClick={() => loadData(postsPage + 1)} disabled={loading} className="w-full py-2 text-xs text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50">
+                  <button onClick={() => loadData(postsPage + 1)} disabled={loading} className="w-full py-2 text-xs text-primary hover:opacity-80 font-medium disabled:opacity-50">
                     {loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Cargar más'}
                   </button>
                 )}
