@@ -644,12 +644,12 @@ const OrdersTab: React.FC<{ appId: string; currency: string }> = ({ appId, curre
       <div className="flex gap-1 flex-wrap">
         <button
           onClick={() => { setStatusFilter(''); setPage(1); }}
-          className={`text-[10px] px-2 py-0.5 rounded-full border ${!statusFilter ? 'bg-indigo-100 border-indigo-300' : 'border-gray-200'}`}
+          className={`text-[10px] px-2 py-0.5 rounded-full border ${!statusFilter ? 'bg-primary/10 border-primary/30' : 'border-gray-200'}`}
         >Todos</button>
         {Object.entries(STATUS_LABELS).map(([key, { label }]) => (
           <button key={key}
             onClick={() => { setStatusFilter(key); setPage(1); }}
-            className={`text-[10px] px-2 py-0.5 rounded-full border ${statusFilter === key ? 'bg-indigo-100 border-indigo-300' : 'border-gray-200'}`}
+            className={`text-[10px] px-2 py-0.5 rounded-full border ${statusFilter === key ? 'bg-primary/10 border-primary/30' : 'border-gray-200'}`}
           >{label}</button>
         ))}
       </div>
@@ -687,7 +687,7 @@ const OrdersTab: React.FC<{ appId: string; currency: string }> = ({ appId, curre
                   ))}
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold" style={{ color: 'var(--af-color-primary, #6366f1)' }}>
+                  <span className="text-[11px] font-bold" style={{ color: 'hsl(var(--primary))' }}>
                     {parseFloat(String(order.total)).toFixed(2)}{currency}
                   </span>
                   <span className="text-[9px] text-gray-400">{new Date(order.createdAt).toLocaleString('es')}</span>
@@ -930,7 +930,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
               <button onClick={() => removeImage(i)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px]">×</button>
             </div>
           ))}
-          <label className="w-10 h-10 rounded border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:border-indigo-400">
+          <label className="w-10 h-10 rounded border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:border-primary">
             <Plus size={14} className="text-gray-400" />
             <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleImageUpload(e.target.files[0])} />
           </label>
@@ -942,8 +942,8 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
         <label className="text-[10px] text-gray-500">Etiquetas</label>
         <div className="flex flex-wrap gap-1 mt-0.5">
           {productForm.tags.map((tag, i) => (
-            <span key={i} className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-              {tag} <button onClick={() => removeTag(i)} className="text-indigo-400 hover:text-indigo-600">×</button>
+            <span key={i} className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              {tag} <button onClick={() => removeTag(i)} className="text-primary/60 hover:text-primary">×</button>
             </span>
           ))}
         </div>
@@ -952,7 +952,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
             onChange={e => setProductForm(prev => ({ ...prev, newTag: e.target.value }))}
             onKeyDown={e => e.key === 'Enter' && addTag()}
             className="flex-1 text-xs border rounded px-2 py-0.5" />
-          <button onClick={addTag} disabled={!productForm.newTag.trim()} className="text-[10px] text-indigo-600 px-1.5">
+          <button onClick={addTag} disabled={!productForm.newTag.trim()} className="text-[10px] text-primary px-1.5">
             <Tag size={10} />
           </button>
         </div>
@@ -1011,13 +1011,13 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
         <div className="flex border-b border-gray-200">
           <button
             onClick={() => setSettingsTab('products')}
-            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors ${settingsTab === 'products' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors ${settingsTab === 'products' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             Productos
           </button>
           <button
             onClick={() => setSettingsTab('orders')}
-            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors flex items-center justify-center gap-1 ${settingsTab === 'orders' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors flex items-center justify-center gap-1 ${settingsTab === 'orders' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             Pedidos
             {pendingCount > 0 && (
@@ -1046,7 +1046,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
             <div className="flex gap-1 mt-0.5">
               {(['grid', 'list'] as const).map(l => (
                 <button key={l} onClick={() => onChange({ ...data, layout: l })}
-                  className={`text-[10px] px-2 py-1 rounded border ${data.layout === l ? 'bg-indigo-100 border-indigo-300' : 'border-gray-200'}`}>
+                  className={`text-[10px] px-2 py-1 rounded border ${data.layout === l ? 'bg-primary/10 border-primary/30' : 'border-gray-200'}`}>
                   {l === 'grid' ? 'Cuadrícula' : 'Lista'}
                 </button>
               ))}
@@ -1106,7 +1106,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
               onKeyDown={e => e.key === 'Enter' && handleAddCol()}
               className="flex-1 text-xs border rounded px-2 py-1" />
             <button onClick={handleAddCol} disabled={!newColName.trim()}
-              className="flex items-center gap-1 bg-indigo-600 text-white text-[10px] px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50">
+              className="flex items-center gap-1 bg-primary text-white text-[10px] px-2 py-1 rounded hover:opacity-90 disabled:opacity-50">
               <Plus size={10} /> Colección
             </button>
           </div>
@@ -1138,7 +1138,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
                       <button onClick={() => setEditingColId(null)} className="text-gray-400 p-0.5"><X size={10} /></button>
                     </>
                   ) : (
-                    <button onClick={() => { setEditingColId(col.id); setColName(col.name); }} className="text-blue-500 p-0.5"><Pencil size={10} /></button>
+                    <button onClick={() => { setEditingColId(col.id); setColName(col.name); }} className="text-primary p-0.5"><Pencil size={10} /></button>
                   )}
                   <button onClick={() => handleDeleteCol(col.id)} className="text-red-400 hover:text-red-600 p-0.5"><Trash2 size={10} /></button>
                 </div>
@@ -1156,7 +1156,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] font-medium truncate">{product.name}</span>
-                          <span className="text-[10px] text-indigo-600 font-bold ml-auto">{parseFloat(product.price).toFixed(2)}{data.currency}</span>
+                          <span className="text-[10px] text-primary font-bold ml-auto">{parseFloat(product.price).toFixed(2)}{data.currency}</span>
                         </div>
                         {product.tags.length > 0 && (
                           <div className="flex gap-0.5">{product.tags.map(t => <span key={t} className="text-[8px] bg-gray-100 px-1 rounded">{t}</span>)}</div>
@@ -1180,7 +1180,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
                               newTag: '',
                             });
                           }}
-                          className="text-blue-500 p-0.5"><Pencil size={9} /></button>
+                          className="text-primary p-0.5"><Pencil size={9} /></button>
                         <button onClick={() => handleDeleteProduct(col.id, product.id)} className="text-red-400 p-0.5"><Trash2 size={9} /></button>
                       </div>
                     </div>
@@ -1191,7 +1191,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
                   ) : (
                     <button
                       onClick={() => { setAddingProductToCol(col.id); setEditingProductId(null); setProductForm(emptyProductForm()); }}
-                      className="flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-700 mt-1">
+                      className="flex items-center gap-1 text-[10px] text-primary hover:opacity-80 mt-1">
                       <Plus size={10} /> Añadir producto
                     </button>
                   )}
@@ -1201,7 +1201,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
           ))}
         </>
       ) : (
-        <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] p-2 rounded">
+        <div className="bg-primary/5 border border-primary/20 text-primary text-[10px] p-2 rounded">
           Guarda la app primero para gestionar el catalogo.
         </div>
       )}
