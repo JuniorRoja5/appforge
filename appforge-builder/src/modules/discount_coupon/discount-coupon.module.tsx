@@ -355,7 +355,7 @@ const CouponListItem: React.FC<{
           <button onClick={() => onToggleActive(coupon)} className={`text-[9px] px-1.5 py-0.5 rounded ${coupon.isActive ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-600'}`}>
             {coupon.isActive ? 'Desactivar' : 'Activar'}
           </button>
-          <button onClick={() => onEdit(coupon)} className="text-blue-500 p-0.5"><Pencil size={10} /></button>
+          <button onClick={() => onEdit(coupon)} className="text-amber-500 p-0.5"><Pencil size={10} /></button>
           <button onClick={() => onDelete(coupon.id)} className="text-red-400 p-0.5"><Trash2 size={10} /></button>
         </div>
       </div>
