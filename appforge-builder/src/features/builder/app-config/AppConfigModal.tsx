@@ -129,7 +129,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       : 'text-gray-600 hover:bg-white/60 hover:text-gray-900'
                   }`}
                 >
-                  <Icon size={16} className={isActive ? 'text-indigo-500' : 'text-gray-400'} />
+                  <Icon size={16} className={isActive ? 'text-primary' : 'text-gray-400'} />
                   {tab.label}
                 </button>
               );
@@ -156,7 +156,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="flex-1 overflow-y-auto p-6">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
               renderTab()
@@ -184,7 +184,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </button>
                 <button
                   onClick={handleSaveAndClose}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-primary hover:opacity-90 text-white text-[12px] font-medium rounded-lg transition-colors"
                 >
                   Guardar y cerrar
                 </button>
@@ -208,7 +208,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <button
                   onClick={handleSave}
                   disabled={saving || !dirty}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-[13px] font-medium rounded-lg transition-colors"
+                  className="px-4 py-1.5 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-[13px] font-medium rounded-lg transition-colors"
                 >
                   {saving ? 'Guardando...' : 'Guardar'}
                 </button>

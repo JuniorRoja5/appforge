@@ -171,7 +171,7 @@ const SettingsPanel: React.FC<{ data: CustomPageConfig; onChange: (data: CustomP
                     onClick={() => onChange({ ...data, padding: opt.value })}
                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                       data.padding === opt.value
-                        ? 'bg-indigo-600 text-white'
+                        ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -195,7 +195,7 @@ const SettingsPanel: React.FC<{ data: CustomPageConfig; onChange: (data: CustomP
                     onClick={() => onChange({ ...data, maxWidth: opt.value })}
                     className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                       data.maxWidth === opt.value
-                        ? 'bg-indigo-600 text-white'
+                        ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >

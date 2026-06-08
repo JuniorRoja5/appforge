@@ -173,7 +173,7 @@ export const AccountPage: React.FC = () => {
         {/* Izquierda (Columna principal 2/3) */}
         <div className="lg:col-span-2 space-y-8">
           {/* Section 1: Avatar + Profile Info */}
-          <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8">
             <h2 className="text-lg font-bold text-gray-900 mb-6">Información personal</h2>
 
         {/* Avatar */}
@@ -188,10 +188,10 @@ export const AccountPage: React.FC = () => {
               <img
                 src={resolveAssetUrl(profile.avatarUrl)}
                 alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 group-hover:border-indigo-400 transition-colors"
+                className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 group-hover:border-primary transition-colors"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold group-hover:from-indigo-600 group-hover:to-purple-700 transition-colors">
+              <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold transition-colors">
                 {profile?.firstName?.charAt(0)?.toUpperCase() || profile?.email?.charAt(0)?.toUpperCase() || 'U'}
               </div>
             )}
@@ -222,7 +222,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.firstName ?? ''}
               onChange={(e) => updateField('firstName', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="Juan"
             />
           </div>
@@ -232,7 +232,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.lastName ?? ''}
               onChange={(e) => updateField('lastName', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="Pérez"
             />
           </div>
@@ -245,7 +245,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.company ?? ''}
               onChange={(e) => updateField('company', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="Mi Empresa S.L."
             />
           </div>
@@ -266,7 +266,7 @@ export const AccountPage: React.FC = () => {
             type="text"
             value={profile?.address ?? ''}
             onChange={(e) => updateField('address', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="Calle Principal 123"
           />
         </div>
@@ -277,7 +277,7 @@ export const AccountPage: React.FC = () => {
             type="text"
             value={profile?.address2 ?? ''}
             onChange={(e) => updateField('address2', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="Piso 2, Puerta B"
           />
         </div>
@@ -289,7 +289,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.zipCode ?? ''}
               onChange={(e) => updateField('zipCode', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="28001"
             />
           </div>
@@ -299,7 +299,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.city ?? ''}
               onChange={(e) => updateField('city', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="Madrid"
             />
           </div>
@@ -312,7 +312,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.country ?? ''}
               onChange={(e) => updateField('country', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="España"
             />
           </div>
@@ -322,7 +322,7 @@ export const AccountPage: React.FC = () => {
               type="text"
               value={profile?.stateProvince ?? ''}
               onChange={(e) => updateField('stateProvince', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="Comunidad de Madrid"
             />
           </div>
@@ -334,7 +334,7 @@ export const AccountPage: React.FC = () => {
             type="tel"
             value={profile?.phone ?? ''}
             onChange={(e) => updateField('phone', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
             placeholder="+34 600 000 000"
           />
         </div>
@@ -349,7 +349,7 @@ export const AccountPage: React.FC = () => {
             <button
               onClick={handleSaveProfile}
               disabled={saving}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-indigo-200"
+              className="px-6 py-2.5 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-primary/20"
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -361,7 +361,7 @@ export const AccountPage: React.FC = () => {
       <div className="space-y-8">
         
         {/* Section 2: Change Password (Moved from bottom) */}
-        <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 space-y-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 space-y-5">
           <h2 className="text-lg font-bold text-gray-900">Seguridad</h2>
 
           <div>
@@ -370,7 +370,7 @@ export const AccountPage: React.FC = () => {
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -382,7 +382,7 @@ export const AccountPage: React.FC = () => {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
                 placeholder="Mínimo 8 caracteres"
               />
             </div>
@@ -392,7 +392,7 @@ export const AccountPage: React.FC = () => {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all"
                 placeholder="Repetir contraseña"
               />
             </div>
@@ -408,7 +408,7 @@ export const AccountPage: React.FC = () => {
             <button
               onClick={handleChangePassword}
               disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
-              className="w-full px-5 py-2.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="w-full px-5 py-2.5 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               {changingPassword ? 'Actualizando...' : 'Actualizar contraseña'}
             </button>
@@ -416,7 +416,7 @@ export const AccountPage: React.FC = () => {
         </div>
 
         {/* Section 4: Danger Zone */}
-        <div className="bg-red-50/50 rounded-[24px] border border-red-100 p-8 space-y-4">
+        <div className="bg-red-50/50 rounded-2xl border border-red-100 p-8 space-y-4">
           <h2 className="text-lg font-bold text-red-700">Zona de Peligro</h2>
 
         {isSuperAdmin ? (

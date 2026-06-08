@@ -8,7 +8,7 @@ export const AuthLayout: React.FC = () => {
       <div className="hidden lg:flex w-1/2 bg-gray-950 flex-col justify-between p-12 relative">
         {/* Abstract Background Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-15%] left-[-10%] w-[60%] h-[60%] bg-blue-600/20 blur-[100px] rounded-full mix-blend-screen" />
+          <div className="absolute top-[-15%] left-[-10%] w-[60%] h-[60%] bg-primary/20 blur-[100px] rounded-full mix-blend-screen" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full mix-blend-screen" />
           {/* Subtle dotted grid overlay */}
           <div 
@@ -21,12 +21,12 @@ export const AuthLayout: React.FC = () => {
         </div>
 
         <div className="relative z-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg shadow-lg ring-1 ring-white/20 mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-white font-bold text-lg shadow-lg ring-1 ring-white/20 mb-8">
             AF
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight text-white mb-4 leading-tight">
             Diseña, construye y<br />
-            escala con <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">AppForge</span>.
+            escala con <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-indigo-400">AppForge</span>.
           </h1>
           <p className="text-gray-400 max-w-md text-lg leading-relaxed">
             La plataforma definitiva para creadores y agencias. Crea apps nativas increíbles sin escribir una sola línea de código.
@@ -60,7 +60,7 @@ export const AuthLayout: React.FC = () => {
         <div className="w-full max-w-[420px]">
           {/* Mobile Branding (hidden on lg) */}
           <div className="lg:hidden text-center mb-10 flex flex-col items-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xl shadow-lg ring-1 ring-blue-500/20 mb-5">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-white font-bold text-xl shadow-lg ring-1 ring-primary/20 mb-5">
               AF
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">

@@ -69,9 +69,9 @@ const BUILD_TYPE_LABELS: Record<string, string> = {
 
 const STATUS_CONFIG: Record<string, { label: string; detail: string; color: string; icon: React.FC<{ size?: number; className?: string }> }> = {
   QUEUED: { label: 'En cola', detail: 'Tu build será procesado en breve...', color: 'text-gray-600 bg-gray-100', icon: Clock },
-  PREPARING: { label: 'Preparando', detail: 'Configurando entorno de compilación...', color: 'text-blue-600 bg-blue-100', icon: Loader2 },
-  BUILDING: { label: 'Construyendo', detail: 'Compilando tu aplicación...', color: 'text-indigo-600 bg-indigo-100', icon: Loader2 },
-  SIGNING: { label: 'Firmando', detail: 'Firmando el paquete con tu keystore...', color: 'text-purple-600 bg-purple-100', icon: Loader2 },
+  PREPARING: { label: 'Preparando', detail: 'Configurando entorno de compilación...', color: 'text-primary bg-primary/10', icon: Loader2 },
+  BUILDING: { label: 'Construyendo', detail: 'Compilando tu aplicación...', color: 'text-primary bg-primary/10', icon: Loader2 },
+  SIGNING: { label: 'Firmando', detail: 'Firmando el paquete con tu keystore...', color: 'text-primary bg-primary/10', icon: Loader2 },
   COMPLETED: { label: 'Completado', detail: 'Build listo para descargar', color: 'text-green-700 bg-green-100', icon: CheckCircle2 },
   FAILED: { label: 'Error', detail: 'La construcción falló', color: 'text-red-700 bg-red-100', icon: XCircle },
 };
@@ -233,8 +233,8 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center">
-              <Smartphone size={18} className="text-indigo-600" />
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Smartphone size={18} className="text-primary" />
             </div>
             <div>
               <h3 className="font-semibold text-[15px] text-gray-900">Generar App</h3>
@@ -293,14 +293,14 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                     isLocked
                       ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
                       : selectedType === bt.value
-                        ? 'border-indigo-500 bg-indigo-50'
+                        ? 'border-primary bg-primary/10'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                   title={lockedTitle}
                 >
-                  <BtIcon size={18} className={isLocked ? 'text-gray-300' : selectedType === bt.value ? 'text-indigo-600' : 'text-gray-400'} />
+                  <BtIcon size={18} className={isLocked ? 'text-gray-300' : selectedType === bt.value ? 'text-primary' : 'text-gray-400'} />
                   <div>
-                    <p className={`text-[13px] font-semibold ${isLocked ? 'text-gray-400' : selectedType === bt.value ? 'text-indigo-700' : 'text-gray-700'}`}>
+                    <p className={`text-[13px] font-semibold ${isLocked ? 'text-gray-400' : selectedType === bt.value ? 'text-primary' : 'text-gray-700'}`}>
                       {bt.label}
                       {isLocked && <span className="ml-1.5 text-[9px] font-normal text-gray-400 align-middle">🔒</span>}
                     </p>
@@ -381,7 +381,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               <button
                 onClick={handleBuild}
                 disabled={requesting || isBuilding || isMainLocked}
-                className="w-full py-3.5 bg-gradient-to-b from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-gray-300 disabled:to-gray-400 text-white text-[14px] font-bold rounded-xl shadow-lg transition-all disabled:shadow-none flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-[14px] font-bold rounded-xl shadow-lg transition-all disabled:shadow-none flex items-center justify-center gap-2"
               >
                 {requesting ? (
                   <><Loader2 size={16} className="animate-spin" /> Solicitando...</>
@@ -402,11 +402,11 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
             )}
 
             {isBuilding && activeBuildStatus && (
-              <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
-                <p className="text-[12px] font-semibold text-indigo-800">
+              <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                <p className="text-[12px] font-semibold text-primary">
                   {STATUS_CONFIG[activeBuildStatus]?.detail}
                 </p>
-                <p className="text-[11px] text-indigo-600 mt-1">
+                <p className="text-[11px] text-primary mt-1">
                   ⏱ Tiempo estimado: 3-7 minutos. Puedes cerrar esta ventana — te enviaremos un email cuando esté listo.
                 </p>
               </div>
@@ -493,7 +493,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => { navigator.clipboard.writeText(build.artifactUrl!); }}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition-colors"
+                                className="flex items-center gap-1 px-3 py-1.5 bg-primary hover:opacity-90 text-white text-[11px] font-semibold rounded-lg transition-colors"
                               >
                                 <Copy size={12} /> Copiar URL
                               </button>
@@ -524,7 +524,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                                 }
                               }}
                               disabled={requesting || isBuilding}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-[11px] font-semibold rounded-lg transition-colors"
+                              className="flex items-center gap-1 px-3 py-1.5 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-[11px] font-semibold rounded-lg transition-colors"
                             >
                               <RefreshCw size={12} /> Reintentar
                             </button>

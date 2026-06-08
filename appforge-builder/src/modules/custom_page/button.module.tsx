@@ -69,7 +69,7 @@ const SettingsPanel: React.FC<{ data: ButtonModuleData; onChange: (data: ButtonM
         <label className="block text-sm font-medium text-gray-700 mb-1">Texto del botón</label>
         <input 
           type="text"
-          className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+          className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-primary focus:border-primary"
           value={data.label}
           onChange={(e) => onChange({ ...data, label: e.target.value })}
         />
@@ -135,7 +135,7 @@ const SettingsPanel: React.FC<{ data: ButtonModuleData; onChange: (data: ButtonM
           <input 
             type="number"
             min="0"
-            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 border border-gray-300 rounded p-2 text-sm focus:ring-primary focus:border-primary"
             value={parseFloat(data.radius) || 0}
             onChange={(e) => {
               const unit = data.radius.includes('%') ? '%' : 'px';
@@ -143,7 +143,7 @@ const SettingsPanel: React.FC<{ data: ButtonModuleData; onChange: (data: ButtonM
             }}
           />
           <select 
-            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
+            className="w-24 border border-gray-300 rounded p-2 text-sm bg-gray-50 focus:ring-primary focus:border-primary"
             value={data.radius.includes('%') ? '%' : 'px'}
             onChange={(e) => {
               const val = parseFloat(data.radius) || 0;

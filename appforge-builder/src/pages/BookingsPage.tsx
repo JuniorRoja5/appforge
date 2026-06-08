@@ -25,7 +25,7 @@ const STATUS_OPTIONS: Array<{ value: FilterValue; label: string }> = [
 const STATUS_STYLES: Record<Status, { bg: string; text: string; label: string }> = {
   CONFIRMED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Confirmada' },
   CANCELLED: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Cancelada' },
-  COMPLETED: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Completada' },
+  COMPLETED: { bg: 'bg-primary/10', text: 'text-primary', label: 'Completada' },
   NO_SHOW: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'No-show' },
 };
 
@@ -139,7 +139,7 @@ export const BookingsPage: React.FC = () => {
             onClick={() => setStatusFilter(opt.value)}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               statusFilter === opt.value
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-primary/10 text-primary'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >

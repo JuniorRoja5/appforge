@@ -78,7 +78,7 @@ export const FontSelector: React.FC<FontSelectorProps> = ({ label, path }) => {
       <select
         value={currentFont}
         onChange={(e) => handleChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary/20 focus:border-primary bg-white"
         style={{ fontFamily: `'${currentFont}', sans-serif` }}
       >
         {categories.map((cat) => (

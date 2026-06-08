@@ -48,7 +48,7 @@ export const ShapePresetPicker: React.FC = () => {
             onClick={() => applyPreset(preset)}
             className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all ${
               activePreset === preset.id
-                ? 'border-indigo-500 bg-indigo-50'
+                ? 'border-primary bg-primary/10'
                 : 'border-gray-200 bg-white hover:border-gray-300'
             }`}
           >

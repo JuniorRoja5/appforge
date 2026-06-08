@@ -348,14 +348,14 @@ const ArticleForm: React.FC<{
   const embedUrl = form.videoUrl ? getEmbedUrl(form.videoUrl) : null;
 
   return (
-    <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/50 space-y-3">
+    <div className="border border-orange-200 rounded-lg p-3 bg-orange-50/50 space-y-3">
       {/* Título */}
       <div>
         <label className="block text-xs font-semibold text-gray-700 mb-1">Título</label>
         <input
           type="text"
           placeholder="Título del artículo"
-          className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:ring-orange-500 focus:border-orange-500"
           value={form.title}
           onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
         />
@@ -380,7 +380,7 @@ const ArticleForm: React.FC<{
       <ImageInputField
         value={form.imageUrl}
         onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
-        accentColor="blue"
+        accentColor="amber"
         shape="video"
         previewSize="lg"
         label="Imagen de portada (opcional)"
@@ -394,7 +394,7 @@ const ArticleForm: React.FC<{
         <input
           type="text"
           placeholder="https://youtube.com/watch?v=... o https://vimeo.com/..."
-          className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:ring-blue-500 focus:border-blue-500"
+          className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:ring-orange-500 focus:border-orange-500"
           value={form.videoUrl}
           onChange={e => setForm(f => ({ ...f, videoUrl: e.target.value }))}
         />
@@ -420,7 +420,7 @@ const ArticleForm: React.FC<{
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
         >
           <Save size={14} /> {saving ? 'Guardando...' : 'Guardar artículo'}
         </button>
@@ -554,7 +554,7 @@ const SettingsPanel: React.FC<{ data: NewsFeedConfig; onChange: (data: NewsFeedC
                     type="checkbox"
                     checked={data[key]}
                     onChange={e => onChange({ ...data, [key]: e.target.checked })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                   />
                   {label}
                 </label>
@@ -633,7 +633,7 @@ const SettingsPanel: React.FC<{ data: NewsFeedConfig; onChange: (data: NewsFeedC
                                 {new Date(article.publishedAt).toLocaleDateString('es-ES')}
                               </p>
                               {article.videoUrl && (
-                                <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                                <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                                   <Video size={9} /> Video
                                 </span>
                               )}
@@ -642,7 +642,7 @@ const SettingsPanel: React.FC<{ data: NewsFeedConfig; onChange: (data: NewsFeedC
                           <div className="flex flex-col gap-1 shrink-0">
                             <button
                               onClick={() => setEditingId(article.id)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-md transition-colors"
                               title="Editar"
                             >
                               <Pencil size={14} />

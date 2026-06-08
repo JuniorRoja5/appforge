@@ -266,7 +266,7 @@ export const BuilderLayout: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-gray-500">Cargando app...</p>
         </div>
       </div>
@@ -297,7 +297,7 @@ export const BuilderLayout: React.FC = () => {
                   <img src={resolveAssetUrl(effectiveIconUrl)} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-sm shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm shrink-0">
                   {appName ? appName.charAt(0).toUpperCase() : 'A'}
                 </div>
               )}
@@ -369,7 +369,7 @@ export const BuilderLayout: React.FC = () => {
               </button>
               <button
                 onClick={() => setBuildPanelOpen(true)}
-                className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-[13px] font-bold rounded-lg shadow-sm transition-all flex items-center"
+                className="px-5 py-2 bg-primary hover:opacity-90 text-white text-[13px] font-bold rounded-lg shadow-sm transition-all flex items-center"
               >
                 <span>Generar App</span>
                 <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
@@ -386,13 +386,13 @@ export const BuilderLayout: React.FC = () => {
       </div>
       <DragOverlay dropAnimation={null}>
         {activeId && activeId.startsWith('module-') ? (
-          <div className="flex items-center space-x-3 p-3 bg-white/95 backdrop-blur-sm border border-indigo-200 rounded-xl shadow-xl w-[240px] transform scale-105 rotate-2 transition-transform">
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+          <div className="flex items-center space-x-3 p-3 bg-white/95 backdrop-blur-sm border border-primary/30 rounded-xl shadow-xl w-[240px] transform scale-105 rotate-2 transition-transform">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               {getModule(activeId.replace('module-', ''))?.icon || <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>}
             </div>
             <div>
               <h3 className="text-[13px] font-semibold text-gray-800">{getModule(activeId.replace('module-', ''))?.name || 'Módulo'}</h3>
-              <p className="text-[11px] text-indigo-500 font-medium mt-0.5">Soltando en el simulador...</p>
+              <p className="text-[11px] text-primary font-medium mt-0.5">Soltando en el simulador...</p>
             </div>
           </div>
         ) : null}

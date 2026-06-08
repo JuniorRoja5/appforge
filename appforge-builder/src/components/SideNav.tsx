@@ -98,7 +98,7 @@ const getAppNavItems = (appId: string): AppNavItem[] => [
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
     isActive
-      ? 'bg-blue-50 text-blue-700'
+      ? 'bg-primary/10 text-primary'
       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
   }`;
 
@@ -106,7 +106,7 @@ export const SideNav: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
 
   return (
-    <nav className="w-[220px] bg-[#f8fafc] border-r border-gray-200/60 flex flex-col h-full p-4 space-y-1 shrink-0">
+    <nav className="w-[220px] bg-gray-50 border-r border-gray-200/60 flex flex-col h-full p-4 space-y-1 shrink-0">
       {navItems.map((item) => (
         <NavLink key={item.to} to={item.to} className={linkClass}>
           {item.icon}

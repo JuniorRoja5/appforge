@@ -8,6 +8,13 @@ interface ColorGroupEditorProps {
   path: string[]; // e.g. ['colors', 'primary']
 }
 
+// Note: the orange focus/hover colors below (ring-orange-500/30 in L38,
+// focus:text-orange-600 in L56) are NOT chrome accidentally — they are
+// "tool affordance" feedback. They must contrast against ANY color the
+// client picks for primary/secondary/accent. Tokenizing them to bg-primary
+// would make the focus indicator vanish when the client picks an indigo
+// similar to AppForge brand. See memory/feedback_chrome_vs_preview.md
+// (section "Adición — tercera categoría").
 export const ColorGroupEditor: React.FC<ColorGroupEditorProps> = ({ label, path }) => {
   const designTokens = useBuilderStore((s) => s.designTokens);
   const update = useBuilderStore((s) => s.updateDesignTokensPartial);

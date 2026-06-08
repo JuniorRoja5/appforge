@@ -88,7 +88,7 @@ export const OnboardingTab: React.FC = () => {
         <button
           onClick={() => update({ enabled: !onboarding.enabled })}
           className={`relative w-10 h-5 rounded-full transition-colors ${
-            onboarding.enabled ? 'bg-indigo-500' : 'bg-gray-300'
+            onboarding.enabled ? 'bg-primary' : 'bg-gray-300'
           }`}
         >
           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -144,7 +144,7 @@ export const OnboardingTab: React.FC = () => {
                   )}
                   <button
                     onClick={() => fileRefs.current[slide.id]?.click()}
-                    className="text-[11px] text-indigo-600 hover:underline"
+                    className="text-[11px] text-primary hover:underline"
                   >
                     {uploadingSlideId === slide.id ? 'Subiendo...' : slide.imageUrl ? 'Cambiar imagen' : 'Subir imagen'}
                   </button>
@@ -167,7 +167,7 @@ export const OnboardingTab: React.FC = () => {
                   value={slide.title}
                   onChange={(e) => updateSlide(slide.id, { title: e.target.value })}
                   placeholder="Título de la diapositiva"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
 
                 {/* Description */}
@@ -176,7 +176,7 @@ export const OnboardingTab: React.FC = () => {
                   onChange={(e) => updateSlide(slide.id, { description: e.target.value })}
                   placeholder="Descripción breve"
                   rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
               </div>
             ))}
@@ -185,7 +185,7 @@ export const OnboardingTab: React.FC = () => {
           {slides.length < 5 && (
             <button
               onClick={addSlide}
-              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-[13px] text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-[13px] text-gray-500 hover:border-primary hover:text-primary transition-colors"
             >
               <Plus size={16} />
               Agregar diapositiva ({slides.length}/5)

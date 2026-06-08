@@ -268,8 +268,8 @@ const SettingsPanel: React.FC<{
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
-              <p className="text-[10px] text-blue-700 leading-relaxed">
+            <div className="bg-violet-50 border border-violet-100 rounded-lg p-2">
+              <p className="text-[10px] text-violet-700 leading-relaxed">
                 Los usuarios de la app se registran con email y contrasena.
                 Sus credenciales son independientes de la plataforma.
               </p>

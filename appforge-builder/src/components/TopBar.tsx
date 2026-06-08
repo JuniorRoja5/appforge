@@ -36,7 +36,7 @@ export const TopBar: React.FC = () => {
         className="flex items-center space-x-3 cursor-pointer"
         onClick={() => navigate('/dashboard')}
       >
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-blue-500/20">
+        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-primary/20">
           AF
         </div>
         <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">
@@ -56,7 +56,7 @@ export const TopBar: React.FC = () => {
               className="w-7 h-7 rounded-full object-cover border border-gray-200"
             />
           ) : (
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-semibold">
               {avatarInitial}
             </div>
           )}

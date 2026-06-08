@@ -1939,3 +1939,59 @@ smoke offline.
 de las PWAs en serio, sube a media — un 503 explícito es la base
 mínima para que la UI pueda mostrar "sin conexión" en condiciones.
 
+---
+
+### #59 — White-label de páginas end-user (StampPage + AppUserResetPasswordPage)
+**Estado**: OPEN.
+**Origen**: Sesión 2026-06-05, rediseño visual del builder. Identificado al planificar
+el bloque "pages secundarias" — se decidió dejar estas dos páginas FUERA del rediseño
+porque tokenizarlas al `--primary` del builder sería el error opuesto pero igual de
+grave que el bug actual.
+
+**Problema**: las pantallas que sirve la plataforma a usuarios finales de apps de
+clientes (`appforge-builder/src/pages/StampPage.tsx`, `appforge-builder/src/pages/
+AppUserResetPasswordPage.tsx`, y posiblemente `OrderPage`/`BookingPage` aunque estas
+usan tokens del cliente parcialmente) tienen colores hardcodeados (`indigo-600`,
+`indigo-500`, gradientes `indigo-50` → `purple-50`, etc.) en vez de heredar los
+design tokens del cliente. Un usuario final de "Cafetería Juan" que abre la app y
+acaba en una de estas páginas ve indigo en lugar del azul/verde de la cafetería,
+rompiendo la promesa de white-label.
+
+El caso de `AppUserResetPasswordPage` es especialmente grave: un usuario recibe email
+de reset desde la app de "Cafetería Juan", hace click, llega a una URL servida por
+nuestra plataforma. Si ve indigo AppForge:
+- No reconoce la marca de la cafetería → fricción.
+- Si conoce AppForge, descubre que la app es servida por terceros → revelación de
+  marca subyacente, anti-white-label.
+
+**Por qué no se resolvió en el rediseño visual**: tokenizar estas páginas al `primary`
+AppForge sería el error opuesto pero igual de grave que el bug original — en vez de
+azul random de Tailwind tendrían el indigo de AppForge clavado, lo cual rompe la
+promesa de white-label de forma más visible (porque ahora la marca AppForge sería
+*explícita* en la página, no accidental).
+
+**Trabajo necesario**:
+- En el mount de cada página pública (`StampPage`, `AppUserResetPasswordPage`):
+  fetchear los `designTokens` del cliente vía `appId` (que ya está en la URL).
+- Aplicar tokens al DOM via `applyTheme.ts` (`appforge-builder/src/lib/niche-templates/
+  applyTheme.ts`) o equivalente — el mismo sistema que ya usa el `RuntimeComponent` de
+  cada módulo para respetar la paleta del cliente.
+- **Precisión técnica clave (no confundir)**: las páginas end-user deben leer
+  `var(--color-primary)` del cliente (las que genera `applyTheme.ts` a partir de los
+  design tokens del cliente), **NO `var(--primary)` del builder** (que es el indigo
+  de marca AppForge declarado en `appforge-builder/src/index.css`). Son dos sistemas
+  de variables distintos con nombres parecidos — confundirlos reintroduciría el bug
+  exacto que esta deuda intenta resolver. La diferencia: prefijo `--color-*` =
+  paleta del cliente; sin prefijo (`--primary`, `--accent`, etc.) = chrome AppForge.
+- Reemplazar los `indigo-*` / `blue-*` hardcoded por las CSS vars que `applyTheme`
+  genera (e.g. `var(--color-primary)` del cliente).
+- Tests E2E con dos clientes distintos verificando que cada uno ve su color de marca,
+  no el de AppForge ni el del otro cliente.
+
+**Bloquea**: beta. Compromete la promesa de white-label que es valor central del
+producto. Mientras esto siga abierto, mejor no hacer demo de StampPage o del flujo
+de reset a clientes potenciales — verán indigo AppForge donde debería verse su marca.
+
+**Prioridad**: alta antes de beta. Media en el corto plazo si no se hace demo
+white-label en las próximas semanas.
+

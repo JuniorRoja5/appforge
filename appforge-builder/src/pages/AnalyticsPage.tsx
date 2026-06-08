@@ -45,7 +45,7 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
 }> = ({ label, value, icon }) => (
   <div className="bg-white rounded-[20px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-5 flex items-center gap-4">
-    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
+    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
       {icon}
     </div>
     <div>
@@ -263,9 +263,9 @@ export const AnalyticsPage: React.FC = () => {
                 { label: 'Por semana', value: retention.wau },
                 { label: 'Por mes',    value: retention.mau },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-blue-50 rounded-xl p-3 text-center">
-                  <p className="text-lg font-bold text-blue-700">{value}</p>
-                  <p className="text-[10px] font-medium text-blue-500">{label}</p>
+                <div key={label} className="bg-primary/5 rounded-xl p-3 text-center">
+                  <p className="text-lg font-bold text-primary">{value}</p>
+                  <p className="text-[10px] font-medium text-primary">{label}</p>
                 </div>
               ))}
             </div>

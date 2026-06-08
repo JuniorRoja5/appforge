@@ -62,7 +62,7 @@ export const PricingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
@@ -108,22 +108,22 @@ export const PricingPage: React.FC = () => {
               key={plan.id}
               className={`relative flex flex-col bg-white rounded-2xl border-2 p-6 transition-shadow hover:shadow-lg ${
                 isCurrent
-                  ? 'border-indigo-500 shadow-md'
+                  ? 'border-primary shadow-md'
                   : isPopular
-                    ? 'border-indigo-300'
+                    ? 'border-primary/40'
                     : 'border-gray-200'
               }`}
             >
               {isCurrent && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-0.5 text-xs font-semibold text-white">
+                  <span className="inline-flex items-center rounded-full bg-primary px-3 py-0.5 text-xs font-semibold text-white">
                     Tu plan actual
                   </span>
                 </div>
               )}
               {isPopular && !isCurrent && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 px-3 py-0.5 text-xs font-semibold text-white">
+                  <span className="inline-flex items-center rounded-full bg-gradient-to-r from-primary to-indigo-400 px-3 py-0.5 text-xs font-semibold text-white">
                     Popular
                   </span>
                 </div>
@@ -179,7 +179,7 @@ export const PricingPage: React.FC = () => {
                   {!isFree && (
                     <button
                       onClick={handlePortal}
-                      className="w-full py-2 rounded-xl text-xs font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      className="w-full py-2 rounded-xl text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
                     >
                       Gestionar facturación
                     </button>
@@ -198,7 +198,7 @@ export const PricingPage: React.FC = () => {
                   disabled={isCheckingOut || checkingOut !== null}
                   className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
                     isPopular
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      ? 'bg-primary text-white hover:opacity-90'
                       : 'bg-gray-900 text-white hover:bg-gray-800'
                   }`}
                 >
@@ -276,7 +276,7 @@ const UsageStat: React.FC<{
         <div className="mt-1.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all ${
-              pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-indigo-500'
+              pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-primary'
             }`}
             style={{ width: `${pct}%` }}
           />

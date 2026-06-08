@@ -91,7 +91,7 @@ function formatDate(d: Date): string {
 const statusConfig: Record<string, { label: string; cls: string }> = {
   CONFIRMED: { label: 'Confirmada', cls: 'bg-green-50 text-green-700 border-green-200' },
   CANCELLED: { label: 'Cancelada', cls: 'bg-red-50 text-red-600 border-red-200' },
-  COMPLETED: { label: 'Completada', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  COMPLETED: { label: 'Completada', cls: 'bg-primary/5 text-primary border-primary/20' },
 };
 
 // ========================
@@ -539,7 +539,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
       <div>
         <div className={sectionHeaderCls} onClick={() => setShowAvailability(!showAvailability)}>
           <h3 className={sectionTitleCls}>
-            <Bell size={14} className="inline mr-1 text-teal-600" /> Disponibilidad y recordatorios
+            <Bell size={14} className="inline mr-1 text-primary" /> Disponibilidad y recordatorios
           </h3>
           <ChevronRight
             size={14}
@@ -621,7 +621,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                       }}
                       className={`w-7 h-7 text-[11px] font-semibold rounded ${
                         enabled
-                          ? 'bg-teal-600 text-white'
+                          ? 'bg-primary text-white'
                           : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                       }`}
                     >
@@ -733,10 +733,10 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Horarios disponibles</h4>
               <div className="flex flex-wrap gap-1.5">
                 {data.timeSlots.map((slot) => (
-                  <span key={slot} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
+                  <span key={slot} className="inline-flex items-center gap-1 px-2 py-1 bg-primary/5 text-primary rounded-full text-xs border border-primary/20">
                     <Clock size={10} />
                     {slot}
-                    <button onClick={() => removeTimeSlot(slot)} className="text-purple-400 hover:text-red-500 ml-0.5">
+                    <button onClick={() => removeTimeSlot(slot)} className="text-primary/60 hover:text-red-500 ml-0.5">
                       <Trash2 size={10} />
                     </button>
                   </span>
@@ -744,7 +744,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
               </div>
               <div className="flex gap-2">
                 <input type="time" value={newSlot} onChange={(e) => setNewSlot(e.target.value)} className="flex-1 px-2 py-1.5 border rounded text-sm" />
-                <button onClick={addTimeSlot} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700">
+                <button onClick={addTimeSlot} className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded text-xs hover:opacity-90">
                   <Plus size={12} /> Agregar
                 </button>
               </div>
@@ -757,7 +757,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
               {(data.fields ?? []).map((field) => (
                 <div key={field.id}>
                   {editingFieldId === field.id ? (
-                    <div className="border border-purple-200 rounded-lg p-3 bg-purple-50 space-y-2">
+                    <div className="border border-primary/20 rounded-lg p-3 bg-primary/5 space-y-2">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
                         <select value={editFieldType} onChange={(e) => setEditFieldType(e.target.value as BookingField['type'])} className="w-full px-2 py-1 border rounded text-xs">
@@ -775,19 +775,19 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                         Obligatorio
                       </label>
                       <div className="flex gap-2">
-                        <button onClick={saveEditField} className="px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700">Guardar</button>
+                        <button onClick={saveEditField} className="px-3 py-1 bg-primary text-white rounded text-xs hover:opacity-90">Guardar</button>
                         <button onClick={cancelEditField} className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300">Cancelar</button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 p-2 border rounded-lg bg-white hover:bg-gray-50">
-                      <span className="text-purple-600">{fieldTypeIcons[field.type]}</span>
+                      <span className="text-primary">{fieldTypeIcons[field.type]}</span>
                       <div className="flex-1 min-w-0">
                         <span className="text-xs font-medium text-gray-800 truncate block">{field.label}</span>
                         <span className="text-[10px] text-gray-400">{fieldTypeLabels[field.type]}{field.required && ' • Obligatorio'}</span>
                       </div>
                       <div className="flex items-center gap-0.5">
-                        <button onClick={() => startEditField(field)} className="p-1 text-blue-500 hover:text-blue-700" title="Editar">
+                        <button onClick={() => startEditField(field)} className="p-1 text-primary hover:opacity-80" title="Editar">
                           <FileText size={12} />
                         </button>
                         <button onClick={() => removeField(field.id)} className="p-1 text-red-500 hover:text-red-700" title="Eliminar">
@@ -800,7 +800,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
               ))}
 
               {showAddField ? (
-                <div className="border border-purple-200 rounded-lg p-3 bg-purple-50 space-y-2">
+                <div className="border border-primary/20 rounded-lg p-3 bg-primary/5 space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de campo</label>
                     <select value={newFieldType} onChange={(e) => setNewFieldType(e.target.value as BookingField['type'])} className="w-full px-2 py-1 border rounded text-xs">
@@ -818,14 +818,14 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                     Obligatorio
                   </label>
                   <div className="flex gap-2">
-                    <button onClick={addField} className="flex items-center gap-1 px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700">
+                    <button onClick={addField} className="flex items-center gap-1 px-3 py-1 bg-primary text-white rounded text-xs hover:opacity-90">
                       <Plus size={12} /> Agregar
                     </button>
                     <button onClick={() => setShowAddField(false)} className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300">Cancelar</button>
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowAddField(true)} className="w-full flex items-center justify-center gap-1 py-2 border-2 border-dashed border-purple-300 text-purple-600 rounded-lg text-xs hover:bg-purple-50">
+                <button onClick={() => setShowAddField(true)} className="w-full flex items-center justify-center gap-1 py-2 border-2 border-dashed border-primary/40 text-primary rounded-lg text-xs hover:bg-primary/5">
                   <Plus size={14} /> Agregar campo
                 </button>
               )}
@@ -868,7 +868,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
               {/* Bookings list */}
               {bookingsLoading ? (
                 <div className="flex items-center justify-center py-6">
-                  <Loader2 size={20} className="animate-spin text-purple-500" />
+                  <Loader2 size={20} className="animate-spin text-primary" />
                 </div>
               ) : bookings.length === 0 ? (
                 <div className="text-center py-6">
@@ -889,7 +889,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {(booking as BookingRecord & { shortCode?: string }).shortCode && (
-                                <span className="text-[10px] font-mono font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] font-mono font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded">
                                   {(booking as BookingRecord & { shortCode?: string }).shortCode}
                                 </span>
                               )}
@@ -941,7 +941,7 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
                                 <>
                                   <button
                                     onClick={() => handleStatusChange(booking.id, 'COMPLETED')}
-                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/5 rounded transition-colors"
                                   >
                                     <CheckCircle size={12} /> Completar
                                   </button>

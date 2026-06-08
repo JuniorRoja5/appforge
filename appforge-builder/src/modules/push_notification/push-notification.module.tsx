@@ -245,7 +245,7 @@ const SettingsPanel: React.FC<{
                 type="checkbox"
                 checked={data.enabled}
                 onChange={(e) => onChange({ ...data, enabled: e.target.checked })}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-gray-300 text-primary focus:ring-primary"
               />
               <span className="text-xs text-gray-700">Habilitado</span>
             </label>
@@ -255,13 +255,13 @@ const SettingsPanel: React.FC<{
                 type="checkbox"
                 checked={data.autoRequestPermission}
                 onChange={(e) => onChange({ ...data, autoRequestPermission: e.target.checked })}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-gray-300 text-primary focus:ring-primary"
               />
               <span className="text-xs text-gray-700">Solicitar permiso al abrir la app</span>
             </label>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-2">
-              <p className="text-[10px] text-blue-700 leading-relaxed">
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-2">
+              <p className="text-[10px] text-primary leading-relaxed">
                 Las notificaciones push se configuran automáticamente. Los dispositivos
                 se suscriben al topic de tu app sin configuración adicional.
               </p>
@@ -306,7 +306,7 @@ const SettingsPanel: React.FC<{
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="Título de la notificación"
                       maxLength={100}
-                      className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     />
                   </div>
                   <div>
@@ -317,7 +317,7 @@ const SettingsPanel: React.FC<{
                       placeholder="Cuerpo de la notificación"
                       maxLength={500}
                       rows={3}
-                      className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
+                      className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
                     />
                   </div>
 
@@ -349,7 +349,7 @@ const SettingsPanel: React.FC<{
                   <button
                     onClick={handleSend}
                     disabled={sending || !title.trim() || !body.trim()}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-primary hover:opacity-90 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors"
                   >
                     {sending ? (
                       <Loader2 size={12} className="animate-spin" />
