@@ -52,6 +52,29 @@ export class OrdersService {
   }
 
   /**
+   * Resuelve el currency del primer módulo catalog del schema del app.
+   * Fallback '€' si no hay catálogo en el schema o el catálogo no define currency.
+   *
+   * Limitación conocida (TECH_DEBT): si el app tiene varios catálogos con
+   * monedas distintas, todos los pedidos se muestran con el currency del
+   * primero. El modelo Order no almacena currency por pedido — sin catalogId
+   * en Order no hay forma de mapear cada pedido a su catálogo de origen.
+   */
+  private async resolveCatalogCurrency(appId: string): Promise<string> {
+    const app = await this.prisma.app.findFirst({
+      where: { id: appId, deletedAt: null },
+      select: { schema: true },
+    });
+    if (!app || !Array.isArray(app.schema)) return '€';
+    const elements = app.schema as Array<{
+      moduleId?: string;
+      config?: { currency?: string };
+    }>;
+    const catalog = elements.find((e) => e?.moduleId === 'catalog');
+    return catalog?.config?.currency || '€';
+  }
+
+  /**
    * Genera un shortCode único por app (ORD-XXXXXX).
    * Reintenta hasta 10 veces si hay colisión.
    */
@@ -420,13 +443,14 @@ export class OrdersService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [pendingCount, todayOrders, allOrders] = await Promise.all([
+    const [pendingCount, todayOrders, allOrders, currency] = await Promise.all([
       this.prisma.order.count({ where: { appId, status: 'PENDING' } }),
       this.prisma.order.count({ where: { appId, createdAt: { gte: today } } }),
       this.prisma.order.findMany({
         where: { appId, status: { not: 'CANCELLED' } },
         select: { total: true },
       }),
+      this.resolveCatalogCurrency(appId),
     ]);
 
     const totalRevenue = allOrders.reduce((acc, o) => acc + Number(o.total), 0);
@@ -435,6 +459,7 @@ export class OrdersService {
       pendingCount,
       todayCount: todayOrders,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
+      currency,
     };
   }
 
