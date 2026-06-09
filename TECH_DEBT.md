@@ -1995,3 +1995,59 @@ de reset a clientes potenciales — verán indigo AppForge donde debería verse 
 **Prioridad**: alta antes de beta. Media en el corto plazo si no se hace demo
 white-label en las próximas semanas.
 
+---
+
+### #60 — Currency hardcoded `€` en cuerpo de emails de orders
+
+**Estado**: CLOSED. Fix aplicado tras detección durante Fase 1.1 — el helper
+`resolveCatalogCurrency` se reusa en `sendOrderEmails` y se pasa como campo
+`currency` a `renderCustomerEmail` y `renderMerchantEmail`. Los cuatro
+`€` literales del HTML de emails sustituidos por la variable. Mismo
+comportamiento que el helper en el dashboard: cuando hay catálogo con
+currency, se respeta; cuando no, fallback `€`. Coherencia visual cliente +
+app + email restaurada.
+**Origen**: Detectado durante medición de side-effects de orders en Fase 1.1
+(commit backend `1c6680e` añadió `resolveCatalogCurrency` para el dashboard de
+pedidos, pero el helper no se aplica al renderizado HTML de los emails).
+
+**Problema**: en `appforge-backend/src/orders/orders.service.ts:230-231` y `:236`,
+el cuerpo del email enviado al crear un pedido tiene el símbolo `€` hardcoded:
+
+```ts
+`<td>${item.price.toFixed(2)}€</td>`
+`<td>${(item.price * item.quantity).toFixed(2)}€</td>`
+// ...
+const totalFormatted = Number(order.total).toFixed(2);
+// luego concatenado con `€` en el HTML del email
+```
+
+Y el método `sendOrderEmails` NO lee el currency del schema del módulo catalog
+(no usa `resolveCatalogCurrency`).
+
+**Consecuencia visible**: un cliente que cobra en dólares (como el cliente de
+prueba que mostró `24.99$` en el dashboard de pedidos tras Fase 1.1) envía a
+sus usuarios un email "Pedido confirmado" que dice `24.99€`. Dashboard y app
+muestran `$`, email muestra `€`, mismo pedido. Inconsistencia visible al
+usuario final, no solo interna.
+
+**Por qué no se resolvió en Fase 1.1**: el scope era el dashboard del cliente
+(la página de admin de pedidos). Los emails son side-effect del create de Order
+y conviven en el mismo service pero pertenecen al ámbito "comunicación con el
+usuario final", no "admin del cliente". Mezclar las dos cosas en el mismo
+commit habría inflado el scope. Pero está claramente identificado, y la
+solución es trivial.
+
+**Trabajo necesario** (~3 líneas):
+- En `sendOrderEmails`, llamar `this.resolveCatalogCurrency(appId)` antes del
+  bucle de `itemsHtml`.
+- Sustituir los `€` literales por la variable.
+- Variable también para `totalFormatted`.
+
+**Bloquea**: nada técnicamente, pero la inconsistencia es visible al usuario
+final del cliente — cobrar en dólares y enviar email en euros es mala
+imagen. Candidata a fix rápido cuando se toque el backend de orders por
+cualquier otro motivo, no requiere PR dedicado.
+
+**Prioridad**: baja en backlog, alta si llega un cliente real cobrando en
+moneda distinta de `€` y se queja del email.
+

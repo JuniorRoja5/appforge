@@ -219,6 +219,7 @@ export class OrdersService {
     });
 
     const trackingUrl = orderTrackingUrl(appId, order.id, order.trackingToken);
+    const currency = await this.resolveCatalogCurrency(appId);
 
     const items = order.items as Array<{ name: string; quantity: number; price: number }>;
     const itemsHtml = items
@@ -227,8 +228,8 @@ export class OrdersService {
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #eee">${item.name}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center">${item.quantity}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${item.price.toFixed(2)}€</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${(item.price * item.quantity).toFixed(2)}€</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${item.price.toFixed(2)}${currency}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right">${(item.price * item.quantity).toFixed(2)}${currency}</td>
       </tr>`,
       )
       .join('');
@@ -248,6 +249,7 @@ export class OrdersService {
               appName: app.name,
               itemsHtml,
               totalFormatted,
+              currency,
               trackingUrl,
             }),
           })
@@ -272,6 +274,7 @@ export class OrdersService {
           appName: app.name,
           itemsHtml,
           totalFormatted,
+          currency,
           trackingUrl,
         }),
       })
@@ -288,6 +291,7 @@ export class OrdersService {
     appName: string;
     itemsHtml: string;
     totalFormatted: string;
+    currency: string;
     trackingUrl: string;
   }): string {
     return `
@@ -313,7 +317,7 @@ export class OrdersService {
       <tfoot>
         <tr>
           <td colspan="3" style="padding:12px;text-align:right;font-weight:600">Total</td>
-          <td style="padding:12px;text-align:right;font-weight:700;font-size:18px;color:#f59e0b">${data.totalFormatted}€</td>
+          <td style="padding:12px;text-align:right;font-weight:700;font-size:18px;color:#f59e0b">${data.totalFormatted}${data.currency}</td>
         </tr>
       </tfoot>
     </table>
@@ -341,6 +345,7 @@ export class OrdersService {
     appName: string;
     itemsHtml: string;
     totalFormatted: string;
+    currency: string;
     trackingUrl: string;
   }): string {
     const contactRows = [
@@ -382,7 +387,7 @@ export class OrdersService {
       <tfoot>
         <tr>
           <td colspan="3" style="padding:12px;text-align:right;font-weight:600">Total</td>
-          <td style="padding:12px;text-align:right;font-weight:700;font-size:18px;color:#10b981">${data.totalFormatted}€</td>
+          <td style="padding:12px;text-align:right;font-weight:700;font-size:18px;color:#10b981">${data.totalFormatted}${data.currency}</td>
         </tr>
       </tfoot>
     </table>
