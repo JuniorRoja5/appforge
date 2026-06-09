@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useParams } from 'react-router-dom';
+import { useAppModulesStore } from '../store/useAppModulesStore';
 
 const navItems = [
   {
@@ -37,7 +38,23 @@ interface AppNavItem {
   icon: React.ReactNode;
 }
 
-const getAppNavItems = (appId: string): AppNavItem[] => [
+interface AppNavDataItem extends AppNavItem {
+  /**
+   * moduleId canónico (no la ruta) del módulo del que depende esta entrada.
+   * IMPORTANTE: este string DEBE coincidir con el `id` declarado en la
+   * ModuleDefinition del módulo correspondiente, no con el segmento de URL.
+   * Ej: la entrada "Pedidos" depende de 'catalog' (porque pedidos no existe
+   * sin catálogo). "Reservas" depende de 'booking' (singular, sin 's').
+   * Filtrar por el string equivocado = la entrada nunca aparece en la barra
+   * de los apps que sí usan el módulo. Bug silencioso. Verificar contra
+   * appforge-builder/src/modules/*.module.tsx (`id:` en el export) al añadir
+   * una nueva.
+   */
+  moduleId: string;
+}
+
+// Entradas siempre visibles cuando hay appId — no dependen de módulos.
+const getAppNavAlways = (appId: string): AppNavItem[] => [
   {
     to: `/apps/${appId}/edit`,
     label: 'Editor',
@@ -76,20 +93,37 @@ const getAppNavItems = (appId: string): AppNavItem[] => [
     ),
   },
   {
-    to: `/apps/${appId}/bookings`,
-    label: 'Reservas',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-  {
     to: `/apps/${appId}/pwa`,
     label: 'PWA',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.6 9h16.8M3.6 15h16.8M12 3a14.95 14.95 0 014.5 9 14.95 14.95 0 01-4.5 9M12 3a14.95 14.95 0 00-4.5 9 14.95 14.95 0 004.5 9z" />
+      </svg>
+    ),
+  },
+];
+
+// Entradas condicionales por módulo — solo visibles si el app tiene el
+// moduleId correspondiente en su schema. Ver comentario de AppNavDataItem
+// sobre el riesgo silencioso de filtrar por el string equivocado.
+const getAppNavData = (appId: string): AppNavDataItem[] => [
+  {
+    to: `/apps/${appId}/orders`,
+    label: 'Pedidos',
+    moduleId: 'catalog',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+      </svg>
+    ),
+  },
+  {
+    to: `/apps/${appId}/bookings`,
+    label: 'Reservas',
+    moduleId: 'booking',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     ),
   },
@@ -104,6 +138,13 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export const SideNav: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
+  // Selector individual → solo re-renderiza si moduleIds cambia.
+  const moduleIds = useAppModulesStore((s) => s.moduleIds);
+
+  const dataItems =
+    appId && moduleIds
+      ? getAppNavData(appId).filter((item) => moduleIds.includes(item.moduleId))
+      : [];
 
   return (
     <nav className="w-[220px] bg-gray-50 border-r border-gray-200/60 flex flex-col h-full p-4 space-y-1 shrink-0">
@@ -119,7 +160,17 @@ export const SideNav: React.FC = () => {
           <div className="pt-4 pb-2">
             <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">App</p>
           </div>
-          {getAppNavItems(appId).map((item) => (
+          {/* Entradas inmediatas — no esperan al store de moduleIds */}
+          {getAppNavAlways(appId).map((item) => (
+            <NavLink key={item.to} to={item.to} className={linkClass}>
+              {item.icon}
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+          {/* Entradas de datos — solo cuando moduleIds está cargado y el app
+              tiene el módulo correspondiente. Si moduleIds es null (no
+              cargado o fallo), dataItems es [] y no se renderiza nada. */}
+          {dataItems.map((item) => (
             <NavLink key={item.to} to={item.to} className={linkClass}>
               {item.icon}
               <span>{item.label}</span>
