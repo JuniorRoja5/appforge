@@ -270,7 +270,7 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
   onChange,
 }) => {
   // --- Sección colapsable ---
-  const [openSection, setOpenSection] = useState<'config' | 'fields' | 'colors' | 'submissions'>('fields');
+  const [openSection, setOpenSection] = useState<'config' | 'fields' | 'colors' | 'submissions' | null>('fields');
 
   // --- Field editor state ---
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
@@ -356,7 +356,7 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
     count?: number;
   }> = ({ id, title, count }) => (
     <button
-      onClick={() => setOpenSection(openSection === id ? id : id)}
+      onClick={() => setOpenSection(openSection === id ? null : id)}
       className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
         openSection === id
           ? 'bg-purple-100 text-purple-800'
