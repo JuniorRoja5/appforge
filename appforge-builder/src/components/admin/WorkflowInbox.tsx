@@ -28,6 +28,15 @@ export interface WorkflowInboxProps<T, S extends string = string> {
   rowActions?: RowAction<T>[];
 
   onActionError?: (error: unknown, action: RowAction<T>, item: T) => void;
+
+  /**
+   * Mensaje cuando la lista está vacía Y no hay filtro activo. Permite a la
+   * página dar copy específico (e.g. "No has recibido ningún mensaje todavía"
+   * en lugar del genérico "Aún no hay registros"). Omitido → default genérico.
+   * Cuando hay filtro activo, el mensaje sigue siendo "No hay registros con
+   * este filtro" (no se override — es contexto diferente).
+   */
+  emptyMessage?: string;
 }
 
 const variantBtnCls: Record<RowActionVariant, string> = {
@@ -51,6 +60,7 @@ export function WorkflowInbox<T, S extends string = string>({
   renderRow,
   rowActions,
   onActionError,
+  emptyMessage,
 }: WorkflowInboxProps<T, S>): ReactElement {
   const { confirm, dialog } = useConfirm();
   const [running, setRunning] = useState<Map<string, string>>(new Map());
@@ -157,9 +167,9 @@ export function WorkflowInbox<T, S extends string = string>({
     </div>
   );
 
-  const emptyMessage = hasActiveFilter
+  const resolvedEmptyMessage = hasActiveFilter
     ? 'No hay registros con este filtro.'
-    : 'Aún no hay registros.';
+    : emptyMessage ?? 'Aún no hay registros.';
 
   return (
     <>
@@ -189,7 +199,7 @@ export function WorkflowInbox<T, S extends string = string>({
       ) : items.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-lg p-12 text-center">
           <Inbox className="mx-auto text-gray-300 mb-3" size={40} />
-          <p className="text-sm text-gray-500">{emptyMessage}</p>
+          <p className="text-sm text-gray-500">{resolvedEmptyMessage}</p>
         </div>
       ) : groups ? (
         <div className="space-y-6">
