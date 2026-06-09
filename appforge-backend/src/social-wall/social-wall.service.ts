@@ -3,11 +3,16 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSocialPostDto } from './dto/create-social-post.dto';
 import { CreateSocialCommentDto } from './dto/create-social-comment.dto';
 import { ReportContentDto } from './dto/report-content.dto';
+import {
+  REPORTABLE_TARGET_TYPES,
+  type ReportableTargetType,
+} from './social-wall.constants';
 
 @Injectable()
 export class SocialWallService {
@@ -159,8 +164,7 @@ export class SocialWallService {
   // ──────────────────── Reports ────────────────────
 
   async reportContent(appId: string, appUserId: string, dto: ReportContentDto) {
-    const validTypes = ['social_post', 'social_comment', 'fan_post'];
-    if (!validTypes.includes(dto.targetType)) {
+    if (!REPORTABLE_TARGET_TYPES.includes(dto.targetType as ReportableTargetType)) {
       throw new ForbiddenException('Tipo de contenido no válido.');
     }
 
@@ -184,11 +188,36 @@ export class SocialWallService {
     return { message: 'Reporte enviado.' };
   }
 
-  async getReports(appId: string, tenantId?: string, role?: string) {
+  async getReports(
+    appId: string,
+    tenantId: string | undefined,
+    role: string | undefined,
+    targetTypes?: string[],
+  ) {
     await this.ensureAppOwnership(appId, tenantId, role);
 
+    // Validar contra la lista canónica. Si el cliente pasa un valor
+    // desconocido, devolver 400 con detalle (no degradar silenciosamente
+    // a "sin filtro" — ese sería el patrón que ocultaría bugs de cliente).
+    if (targetTypes && targetTypes.length > 0) {
+      const invalid = targetTypes.filter(
+        (t) => !REPORTABLE_TARGET_TYPES.includes(t as ReportableTargetType),
+      );
+      if (invalid.length > 0) {
+        throw new BadRequestException(
+          `targetType inválido: ${invalid.join(', ')}. Valores permitidos: ${REPORTABLE_TARGET_TYPES.join(', ')}.`,
+        );
+      }
+    }
+
     return this.prisma.contentReport.findMany({
-      where: { appId, resolved: false },
+      where: {
+        appId,
+        resolved: false,
+        ...(targetTypes && targetTypes.length > 0
+          ? { targetType: { in: targetTypes } }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         appUser: { select: { email: true, firstName: true } },
@@ -216,7 +245,49 @@ export class SocialWallService {
     const post = await this.prisma.socialPost.findUnique({ where: { id: postId } });
     if (!post || post.appId !== appId) throw new NotFoundException('Post no encontrado.');
 
-    await this.prisma.socialPost.delete({ where: { id: postId } });
+    // Cascada: borrar el post Y marcar como resueltos todos los reports que
+    // apuntaban a este post. Sin esto los reports quedarían huérfanos —
+    // apuntando a un targetId que ya no existe — y el moderador los seguiría
+    // viendo en la cola. Atómico via $transaction: si la delete falla, el
+    // updateMany no se ejecuta. Cubre también el caso de varios reports sobre
+    // el mismo post (el @@unique de ContentReport es [appUserId, targetType,
+    // targetId], así que distintos usuarios pueden reportar el mismo post).
+    await this.prisma.$transaction([
+      this.prisma.socialPost.delete({ where: { id: postId } }),
+      this.prisma.contentReport.updateMany({
+        where: { appId, targetType: 'social_post', targetId: postId, resolved: false },
+        data: { resolved: true },
+      }),
+    ]);
+  }
+
+  async moderateDeleteComment(
+    appId: string,
+    commentId: string,
+    tenantId?: string,
+    role?: string,
+  ) {
+    await this.ensureAppOwnership(appId, tenantId, role);
+
+    // include post.appId para confirmar que el comentario pertenece al app
+    // del cliente que modera (anti-IDOR: sin esta comprobación, un cliente
+    // con acceso a un commentId de otro tenant podría borrarlo).
+    const comment = await this.prisma.socialComment.findUnique({
+      where: { id: commentId },
+      include: { post: { select: { appId: true } } },
+    });
+    if (!comment || comment.post.appId !== appId) {
+      throw new NotFoundException('Comentario no encontrado.');
+    }
+
+    // Misma cascada que moderateDeletePost pero para 'social_comment'.
+    await this.prisma.$transaction([
+      this.prisma.socialComment.delete({ where: { id: commentId } }),
+      this.prisma.contentReport.updateMany({
+        where: { appId, targetType: 'social_comment', targetId: commentId, resolved: false },
+        data: { resolved: true },
+      }),
+    ]);
   }
 
   async getStats(appId: string, tenantId?: string, role?: string) {
