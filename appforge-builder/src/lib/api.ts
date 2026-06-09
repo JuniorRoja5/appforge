@@ -2034,7 +2034,7 @@ export const updateOrderStatus = async (
 
 export const getOrderStats = async (
   appId: string, token: string,
-): Promise<{ pendingCount: number; todayCount: number; totalRevenue: number }> => {
+): Promise<{ pendingCount: number; todayCount: number; totalRevenue: number; currency: string }> => {
   const response = await fetch(`${API_URL}/apps/${appId}/orders/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
