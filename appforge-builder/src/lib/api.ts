@@ -1613,6 +1613,11 @@ export interface SocialPostItem {
   createdAt: string;
 }
 
+// Tipo del contenido reportado polimórfico — re-exportado de la pieza común
+// de Fase 0 para mantener una sola fuente de verdad.
+export type { ReportedContent } from '../components/admin/ModerationQueue';
+import type { ReportedContent as _ReportedContent } from '../components/admin/ModerationQueue';
+
 export interface ContentReportItem {
   id: string;
   targetType: string;
@@ -1620,6 +1625,11 @@ export interface ContentReportItem {
   reason?: string;
   appUser: { email: string; firstName?: string };
   createdAt: string;
+  // Sin `?` — el endpoint enriquecido de 1.3c-api siempre devuelve este
+  // campo (poblado o null para huérfanos). El frontend puede asumir su
+  // presencia. El `?` opcional vive solo en BaseReportShape (módulos
+  // futuros que no enriquezcan).
+  reportedContent: _ReportedContent | null;
 }
 
 export const getSocialPosts = async (

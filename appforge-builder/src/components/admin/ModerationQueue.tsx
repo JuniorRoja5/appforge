@@ -1,13 +1,37 @@
 import { useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { FC, ReactElement, ReactNode } from 'react';
 import { Trash2, CheckCircle, Loader2, Flag, Inbox } from 'lucide-react';
 import { useConfirm } from './ConfirmDialog';
+import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import type { ConfirmConfig } from './types';
+
+/**
+ * Contenido del item reportado, enriquecido server-side por getReports en
+ * 1.3c-api. Forma polimórfica que sirve a los tres tipos canónicos:
+ *   - social_post  → text (content) + imageUrl opcional + authorEmail
+ *   - social_comment → text (content) + authorEmail  [sin imageUrl]
+ *   - fan_post     → text (caption) opcional + imageUrl (req) + authorEmail
+ *
+ * El render por defecto distingue tres estados:
+ *   - undefined  → el consumidor NO pasa el campo; no se pinta el bloque
+ *                  (retro-compat con módulos que no enriquezcan).
+ *   - null       → el contenido ya no existe (huérfano: borrado en cascada,
+ *                  o anti-fuga server-side rechazó pertenencia al app).
+ *                  Se pinta "Contenido eliminado".
+ *   - objeto     → se pinta miniatura (si imageUrl) + text (line-clamp-2) +
+ *                  email del autor del contenido.
+ */
+export interface ReportedContent {
+  text?: string;
+  imageUrl?: string;
+  authorEmail: string;
+}
 
 export interface BaseReportShape {
   reason?: string | null;
   appUser: { email: string };
   targetType: string;
+  reportedContent?: ReportedContent | null;
 }
 
 export interface PostActions {
@@ -83,6 +107,94 @@ const defaultDeleteReportedContentConfig: ConfirmConfig = {
 
 const defaultReportTypeLabel = (r: BaseReportShape): string =>
   `${r.targetType.replace(/_/g, ' ')} reportado`;
+
+/**
+ * Sub-componente del render por defecto. Vive fuera del genérico
+ * ModerationQueue para que su useState (imageError) no se recree en cada
+ * render del padre. Solo depende de BaseReportShape — los consumidores que
+ * extienden TReport pasan instancias que TS acepta por covarianza.
+ *
+ * Maneja los tres estados de reportedContent + el caso de imageUrl rota:
+ *   - imageUrl + onError + hay text  → oculta img, deja el text como contexto
+ *   - imageUrl + onError + sin text  → placeholder "Imagen no disponible"
+ *     (sin esto, el bloque saldría vacío en caso de fan_post sin caption
+ *     con imagen rota — el moderador no sabría que hay contenido)
+ */
+const DefaultReportRow: FC<{
+  report: BaseReportShape;
+  actions: ReportActions;
+  typeLabel: string;
+}> = ({ report, actions, typeLabel }) => {
+  const [imageError, setImageError] = useState(false);
+  const rc = report.reportedContent;
+
+  return (
+    <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-800 flex items-center gap-1">
+            <Flag size={12} className="text-orange-500" />
+            {typeLabel}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Por: {report.appUser.email}
+          </p>
+          {report.reason && (
+            <p className="text-xs text-gray-500 mt-0.5 italic">
+              &ldquo;{report.reason}&rdquo;
+            </p>
+          )}
+          {/* Bloque de contenido reportado — solo si el consumidor pasa el
+              campo (undefined = retro-compat, no se pinta). Borde
+              orange-200 un paso más oscuro que el card padre para que el
+              bloque se lea como unidad embebida. */}
+          {rc !== undefined && (
+            <div className="bg-white border border-orange-200 rounded p-2 mt-2">
+              {rc === null ? (
+                <p className="text-xs text-gray-400 italic">
+                  Contenido eliminado
+                </p>
+              ) : (
+                <div className="flex items-start gap-2">
+                  {rc.imageUrl && !imageError && (
+                    <img
+                      src={resolveAssetUrl(rc.imageUrl)}
+                      alt=""
+                      className="w-12 h-12 rounded object-cover shrink-0"
+                      onError={() => setImageError(true)}
+                    />
+                  )}
+                  {rc.imageUrl && imageError && !rc.text && (
+                    <div className="w-12 h-12 rounded bg-gray-100 shrink-0 flex items-center justify-center text-[9px] text-gray-400 text-center px-1 leading-tight">
+                      Imagen no disponible
+                    </div>
+                  )}
+                  {/* min-w-0 obligatorio en flex children que contienen
+                      line-clamp/truncate — sin esto el texto largo empuja
+                      el layout en vez de truncarse. */}
+                  <div className="min-w-0 flex-1">
+                    {rc.text && (
+                      <p className="text-xs text-gray-700 line-clamp-2">
+                        {rc.text}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Autor: {rc.authorEmail}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {actions.deleteContentButton}
+          {actions.resolveButton}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export function ModerationQueue<
   TPost,
@@ -260,28 +372,11 @@ export function ModerationQueue<
   ): ReactNode => {
     const typeLabel = (getReportTypeLabel ?? defaultReportTypeLabel)(report);
     return (
-      <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-800 flex items-center gap-1">
-              <Flag size={12} className="text-orange-500" />
-              {typeLabel}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Por: {report.appUser.email}
-            </p>
-            {report.reason && (
-              <p className="text-xs text-gray-500 mt-0.5 italic">
-                &ldquo;{report.reason}&rdquo;
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {actions.deleteContentButton}
-            {actions.resolveButton}
-          </div>
-        </div>
-      </div>
+      <DefaultReportRow
+        report={report}
+        actions={actions}
+        typeLabel={typeLabel}
+      />
     );
   };
 
