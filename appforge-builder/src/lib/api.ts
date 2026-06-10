@@ -1642,8 +1642,15 @@ export const getSocialWallStats = async (
   return response.json();
 };
 
-export const getSocialReports = async (appId: string, token: string): Promise<ContentReportItem[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/reports`, {
+export const getSocialReports = async (
+  appId: string,
+  token: string,
+  targetTypes?: string[],
+): Promise<ContentReportItem[]> => {
+  const qs = targetTypes && targetTypes.length > 0
+    ? `?targetType=${encodeURIComponent(targetTypes.join(','))}`
+    : '';
+  const response = await fetch(`${API_URL}/apps/${appId}/social/reports${qs}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener reportes');
@@ -1664,6 +1671,21 @@ export const deleteSocialPost = async (appId: string, postId: string, token: str
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al eliminar post');
+};
+
+export const moderateDeleteSocialComment = async (
+  appId: string,
+  commentId: string,
+  token: string,
+): Promise<void> => {
+  const response = await fetch(
+    `${API_URL}/apps/${appId}/social/comments/${commentId}/moderate`,
+    {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) throw new Error('Error al eliminar comentario');
 };
 
 // ──────────────────── Fan Wall ────────────────────
