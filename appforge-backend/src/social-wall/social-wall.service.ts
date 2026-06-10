@@ -210,7 +210,7 @@ export class SocialWallService {
       }
     }
 
-    return this.prisma.contentReport.findMany({
+    const reports = await this.prisma.contentReport.findMany({
       where: {
         appId,
         resolved: false,
@@ -222,6 +222,130 @@ export class SocialWallService {
       include: {
         appUser: { select: { email: true, firstName: true } },
       },
+    });
+
+    // ────────────────── Enriquecimiento polimórfico del contenido reportado.
+    //
+    // El cliente del builder muestra el contenido del item reportado junto al
+    // report (gate #5 + UX moderación). Sin esto, ve "Publicación reportada
+    // por X — 'razón'" sin saber qué publicación.
+    //
+    // Estrategia anti-N+1: agrupar los targetId por targetType y disparar
+    // como mucho 3 queries batch (SocialPost / SocialComment / FanPost).
+    // O(reports) en cliente para construir Maps de lookup O(1).
+    //
+    // Anti-fuga por appId: cada query filtra por pertenencia al app.
+    //   - SocialPost / FanPost: appId directo en el modelo.
+    //   - SocialComment: no tiene appId propio → filtro vía post: { appId }.
+    // Un targetId que apunte a contenido de otro tenant simplemente NO
+    // aparece en el map → reportedContent quedará null.
+    //
+    // Casos null: cierran el coletazo de TECH_DEBT #61. Si el contenido
+    // ya fue borrado (e.g. SocialComment huérfano tras moderateDeletePost
+    // del post padre que disparó cascade DB de comments), el findMany
+    // simplemente no lo devuelve, el map no lo contiene, y el frontend
+    // pinta "Contenido eliminado" en vez de fila confusa.
+
+    const socialPostIds: string[] = [];
+    const socialCommentIds: string[] = [];
+    const fanPostIds: string[] = [];
+
+    for (const r of reports) {
+      if (r.targetType === 'social_post') socialPostIds.push(r.targetId);
+      else if (r.targetType === 'social_comment') socialCommentIds.push(r.targetId);
+      else if (r.targetType === 'fan_post') fanPostIds.push(r.targetId);
+    }
+
+    // Short-circuit de cada batch cuando el grupo está vacío: optimización
+    // (ahorra una query que devolvería [] limpio de todas formas). No es
+    // corrección — Prisma con `id: { in: [] }` se comporta correctamente.
+    const [socialPosts, socialComments, fanPosts] = await Promise.all([
+      socialPostIds.length > 0
+        ? this.prisma.socialPost.findMany({
+            where: { id: { in: socialPostIds }, appId },
+            select: {
+              id: true,
+              content: true,
+              imageUrl: true,
+              appUser: { select: { email: true } },
+            },
+          })
+        : Promise.resolve([] as Array<{
+            id: string;
+            content: string;
+            imageUrl: string | null;
+            appUser: { email: string };
+          }>),
+      socialCommentIds.length > 0
+        ? this.prisma.socialComment.findMany({
+            where: { id: { in: socialCommentIds }, post: { appId } },
+            select: {
+              id: true,
+              content: true,
+              appUser: { select: { email: true } },
+            },
+          })
+        : Promise.resolve([] as Array<{
+            id: string;
+            content: string;
+            appUser: { email: string };
+          }>),
+      fanPostIds.length > 0
+        ? this.prisma.fanPost.findMany({
+            where: { id: { in: fanPostIds }, appId },
+            select: {
+              id: true,
+              caption: true,
+              imageUrl: true,
+              appUser: { select: { email: true } },
+            },
+          })
+        : Promise.resolve([] as Array<{
+            id: string;
+            caption: string | null;
+            imageUrl: string;
+            appUser: { email: string };
+          }>),
+    ]);
+
+    const socialPostMap = new Map(socialPosts.map((p) => [p.id, p]));
+    const socialCommentMap = new Map(socialComments.map((c) => [c.id, c]));
+    const fanPostMap = new Map(fanPosts.map((p) => [p.id, p]));
+
+    return reports.map((r) => {
+      let reportedContent:
+        | { text?: string; imageUrl?: string; authorEmail: string }
+        | null = null;
+
+      if (r.targetType === 'social_post') {
+        const p = socialPostMap.get(r.targetId);
+        if (p) {
+          reportedContent = {
+            text: p.content,
+            imageUrl: p.imageUrl ?? undefined,
+            authorEmail: p.appUser.email,
+          };
+        }
+      } else if (r.targetType === 'social_comment') {
+        const c = socialCommentMap.get(r.targetId);
+        if (c) {
+          reportedContent = {
+            text: c.content,
+            authorEmail: c.appUser.email,
+          };
+        }
+      } else if (r.targetType === 'fan_post') {
+        const p = fanPostMap.get(r.targetId);
+        if (p) {
+          reportedContent = {
+            text: p.caption ?? undefined,
+            imageUrl: p.imageUrl,
+            authorEmail: p.appUser.email,
+          };
+        }
+      }
+
+      return { ...r, reportedContent };
     });
   }
 
