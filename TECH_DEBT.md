@@ -2051,3 +2051,56 @@ cualquier otro motivo, no requiere PR dedicado.
 **Prioridad**: baja en backlog, alta si llega un cliente real cobrando en
 moneda distinta de `€` y se queja del email.
 
+---
+
+### #61 — Cascada de SocialComment al borrar un SocialPost deja reports de comentarios huérfanos
+
+**Estado**: OPEN.
+**Origen**: Detectado en review de Fase 1.3a (commit `4088b79`, que añadió la
+cascada `delete + updateMany(reports resolved:true)` en `moderateDeletePost` y
+`moderateDeleteComment`).
+
+**Problema**: el modelo `SocialComment` tiene `postId @relation(fields: [postId],
+references: [id], onDelete: Cascade)` ([schema.prisma:607](appforge-backend/prisma/schema.prisma#L607)).
+Cuando el moderador llama `moderateDeletePost(postId)`:
+- El post se borra ✓
+- Sus comentarios se borran en cascada por la BD ✓ (sin tocar código)
+- Los reports de tipo `social_post` con ese `targetId` se resuelven por nuestro
+  `updateMany` ✓ (commit `4088b79`)
+- **PERO** los reports de tipo `social_comment` cuyos `targetId` apuntan a
+  comentarios que la BD acaba de borrar en cascada **NO se resuelven**. Quedan
+  huérfanos en la cola de moderación.
+
+**Consecuencia visible**: el moderador ve reports en la página de moderación
+de social wall que apuntan a comentarios que ya no existen. Si clickea
+"Eliminar contenido" en uno de esos, `moderateDeleteComment` devuelve 404
+(comentario no encontrado). El `onActionError` cableado al banner del Shell
+muestra el error, así que no es fallo silencioso — pero es UX confusa.
+
+**Workaround actual**: el botón "Resolver" del report sigue funcionando (solo
+marca `resolved: true`, no toca el target). El moderador puede limpiar los
+huérfanos a mano clickeando Resolver.
+
+**Por qué no se cerró en Fase 1.3a**: requiere la combinación específica de
+borrar un post (no un comentario directo) cuando un comentario hijo tiene
+report pendiente. Caso borde de segundo orden, no regresión (hoy ya pasa,
+peor — sin la cascada de `4088b79` ningún report se resuelve solo). Ampliar
+el método por un caso de baja frecuencia mientras el moderador tiene salida
+(Resolver) ensanchaba el commit.
+
+**Trabajo necesario** (~4 líneas en `moderateDeletePost` de
+`social-wall.service.ts`):
+- Antes de la `$transaction`, `findMany` los `id`s de SocialComment del post a
+  borrar.
+- Incluir en el `updateMany` una segunda condición que también resuelva
+  `{ targetType: 'social_comment', targetId: { in: commentIds } }`.
+
+Quedaría como una sola `$transaction` con tres operaciones (delete post +
+updateMany social_post + updateMany social_comment para los commentIds del
+post).
+
+**Bloquea**: nada. UX confusa solo en el caso borde descrito.
+
+**Prioridad**: baja en backlog. Subir a media si llega cliente con muro
+activo + uso intensivo de reports + queja sobre reports huérfanos.
+
