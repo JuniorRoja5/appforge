@@ -2104,3 +2104,8 @@ post).
 **Prioridad**: baja en backlog. Subir a media si llega cliente con muro
 activo + uso intensivo de reports + queja sobre reports huérfanos.
 
+**Alcance**: `fan_post` cerrado por construcción en Fase 1.4a — FanPost no
+tiene entidad hija con `onDelete: Cascade`, así que no genera huérfanos.
+#61 permanece abierto solo para `social_comment` tras borrado del SocialPost
+padre.
+
