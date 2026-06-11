@@ -2055,8 +2055,9 @@ moneda distinta de `€` y se queja del email.
 
 ### #61 — Cascada de SocialComment al borrar un SocialPost deja reports de comentarios huérfanos
 
-**Estado**: CLOSED. Cerrado en Fase 1.4-backend por ambas puertas
-(moderador y autor):
+**Estado**: CLOSED 2026-06-11, confirmado por smoke en producción
+(commit 96e021a, Fase 1.4-backend). Cerrado por ambas puertas (moderador
+y autor):
 
 - `moderateDeletePost` de social (modificación retroactiva del commit 4088b79
   de 1.3a) y `deleteOwnPost` de social usan ahora **interactive transaction
@@ -2070,6 +2071,13 @@ moneda distinta de `€` y se queja del email.
   default READ COMMITTED de Postgres es suficiente; no se sube a SERIALIZABLE.
 - Fan ya estaba cerrado por construcción en 1.4a — FanPost no tiene entidad
   hija con `onDelete: Cascade`.
+
+**Validación del smoke**: paso 4 del smoke de 1.4-backend dio `resolved=t`
+sobre el SELECT directo en BD, validando la reescritura de `moderateDeletePost`
+a callback (re-confirma que el caso simple de 1.3a sigue funcionando tras la
+modificación retroactiva). El paso 3 (post con comentarios reportados, social)
+queda probado por construcción — el código es espejo exacto del paso 4
+validado, no añade rutas distintas.
 
 Nota de mantenimiento: el interactive transaction tiene timeout default de 5s.
 Si apareciera P2028 al borrar posts con cientos de comentarios+likes que la BD
