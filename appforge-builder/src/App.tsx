@@ -16,6 +16,7 @@ import { BookingsPage } from './pages/BookingsPage';
 import { OrdersAdminPage } from './pages/OrdersAdminPage';
 import { ContactInboxPage } from './pages/ContactInboxPage';
 import { SocialWallModerationPage } from './pages/SocialWallModerationPage';
+import { FanWallModerationPage } from './pages/FanWallModerationPage';
 import { PwaPage } from './pages/PwaPage';
 import { BillingPage } from './pages/BillingPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/orders', element: <OrdersAdminPage /> },
       { path: '/apps/:appId/contact', element: <ContactInboxPage /> },
       { path: '/apps/:appId/social', element: <SocialWallModerationPage /> },
+      { path: '/apps/:appId/fan-wall', element: <FanWallModerationPage /> },
       { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
       { path: '/billing', element: <BillingPage /> },

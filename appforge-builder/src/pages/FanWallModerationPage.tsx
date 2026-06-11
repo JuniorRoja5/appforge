@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FC } from 'react';
 import { useParams } from 'react-router-dom';
-import { MessageSquare, Heart, AlertTriangle } from 'lucide-react';
+import { Camera, Heart, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { resolveAssetUrl } from '../lib/resolve-asset-url';
 import {
-  getSocialPosts,
-  getSocialWallStats,
+  getFanPosts,
+  getFanWallStats,
   getSocialReports,
   resolveSocialReport,
-  deleteSocialPost,
-  moderateDeleteSocialComment,
-  type SocialPostItem,
+  deleteFanPost,
+  type FanPostItem,
   type ContentReportItem,
 } from '../lib/api';
 import { DataAdminShell } from '../components/admin/DataAdminShell';
@@ -20,36 +20,29 @@ import {
 } from '../components/admin/ModerationQueue';
 import { StatCardCell } from '../components/admin/StatCardCell';
 
-interface SocialStats {
+interface FanStats {
   totalPosts: number;
-  totalComments: number;
   totalLikes: number;
   pendingReports: number;
 }
 
 /**
  * Copy humano por targetType (gate #5). Tras el filtro server-side
- * targetType=social_post,social_comment no debería llegar fan_post a esta
- * página; el default ofrece copy razonable por si un nuevo tipo se añade en
- * el futuro sin que esta página lo conozca aún.
+ * targetType=fan_post no debería llegar otro tipo a esta página; el default
+ * ofrece copy razonable por si un nuevo tipo se añade en el futuro sin que
+ * esta página lo conozca aún.
  */
 const getReportTypeLabel = (r: ContentReportItem): string => {
-  if (r.targetType === 'social_post') return 'Publicación reportada';
-  if (r.targetType === 'social_comment') return 'Comentario reportado';
+  if (r.targetType === 'fan_post') return 'Foto reportada';
   return 'Contenido reportado';
 };
 
-const SocialStatsCards: FC<{ stats: SocialStats }> = ({ stats }) => (
-  <div className="grid grid-cols-4 gap-3">
+const FanStatsCards: FC<{ stats: FanStats }> = ({ stats }) => (
+  <div className="grid grid-cols-3 gap-3">
     <StatCardCell
-      icon={<MessageSquare size={14} />}
-      label="Posts"
+      icon={<Camera size={14} />}
+      label="Fotos"
       value={stats.totalPosts}
-    />
-    <StatCardCell
-      icon={<MessageSquare size={14} />}
-      label="Comentarios"
-      value={stats.totalComments}
     />
     <StatCardCell
       icon={<Heart size={14} />}
@@ -65,41 +58,41 @@ const SocialStatsCards: FC<{ stats: SocialStats }> = ({ stats }) => (
   </div>
 );
 
-const SocialPostCard: FC<{
-  post: SocialPostItem;
+const FanPostCell: FC<{
+  post: FanPostItem;
   actions: PostActions;
 }> = ({ post, actions }) => (
-  <div className="border border-gray-200 rounded-lg p-3 bg-white">
-    <div className="flex items-start justify-between gap-2">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-700 truncate">
-          {post.author.email}
-        </p>
-        <p className="text-sm text-gray-800 mt-1 line-clamp-3">{post.content}</p>
-        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400">
-          <span className="flex items-center gap-0.5">
-            <Heart size={10} /> {post.likesCount}
-          </span>
-          <span className="flex items-center gap-0.5">
-            <MessageSquare size={10} /> {post.commentCount}
-          </span>
-          <span>{new Date(post.createdAt).toLocaleDateString('es-ES')}</span>
-        </div>
-      </div>
-      <div className="shrink-0">{actions.deleteButton}</div>
+  <div className="relative aspect-square rounded-lg overflow-hidden group bg-gray-100">
+    <img
+      src={resolveAssetUrl(post.imageUrl)}
+      alt=""
+      className="w-full h-full object-cover"
+    />
+    {/* Overlay hover con el botón delete que ModerationQueue construye y
+        nos pasa. Patrón clonado del fan-wall.module.tsx residual (sección
+        Moderación original) para que la transición a página dedicada
+        preserve la familiaridad visual. */}
+    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+      {actions.deleteButton}
+    </div>
+    {/* Badge likes inferior izquierda siempre visible — sin él, cada foto
+        es solo un cuadrado sin contexto. */}
+    <div className="absolute bottom-1 left-1 flex items-center gap-0.5 bg-black/50 rounded px-1 py-0.5">
+      <Heart size={8} className="text-white" />
+      <span className="text-[9px] text-white">{post.likesCount}</span>
     </div>
   </div>
 );
 
-export const SocialWallModerationPage: FC = () => {
+export const FanWallModerationPage: FC = () => {
   const { appId } = useParams<{ appId: string }>();
   const token = useAuthStore((s) => s.token);
 
-  const [posts, setPosts] = useState<SocialPostItem[]>([]);
+  const [posts, setPosts] = useState<FanPostItem[]>([]);
   const [postsTotal, setPostsTotal] = useState(0);
   const [postsPage, setPostsPage] = useState(1);
   const [reports, setReports] = useState<ContentReportItem[]>([]);
-  const [stats, setStats] = useState<SocialStats | null>(null);
+  const [stats, setStats] = useState<FanStats | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [postsLoading, setPostsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +100,7 @@ export const SocialWallModerationPage: FC = () => {
   const fetchPosts = useCallback(
     async (page: number) => {
       if (!appId || !token) return;
-      const res = await getSocialPosts(appId, token, page);
+      const res = await getFanPosts(appId, token, page);
       if (page === 1) setPosts(res.data);
       else setPosts((prev) => [...prev, ...res.data]);
       setPostsTotal(res.total);
@@ -118,29 +111,27 @@ export const SocialWallModerationPage: FC = () => {
 
   const fetchReports = useCallback(async () => {
     if (!appId || !token) return;
-    // Filtro server-side de Fase 1.3a: solo social_post + social_comment.
-    // Cierra el gate #6 — esta página NO ve reports de fan_post.
-    const r = await getSocialReports(appId, token, [
-      'social_post',
-      'social_comment',
-    ]);
+    // Filtro server-side de Fase 1.3a: solo fan_post. Reemplaza el filter
+    // client-side del fan-wall.module.tsx original (L126):
+    //   setReports(r.filter((rep) => rep.targetType === 'fan_post'))
+    // El backend ya hace el trabajo.
+    const r = await getSocialReports(appId, token, ['fan_post']);
     setReports(r);
   }, [appId, token]);
 
   const fetchStats = useCallback(async () => {
     if (!appId || !token) return;
     try {
-      setStats(await getSocialWallStats(appId, token));
+      setStats(await getFanWallStats(appId, token));
     } catch (err) {
-      // Stats secundarias: si fallan las stats cards no se renderizan pero
-      // la página sobrevive. No silencioso: deja rastro en consola.
+      // Stats secundarias: si fallan las cards no se renderizan pero la
+      // página sobrevive. No silencioso: deja rastro en consola.
       // eslint-disable-next-line no-console
-      console.error('[SocialWallModerationPage] stats fetch failed:', err);
+      console.error('[FanWallModerationPage] stats fetch failed:', err);
     }
   }, [appId, token]);
 
-  // Carga inicial: posts(1) + reports + stats en paralelo. Solo bloquea al
-  // Shell la primera vez (gate #2).
+  // Carga inicial paralelo. Gate #2: loading={initialLoading} solo aquí.
   useEffect(() => {
     if (!appId || !token) return;
     setInitialLoading(true);
@@ -163,43 +154,35 @@ export const SocialWallModerationPage: FC = () => {
     try {
       await fetchPosts(postsPage + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar más posts.');
+      setError(err instanceof Error ? err.message : 'Error al cargar más fotos.');
     } finally {
       setPostsLoading(false);
     }
   }, [fetchPosts, postsPage, postsLoading]);
 
-  // Tras resolver un reporte: refetch reports + stats. La cascada de Fase 1.3a
-  // resuelve los reports en backend cuando se borra contenido, así que para
-  // el resto de acciones tampoco hace falta llamar resolveSocialReport desde
-  // aquí (el backend lo hace solo).
   const refetchAfterAction = useCallback(async () => {
     await Promise.all([fetchReports(), fetchStats()]);
   }, [fetchReports, fetchStats]);
 
   const refetchAfterPostDelete = useCallback(async () => {
-    // Tras borrar un post el listado de posts también cambia.
     await Promise.all([fetchPosts(1), fetchReports(), fetchStats()]);
   }, [fetchPosts, fetchReports, fetchStats]);
 
   const handleDeleteReportedContent = useCallback(
     async (report: ContentReportItem) => {
       if (!appId || !token) return;
-      // Ramificado por targetType. La firma de Fase 0 recibe el report entero,
-      // así que el ramificado vive aquí, no en ModerationQueue.
-      if (report.targetType === 'social_post') {
-        await deleteSocialPost(appId, report.targetId, token);
-      } else if (report.targetType === 'social_comment') {
-        await moderateDeleteSocialComment(appId, report.targetId, token);
-      } else {
-        // Defensa: no debería llegar tras el filtro server-side. Throw para
-        // que onActionError lo capture y muestre en el banner del Shell.
+      // Defensa: tras el filtro server-side ['fan_post'] no debería llegar
+      // otro tipo. NO hay ramificado como en social (que ramificaba entre
+      // social_post y social_comment) — fan solo tiene un tipo reportable.
+      if (report.targetType !== 'fan_post') {
         throw new Error(
           `Tipo de contenido reportado no soportado: ${report.targetType}`,
         );
       }
-      // Backend (commit 4088b79) hace updateMany de reports en su
-      // $transaction. Solo refetchamos para reflejar el nuevo estado.
+      await deleteFanPost(appId, report.targetId, token);
+      // Backend (commit 42c216c moderateDeletePost de fan-wall, validado en
+      // smoke de 1.4a) hace cascada $transaction(delete + updateMany
+      // resolved:true). Solo refetchamos para reflejar.
       await refetchAfterPostDelete();
     },
     [appId, token, refetchAfterPostDelete],
@@ -207,14 +190,14 @@ export const SocialWallModerationPage: FC = () => {
 
   return (
     <DataAdminShell
-      title="Moderación del muro"
-      description="Modera publicaciones, comentarios y atiende los reportes de los usuarios."
+      title="Moderación del fan wall"
+      description="Modera las fotos subidas por los usuarios y atiende los reportes."
       backHref={`/apps/${appId}/edit`}
       loading={initialLoading}
       error={error}
-      statsCards={stats && <SocialStatsCards stats={stats} />}
+      statsCards={stats && <FanStatsCards stats={stats} />}
     >
-      <ModerationQueue<SocialPostItem, ContentReportItem>
+      <ModerationQueue<FanPostItem, ContentReportItem>
         reports={reports}
         getReportId={(r) => r.id}
         getReportTypeLabel={getReportTypeLabel}
@@ -222,14 +205,14 @@ export const SocialWallModerationPage: FC = () => {
         postsTotal={postsTotal}
         getPostId={(p) => p.id}
         renderPostCell={(post, actions) => (
-          <SocialPostCard post={post} actions={actions} />
+          <FanPostCell post={post} actions={actions} />
         )}
-        postsLayout="list"
+        postsLayout="grid"
         postsLoading={postsLoading}
         loadMore={handleLoadMore}
         onDeletePost={async (post) => {
           if (!appId || !token) return;
-          await deleteSocialPost(appId, post.id, token);
+          await deleteFanPost(appId, post.id, token);
           await refetchAfterPostDelete();
         }}
         onResolveReport={async (report) => {
