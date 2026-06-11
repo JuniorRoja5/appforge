@@ -94,7 +94,18 @@ export class FanWallService {
     if (!post) throw new NotFoundException('Post no encontrado.');
     if (post.appUserId !== appUserId) throw new ForbiddenException('Solo puedes eliminar tus propias fotos.');
 
-    await this.prisma.fanPost.delete({ where: { id: postId } });
+    // Cascada: borrar la foto Y resolver sus reports. Espejo de
+    // moderateDeletePost (1.4a, commit 42c216c). Mismo bug por distinta
+    // puerta (autor vs moderador). post.appId viene gratis del findUnique
+    // anterior. FanPost no tiene entidad hija — no aplica la ampliación de
+    // TECH_DEBT #61 que sí se hace en deleteOwnPost de social.
+    await this.prisma.$transaction([
+      this.prisma.fanPost.delete({ where: { id: postId } }),
+      this.prisma.contentReport.updateMany({
+        where: { appId: post.appId, targetType: 'fan_post', targetId: postId, resolved: false },
+        data: { resolved: true },
+      }),
+    ]);
   }
 
   // ──────────────────── Reports ────────────────────

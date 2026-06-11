@@ -2055,7 +2055,28 @@ moneda distinta de `€` y se queja del email.
 
 ### #61 — Cascada de SocialComment al borrar un SocialPost deja reports de comentarios huérfanos
 
-**Estado**: OPEN.
+**Estado**: CLOSED. Cerrado en Fase 1.4-backend por ambas puertas
+(moderador y autor):
+
+- `moderateDeletePost` de social (modificación retroactiva del commit 4088b79
+  de 1.3a) y `deleteOwnPost` de social usan ahora **interactive transaction
+  de Prisma** (callback con `tx`) para que el `findMany` de commentIds, el
+  `delete` del post y el `updateMany` de reports vivan en la misma transacción
+  secuencial. El `updateMany` amplía su filtro a `targetType: { in:
+  ['social_post','social_comment'] }` y `targetId: { in: [postId, ...commentIds] }`.
+- La race window (commentId creado entre `findMany` y `delete` en transacciones
+  separadas) queda cerrada por construcción — no por nivel de aislamiento, sino
+  porque ambas operaciones viven dentro del mismo bloque transaccional. El
+  default READ COMMITTED de Postgres es suficiente; no se sube a SERIALIZABLE.
+- Fan ya estaba cerrado por construcción en 1.4a — FanPost no tiene entidad
+  hija con `onDelete: Cascade`.
+
+Nota de mantenimiento: el interactive transaction tiene timeout default de 5s.
+Si apareciera P2028 al borrar posts con cientos de comentarios+likes que la BD
+cascadea, la mitigación es pasar `{ timeout: <ms> }` como segundo arg al
+`$transaction`. No tocar antes — sería optimización prematura.
+
+**Estado original (histórico)**: OPEN.
 **Origen**: Detectado en review de Fase 1.3a (commit `4088b79`, que añadió la
 cascada `delete + updateMany(reports resolved:true)` en `moderateDeletePost` y
 `moderateDeleteComment`).

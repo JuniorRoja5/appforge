@@ -150,15 +150,67 @@ export class SocialWallService {
     if (!post) throw new NotFoundException('Post no encontrado.');
     if (post.appUserId !== appUserId) throw new ForbiddenException('Solo puedes eliminar tus propios posts.');
 
-    await this.prisma.socialPost.delete({ where: { id: postId } });
+    // Cascada que cierra TECH_DEBT #61 por el lado del autor: resuelve los
+    // reports del post Y los de sus comentarios (que la BD borrará en
+    // cascada vía onDelete: Cascade de SocialComment). Interactive
+    // transaction de Prisma (callback con tx) para que findMany + delete +
+    // updateMany vivan en la misma transacción secuencial — la race
+    // window (commitId creado entre findMany y delete) se cierra porque
+    // ambas operaciones están dentro del mismo bloque transaccional.
+    //
+    // Nota de mantenimiento: el interactive transaction tiene timeout
+    // default de 5s. Con volúmenes actuales (posts con pocos comentarios)
+    // ni se roza. Si un día apareciera P2028 ("transaction timeout") al
+    // borrar posts grandes con cientos de comentarios + likes que la BD
+    // cascadea, la mitigación es pasar { timeout: <ms> } como segundo arg
+    // al $transaction — no antes, sería optimización prematura.
+    const appId = post.appId;
+    await this.prisma.$transaction(async (tx) => {
+      const comments = await tx.socialComment.findMany({
+        where: { postId },
+        select: { id: true },
+      });
+      const commentIds = comments.map((c) => c.id);
+
+      await tx.socialPost.delete({ where: { id: postId } });
+
+      await tx.contentReport.updateMany({
+        where: {
+          appId,
+          targetType: { in: ['social_post', 'social_comment'] },
+          targetId: { in: [postId, ...commentIds] },
+          resolved: false,
+        },
+        data: { resolved: true },
+      });
+    });
   }
 
   async deleteOwnComment(commentId: string, appUserId: string) {
-    const comment = await this.prisma.socialComment.findUnique({ where: { id: commentId } });
+    // include post.appId — SocialComment no tiene appId propio en el modelo
+    // (mismo patrón que moderateDeleteComment de 1.3a).
+    const comment = await this.prisma.socialComment.findUnique({
+      where: { id: commentId },
+      include: { post: { select: { appId: true } } },
+    });
     if (!comment) throw new NotFoundException('Comentario no encontrado.');
     if (comment.appUserId !== appUserId) throw new ForbiddenException('Solo puedes eliminar tus propios comentarios.');
 
-    await this.prisma.socialComment.delete({ where: { id: commentId } });
+    // Cascada: borrar el comentario Y resolver sus reports. Espejo de
+    // moderateDeleteComment (1.3a). Sin entidad hija — no aplica la
+    // ampliación de #61. Forma simple $transaction([...]) suficiente.
+    await this.prisma.$transaction([
+      this.prisma.socialComment.delete({ where: { id: commentId } }),
+      this.prisma.contentReport.updateMany({
+        where: {
+          appId: comment.post.appId,
+          targetType: 'social_comment',
+          targetId: commentId,
+          resolved: false,
+        },
+        data: { resolved: true },
+      }),
+    ]);
   }
 
   // ──────────────────── Reports ────────────────────
@@ -369,20 +421,52 @@ export class SocialWallService {
     const post = await this.prisma.socialPost.findUnique({ where: { id: postId } });
     if (!post || post.appId !== appId) throw new NotFoundException('Post no encontrado.');
 
-    // Cascada: borrar el post Y marcar como resueltos todos los reports que
-    // apuntaban a este post. Sin esto los reports quedarían huérfanos —
-    // apuntando a un targetId que ya no existe — y el moderador los seguiría
-    // viendo en la cola. Atómico via $transaction: si la delete falla, el
-    // updateMany no se ejecuta. Cubre también el caso de varios reports sobre
-    // el mismo post (el @@unique de ContentReport es [appUserId, targetType,
-    // targetId], así que distintos usuarios pueden reportar el mismo post).
-    await this.prisma.$transaction([
-      this.prisma.socialPost.delete({ where: { id: postId } }),
-      this.prisma.contentReport.updateMany({
-        where: { appId, targetType: 'social_post', targetId: postId, resolved: false },
+    // Cascada ampliada para cerrar TECH_DEBT #61 de raíz por el lado del
+    // moderador (commit 1.4-backend). Ampliación retroactiva del commit
+    // 4088b79 original de 1.3a, que solo cubría reports de social_post.
+    // Ahora también resuelve los reports de los comentarios del post
+    // (que la BD borrará en cascada vía onDelete: Cascade de SocialComment).
+    //
+    // Interactive transaction de Prisma (callback con tx) para que findMany
+    // + delete + updateMany vivan en la misma transacción secuencial — la
+    // race window (commentId creado entre el findMany y el delete) se
+    // cierra porque ambas operaciones están dentro del mismo bloque
+    // transaccional, no por nivel de aislamiento (READ COMMITTED default
+    // de Postgres es suficiente).
+    //
+    // El @@unique de ContentReport es [appUserId, targetType, targetId],
+    // así que un mismo target puede tener múltiples reports (distintos
+    // appUser). El updateMany los resuelve todos juntos.
+    //
+    // Espejo de la cascada de deleteOwnPost de social (mismo archivo,
+    // forma idéntica) — los dos caminos a borrado de post quedan cerrados
+    // a la vez.
+    //
+    // Nota de mantenimiento: el interactive transaction tiene timeout
+    // default de 5s. Con volúmenes actuales (posts con pocos comentarios)
+    // ni se roza. Si un día apareciera P2028 ("transaction timeout") al
+    // moderar posts grandes con cientos de comentarios + likes que la BD
+    // cascadea, la mitigación es pasar { timeout: <ms> } como segundo arg
+    // al $transaction.
+    await this.prisma.$transaction(async (tx) => {
+      const comments = await tx.socialComment.findMany({
+        where: { postId },
+        select: { id: true },
+      });
+      const commentIds = comments.map((c) => c.id);
+
+      await tx.socialPost.delete({ where: { id: postId } });
+
+      await tx.contentReport.updateMany({
+        where: {
+          appId,
+          targetType: { in: ['social_post', 'social_comment'] },
+          targetId: { in: [postId, ...commentIds] },
+          resolved: false,
+        },
         data: { resolved: true },
-      }),
-    ]);
+      });
+    });
   }
 
   async moderateDeleteComment(
