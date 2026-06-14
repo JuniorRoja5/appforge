@@ -2138,3 +2138,132 @@ tiene entidad hija con `onDelete: Cascade`, así que no genera huérfanos.
 #61 permanece abierto solo para `social_comment` tras borrado del SocialPost
 padre.
 
+### #62 — Builder bundle 1.76 MB sin code-splitting
+
+**Estado**: OPEN
+**Origen**: Observado durante deploy de Fase 1.5a (commit `bdf68dc`,
+2026-06-14) en el output de `npm run build` de `appforge-builder`.
+
+**Descripción**: `vite build` emite el bundle principal en
+`dist/assets/index-*.js` con tamaño 1.76 MB (≈420 KB gzip), excediendo el
+umbral por defecto de Vite (500 KB sin gzip) y disparando el warning `(!)
+Some chunks are larger than 500 kB after minification`. La causa es que todas
+las páginas del builder se importan de forma **estática** en
+`appforge-builder/src/App.tsx` (~25 imports tipo
+`import { BookingsPage } from './pages/BookingsPage'`), así que React Router
+no puede partir el grafo en chunks por ruta.
+
+**Impacto**:
+- Carga inicial del panel descarga todo el JS de páginas que el usuario
+  probablemente no va a abrir en esa sesión (Coupons, Loyalty, PWA settings,
+  Stripe billing, etc.).
+- En conexiones lentas cada KB cuenta. Hoy con un único cliente y volumen
+  bajo no se nota; con carga real + más páginas admin a futuro, sí.
+- El warning aparece en el output del build cada deploy. Ruido visual que
+  enmascara warnings nuevos que sí importen.
+
+**Crecerá según**: cada nueva página admin que añadamos en Fase 2/3 (Coupons
+admin, Loyalty admin, Push history, News/Events admin) suma a este mismo
+chunk. Más urgente a más páginas.
+
+**Fix**: pasar las rutas a `React.lazy(() => import(...))` + `<Suspense>` en
+`App.tsx`. Vite emite un chunk por ruta automáticamente. Las rutas críticas
+(Dashboard, Login) pueden quedarse estáticas para que la primera vista no
+muestre un fallback.
+
+Cuidado con el patrón de export: hoy las páginas usan `export const X`, no
+`export default`. El wrapper típico
+`lazy(() => import('./pages/X').then(m => ({ default: m.X })))` mantiene la
+compatibilidad sin tocar las páginas. Alternativa más invasiva: re-exportar
+cada página como default (~25 archivos).
+
+Implicación operacional: si se hace, el grep de testigos al desplegar deja
+de apuntar SOLO a `dist/assets/index-*.js` y debe ampliarse a
+`dist/assets/*.js` — el string del componente vivirá en el chunk de su
+ruta, no en el bundle principal.
+
+**Esfuerzo estimado**: 1-2 horas. Conversion mecánica + un smoke por ruta
+para confirmar que el fallback de Suspense aparece <100ms y la página
+carga.
+
+**Prioridad**: baja hoy (panel funciona, deploy funciona). Subir a media
+cuando se añadan las páginas admin de Fase 2 (Coupons + Loyalty + Catalog
+products) — es el momento natural antes de que el chunk siga creciendo.
+
+**No bloquea**: ninguna fase del roadmap actual. Es deuda de tamaño de
+bundle, no de funcionalidad.
+
+### #63 — Reactivación CANCELLED→CONFIRMED deja la reserva en estado inconsistente
+
+**Estado**: OPEN
+**Origen**: Detectado durante la medición de Fase 1.5b (vaciado del bloque
+residual de `booking.module.tsx`), 2026-06-14. El bloque residual ofrecía
+un botón "Reactivar" (CANCELLED → CONFIRMED) que se borra con el resto
+del bloque. Revisión del backend de `updateStatus`
+([booking.service.ts:285-345](appforge-backend/src/booking/booking.service.ts#L285-L345))
+confirmó que la operación está rota por tres caminos independientes, ninguno
+mitigable desde el frontend. Eliminar el botón en 1.5b es "dejar de exponer
+un bug"; restaurar reactivación de verdad es trabajo de backend.
+
+**Problema 1 — Metadata de cancelación colgando**:
+`updateStatus` solo escribe `cancelledAt` y `cancelledBy` cuando
+`status === BookingStatus.CANCELLED`
+([service.ts:306-309](appforge-backend/src/booking/booking.service.ts#L306-L309)).
+Nunca los limpia. Una reserva reactivada queda en BD:
+
+```
+status      = CONFIRMED
+cancelledAt = <fecha vieja>
+cancelledBy = 'MERCHANT' | 'CUSTOMER'
+```
+
+Estado incoherente. Pista que enmascara los otros dos problemas.
+
+**Problema 2 — Recordatorios desprogramados**:
+Al cancelar, [service.ts:317-323](appforge-backend/src/booking/booking.service.ts#L317-L323)
+llama a `cancelReminderJobs` que elimina los BullMQ `booking-<id>-24h` y
+`booking-<id>-2h`. Reactivar **no los re-programa**. La reserva queda
+CONFIRMED pero no se enviará el aviso de 24h ni el de 2h. Reduce
+no-shows es el caso de uso principal de booking; sin recordatorios la
+reactivación "funciona" pero el cliente puede no aparecer.
+
+**Problema 3 — Cliente no notificado**:
+El push FCM solo dispara dentro de `STATUS_PUSH_MAP`
+([service.ts:22-28](appforge-backend/src/booking/booking.service.ts#L22-L28)),
+que solo cubre `CANCELLED`. La app del cliente sigue mostrando la reserva
+como cancelada hasta que entre al detalle y refetche.
+
+**Workaround actual**: ninguno. Por eso "Reactivar" no se porta a
+BookingsPage en 1.5a/b: portarlo expondría el bug en lugar de cerrarlo.
+
+**Defensa colateral en BookingRow (Fase 1.5 commit 2, cancelledBy chips)**:
+los chips "por cliente" / "por ti" que renderizan `cancelledBy` se gatean
+por `booking.status === 'CANCELLED'`, no solo por el valor de
+`cancelledBy`. Si en producción aparece una reserva con `cancelledBy`
+colgando en CONFIRMED por este bug, el chip **no se pinta** y el badge
+"Confirmada" no entra en contradicción visual con "por ti". El bug sigue
+en BD; el frontend no lo expone.
+
+**Fix correcto** (~30 líneas backend, no tocar antes de necesitarlo):
+
+1. En `updateStatus`, cuando `status === CONFIRMED && previousStatus ===
+   CANCELLED`, limpiar metadata: `cancelledAt = null`, `cancelledBy = null`.
+2. Re-llamar a `scheduleReminders(booking, config)` tras el `update` cuando
+   se reactiva.
+3. Añadir notificación al cliente para la transición CANCELLED→CONFIRMED.
+   `STATUS_PUSH_MAP` hoy es por `status` final; necesitará incluir contexto
+   de transición, o un check directo en `updateStatus`.
+4. Una vez el backend esté limpio, añadir 5ª RowAction a BookingsPage con
+   `id: 'reactivate'`, `isAvailable: b.status === 'CANCELLED'`. ~10 líneas.
+
+**Esfuerzo estimado**: 1-2 horas backend + ~10 líneas frontend. Incluye
+tests del flujo cancel → reactivate (limpieza de metadata, re-schedule
+de jobs, push enviado).
+
+**Prioridad**: baja por defecto. Subir a media cuando llegue cliente real
+que cancele por error y pida deshacerlo. Hasta entonces el cliente puede
+crear una reserva nueva — peor UX, pero el dato no se corrompe.
+
+**No bloquea**: ninguna fase del roadmap actual. Es feature limpia
+ausente, no feature rota expuesta al usuario (1.5b la oculta).
+
