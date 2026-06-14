@@ -1,21 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
   Calendar, Clock, Plus, Trash2,
   ChevronLeft, ChevronRight,
   User, Mail, Phone, FileText,
-  CheckCircle, XCircle, Loader2,
   AlertTriangle, Bell, MapPin,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
-  getBookings,
   getAvailableSlots,
-  updateBookingStatus,
-  deleteBooking,
   getAppSmtpConfig,
-  type BookingRecord,
 } from '../../lib/api';
 
 // --- Zod schemas ---
@@ -86,13 +82,6 @@ const DAY_HEADERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 function formatDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-
-// --- Status badge ---
-const statusConfig: Record<string, { label: string; cls: string }> = {
-  CONFIRMED: { label: 'Confirmada', cls: 'bg-green-50 text-green-700 border-green-200' },
-  CANCELLED: { label: 'Cancelada', cls: 'bg-red-50 text-red-600 border-red-200' },
-  COMPLETED: { label: 'Completada', cls: 'bg-primary/5 text-primary border-primary/20' },
-};
 
 // ========================
 // PreviewComponent
@@ -320,43 +309,10 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
 
   // Section toggles
   const [showConfig, setShowConfig] = useState(true);
-  const [showBookings, setShowBookings] = useState(true);
   const [showAvailability, setShowAvailability] = useState(false);
 
   // SMTP banner state
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
-
-  // Bookings state
-  const [bookings, setBookings] = useState<BookingRecord[]>([]);
-  const [bookingsLoading, setBookingsLoading] = useState(false);
-  const [filterDate, setFilterDate] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const refreshPreview = useCallback(() => {
-    onChange({ ...data, _refreshKey: (data._refreshKey ?? 0) + 1 });
-  }, [data, onChange]);
-
-  // Load bookings
-  const loadBookings = useCallback(async () => {
-    if (!data.appId || !token) return;
-    setBookingsLoading(true);
-    try {
-      const filters: { date?: string; status?: string } = {};
-      if (filterDate) filters.date = filterDate;
-      if (filterStatus) filters.status = filterStatus;
-      const result = await getBookings(data.appId, token, filters);
-      setBookings(result);
-    } catch {
-      setBookings([]);
-    } finally {
-      setBookingsLoading(false);
-    }
-  }, [data.appId, token, filterDate, filterStatus]);
-
-  useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
 
   // Check SMTP config to show warning banner
   useEffect(() => {
@@ -378,34 +334,6 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
       'Sin email obligatorio, tus clientes no recibirán confirmación ni recordatorios. ¿Continuar?',
     );
     if (ok) action();
-  };
-
-  const handleStatusChange = async (bookingId: string, status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED') => {
-    if (!data.appId || !token) return;
-    setActionLoading(bookingId);
-    try {
-      await updateBookingStatus(data.appId, bookingId, status, token);
-      await loadBookings();
-      refreshPreview();
-    } catch {
-      // silently fail
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDelete = async (bookingId: string) => {
-    if (!data.appId || !token) return;
-    setActionLoading(bookingId);
-    try {
-      await deleteBooking(data.appId, bookingId, token);
-      await loadBookings();
-      refreshPreview();
-    } catch {
-      // silently fail
-    } finally {
-      setActionLoading(null);
-    }
   };
 
   // Field editing
@@ -834,157 +762,17 @@ const SettingsPanel: React.FC<{ data: BookingConfig; onChange: (data: BookingCon
         )}
       </div>
 
-      {/* ─── Bookings List Section ─── */}
+      {/* Administrar reservas — página dedicada */}
       {data.appId && (
-        <div>
-          <div className={sectionHeaderCls} onClick={() => setShowBookings(!showBookings)}>
-            <h3 className={sectionTitleCls}>Reservas ({bookings.length})</h3>
-            <ChevronRight size={14} className={`text-gray-400 transition-transform ${showBookings ? 'rotate-90' : ''}`} />
-          </div>
-
-          {showBookings && (
-            <div className="space-y-3 mt-2">
-              {/* Filters */}
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="flex-1 px-2 py-1.5 border rounded text-xs"
-                  placeholder="Filtrar por fecha"
-                />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-2 py-1.5 border rounded text-xs"
-                >
-                  <option value="">Todos</option>
-                  <option value="CONFIRMED">Confirmadas</option>
-                  <option value="CANCELLED">Canceladas</option>
-                  <option value="COMPLETED">Completadas</option>
-                </select>
-              </div>
-
-              {/* Bookings list */}
-              {bookingsLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 size={20} className="animate-spin text-primary" />
-                </div>
-              ) : bookings.length === 0 ? (
-                <div className="text-center py-6">
-                  <Calendar size={24} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-xs text-gray-400">No hay reservas{filterDate || filterStatus ? ' con estos filtros' : ''}</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {bookings.map((booking) => {
-                    const sc = statusConfig[booking.status] ?? statusConfig.CONFIRMED;
-                    const isLoading = actionLoading === booking.id;
-                    const formEntries = Object.entries(booking.formData || {}).slice(0, 3);
-
-                    return (
-                      <div key={booking.id} className="border border-gray-200 rounded-lg p-3 bg-white space-y-2">
-                        {/* Header row */}
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {(booking as BookingRecord & { shortCode?: string }).shortCode && (
-                                <span className="text-[10px] font-mono font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded">
-                                  {(booking as BookingRecord & { shortCode?: string }).shortCode}
-                                </span>
-                              )}
-                              <Calendar size={12} className="text-gray-400" />
-                              <span className="text-xs font-semibold text-gray-800">
-                                {new Date(booking.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                              </span>
-                              <span className="text-xs text-gray-500">·</span>
-                              <Clock size={12} className="text-gray-400" />
-                              <span className="text-xs font-medium text-gray-700">{booking.timeSlot}</span>
-                            </div>
-                            <div className="flex items-center gap-1 mt-1">
-                              <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border ${sc.cls}`}>
-                                {sc.label}
-                              </span>
-                              {(booking as BookingRecord & { cancelledBy?: string }).cancelledBy === 'CUSTOMER' && (
-                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                  por cliente
-                                </span>
-                              )}
-                              {(booking as BookingRecord & { cancelledBy?: string }).cancelledBy === 'MERCHANT' && (
-                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-                                  por ti
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-[9px] text-gray-400">{booking.duration} min</span>
-                        </div>
-
-                        {/* Form data summary */}
-                        {formEntries.length > 0 && (
-                          <div className="text-[10px] text-gray-500 space-y-0.5 pl-1">
-                            {formEntries.map(([key, val]) => (
-                              <div key={key} className="truncate">
-                                <span className="font-medium text-gray-600">{key}:</span> {String(val)}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100">
-                          {isLoading ? (
-                            <Loader2 size={14} className="animate-spin text-gray-400" />
-                          ) : (
-                            <>
-                              {booking.status === 'CONFIRMED' && (
-                                <>
-                                  <button
-                                    onClick={() => handleStatusChange(booking.id, 'COMPLETED')}
-                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/5 rounded transition-colors"
-                                  >
-                                    <CheckCircle size={12} /> Completar
-                                  </button>
-                                  <button
-                                    onClick={() => handleStatusChange(booking.id, 'CANCELLED')}
-                                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-red-500 hover:bg-red-50 rounded transition-colors"
-                                  >
-                                    <XCircle size={12} /> Cancelar
-                                  </button>
-                                </>
-                              )}
-                              {booking.status === 'CANCELLED' && (
-                                <button
-                                  onClick={() => handleStatusChange(booking.id, 'CONFIRMED')}
-                                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-green-600 hover:bg-green-50 rounded transition-colors"
-                                >
-                                  <CheckCircle size={12} /> Reactivar
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleDelete(booking.id)}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors ml-auto"
-                              >
-                                <Trash2 size={12} /> Eliminar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {!data.appId && (
-        <div className="text-center py-4 border border-dashed border-gray-200 rounded-lg">
-          <Calendar size={20} className="mx-auto text-gray-300 mb-1.5" />
-          <p className="text-[11px] text-gray-400">Guarda la app para gestionar reservas</p>
-        </div>
+        <Link
+          to={`/apps/${data.appId}/bookings`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Calendar size={16} />
+            Administrar reservas
+          </span>
+        </Link>
       )}
     </div>
   );
