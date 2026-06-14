@@ -157,9 +157,21 @@ const BookingRow: FC<{
           <span className="ml-2 font-mono text-gray-400">{booking.shortCode}</span>
         </p>
       </div>
-      <span className={`px-2 py-1 rounded text-xs font-medium ${style.bg} ${style.text}`}>
-        {style.label}
-      </span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className={`px-2 py-1 rounded text-xs font-medium ${style.bg} ${style.text}`}>
+          {style.label}
+        </span>
+        {booking.status === 'CANCELLED' && booking.cancelledBy === 'CUSTOMER' && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+            por cliente
+          </span>
+        )}
+        {booking.status === 'CANCELLED' && booking.cancelledBy === 'MERCHANT' && (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+            por ti
+          </span>
+        )}
+      </div>
       {actions}
     </div>
   );
