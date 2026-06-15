@@ -1,22 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
-  Ticket, Plus, Pencil, Trash2, Save, X,
+  Ticket,
   ChevronDown, ChevronUp,
-  Clock, AlertTriangle, RefreshCw,
+  Clock,
   Lock, Link as LinkIcon, Loader2,
 } from 'lucide-react';
 import {
   getDiscountCoupons,
-  createDiscountCoupon,
-  updateDiscountCoupon,
-  deleteDiscountCoupon,
-  generateCouponCode,
   redeemCoupon,
-  getCouponRedemptions,
-  resetCouponRedemptions,
-  type CouponRedemptionItem,
   getCouponMerchantConfigStatus,
   setupCouponMerchantConfig,
 } from '../../lib/api';
@@ -283,151 +277,10 @@ const RuntimeComponent: React.FC<{ data: DiscountCouponConfig }> = ({ data: _dat
   </div>
 );
 
-// ===== COUPON LIST ITEM (with redemption) =====
-
-const CouponListItem: React.FC<{
-  coupon: DiscountCoupon;
-  data: DiscountCouponConfig;
-  token: string;
-  onToggleActive: (c: DiscountCoupon) => void;
-  onEdit: (c: DiscountCoupon) => void;
-  onDelete: (id: string) => void;
-  onRefresh: () => void;
-}> = ({ coupon, data, token, onToggleActive, onEdit, onDelete, onRefresh }) => {
-  const [redemptionsOpen, setRedemptionsOpen] = useState(false);
-  const [redemptions, setRedemptions] = useState<CouponRedemptionItem[]>([]);
-  const [loadingRedemptions, setLoadingRedemptions] = useState(false);
-  const [resetting, setResetting] = useState(false);
-
-  const status = getCouponStatus(coupon);
-  const st = STATUS_STYLES[status];
-
-  const loadRedemptions = async () => {
-    if (!data.appId) return;
-    setLoadingRedemptions(true);
-    try {
-      const r = await getCouponRedemptions(data.appId, coupon.id, token);
-      setRedemptions(r);
-    } catch { /* ignore */ }
-    setLoadingRedemptions(false);
-  };
-
-  const handleReset = async () => {
-    if (!data.appId || !confirm('¿Resetear todos los canjes de este cupón? Se pondrá el contador a 0.')) return;
-    setResetting(true);
-    try {
-      await resetCouponRedemptions(data.appId, coupon.id, token);
-      setRedemptions([]);
-      onRefresh();
-    } catch { /* ignore */ }
-    setResetting(false);
-  };
-
-  const toggleRedemptions = () => {
-    const next = !redemptionsOpen;
-    setRedemptionsOpen(next);
-    if (next && redemptions.length === 0) loadRedemptions();
-  };
-
-  return (
-    <div className="border rounded p-2 space-y-1">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-medium ${st.bg} ${st.text}`}>{st.label}</span>
-          <span className="text-[11px] font-semibold truncate">{coupon.title}</span>
-        </div>
-        <div className="flex gap-0.5">
-          <button onClick={() => onToggleActive(coupon)} className={`text-[9px] px-1.5 py-0.5 rounded ${coupon.isActive ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-600'}`}>
-            {coupon.isActive ? 'Desactivar' : 'Activar'}
-          </button>
-          <button onClick={() => onEdit(coupon)} className="text-amber-500 p-0.5"><Pencil size={10} /></button>
-          <button onClick={() => onDelete(coupon.id)} className="text-red-400 p-0.5"><Trash2 size={10} /></button>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 text-[10px]">
-        <span className="font-mono bg-gray-50 px-1.5 py-0.5 rounded border text-gray-700">{coupon.code}</span>
-        <span className="font-bold text-amber-600">{formatDiscount(coupon, data.currency || '€')}</span>
-        <span className="text-gray-400">
-          Canjeado {coupon.currentUses}{coupon.maxUses ? `/${coupon.maxUses}` : ''} veces
-        </span>
-      </div>
-
-      {/* Redemption section */}
-      <div className="pt-1">
-        <button
-          onClick={toggleRedemptions}
-          className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700"
-        >
-          {redemptionsOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-          Historial de canjes
-        </button>
-        {redemptionsOpen && (
-          <div className="mt-1 space-y-1">
-            {loadingRedemptions ? (
-              <p className="text-[10px] text-gray-400 text-center py-2">Cargando...</p>
-            ) : redemptions.length === 0 ? (
-              <p className="text-[10px] text-gray-400 text-center py-2">Sin canjes</p>
-            ) : (
-              <>
-                {redemptions.slice(0, 10).map(r => (
-                  <div key={r.id} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1 text-[10px]">
-                    <span className="text-gray-600">
-                      {r.appUser ? r.appUser.email : r.deviceId ? `Anónimo (${r.deviceId.slice(0, 8)}...)` : 'Anónimo'}
-                    </span>
-                    <span className="text-gray-400">{formatDate(r.redeemedAt)}</span>
-                  </div>
-                ))}
-                {redemptions.length > 10 && (
-                  <p className="text-[10px] text-gray-400 text-center">...y {redemptions.length - 10} más</p>
-                )}
-              </>
-            )}
-            {coupon.currentUses > 0 && (
-              <button
-                onClick={handleReset}
-                disabled={resetting}
-                className="text-[10px] text-red-500 hover:text-red-700 flex items-center gap-1 mt-1"
-              >
-                <RefreshCw size={10} className={resetting ? 'animate-spin' : ''} />
-                Resetear canjes
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ===== SETTINGS PANEL =====
 
-interface CouponForm {
-  title: string;
-  description: string;
-  code: string;
-  discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  discountValue: string;
-  imageUrl: string;
-  conditions: string;
-  maxUses: string;
-  validFrom: string;
-  validUntil: string;
-}
-
-const emptyCouponForm = (): CouponForm => ({
-  title: '', description: '', code: '', discountType: 'PERCENTAGE', discountValue: '',
-  imageUrl: '', conditions: '', maxUses: '', validFrom: '', validUntil: '',
-});
-
 const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: DiscountCouponConfig) => void }> = ({ data, onChange }) => {
-  const [coupons, setCoupons] = useState<DiscountCoupon[]>([]);
-  const [loading, setLoading] = useState(false);
   const token = useAuthStore((s) => s.token) ?? '';
-  const [error, setError] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<CouponForm>(emptyCouponForm());
-  const [generatingCode, setGeneratingCode] = useState(false);
 
   // === Merchant Config state ===
   const [merchantOpen, setMerchantOpen] = useState(true);
@@ -440,15 +293,6 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
   // === Display options state ===
   const [displayOpen, setDisplayOpen] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!data.appId || !token) return;
-    setLoading(true);
-    try {
-      setCoupons(await getDiscountCoupons(data.appId, token));
-    } catch { setError('Error al cargar cupones'); }
-    setLoading(false);
-  }, [data.appId, token]);
-
   const refreshMerchantStatus = useCallback(async () => {
     if (!data.appId || !token) return;
     try {
@@ -457,10 +301,7 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
     } catch { /* ignore */ }
   }, [data.appId, token]);
 
-  useEffect(() => { if (token) refresh(); }, [token, refresh]);
   useEffect(() => { if (token) refreshMerchantStatus(); }, [token, refreshMerchantStatus]);
-
-  const triggerRefresh = () => onChange({ ...data, _refreshKey: (data._refreshKey || 0) + 1 });
 
   // === PIN Save handler ===
   const handleSavePin = async () => {
@@ -496,90 +337,8 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
 
   const redeemPageUrl = data.appId ? `${window.location.origin}/redeem/${data.appId}` : '';
 
-  const handleGenCode = async () => {
-    if (!data.appId) return;
-    setGeneratingCode(true);
-    try {
-      const { code } = await generateCouponCode(data.appId, token);
-      setForm(prev => ({ ...prev, code }));
-    } catch { setError('Error al generar código'); }
-    setGeneratingCode(false);
-  };
-
-  const handleSave = async () => {
-    if (!form.title.trim() || !form.code.trim() || !form.discountValue || !data.appId) return;
-    try {
-      const payload = {
-        title: form.title.trim(),
-        description: form.description || undefined,
-        code: form.code.trim(),
-        discountType: form.discountType,
-        discountValue: parseFloat(form.discountValue),
-        imageUrl: form.imageUrl || undefined,
-        conditions: form.conditions || undefined,
-        maxUses: form.maxUses ? parseInt(form.maxUses) : undefined,
-        validFrom: form.validFrom || undefined,
-        validUntil: form.validUntil || undefined,
-      };
-      if (editingId) {
-        await updateDiscountCoupon(data.appId, editingId, payload, token);
-      } else {
-        await createDiscountCoupon(data.appId, payload as Parameters<typeof createDiscountCoupon>[1], token);
-      }
-      setForm(emptyCouponForm());
-      setEditingId(null);
-      setShowForm(false);
-      await refresh();
-      triggerRefresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar cupón');
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!data.appId) return;
-    try {
-      await deleteDiscountCoupon(data.appId, id, token);
-      await refresh();
-      triggerRefresh();
-    } catch { setError('Error al eliminar cupón'); }
-  };
-
-  const handleToggleActive = async (coupon: DiscountCoupon) => {
-    if (!data.appId) return;
-    try {
-      await updateDiscountCoupon(data.appId, coupon.id, { isActive: !coupon.isActive }, token);
-      await refresh();
-      triggerRefresh();
-    } catch { setError('Error al cambiar estado'); }
-  };
-
-  const startEdit = (c: DiscountCoupon) => {
-    setEditingId(c.id);
-    setForm({
-      title: c.title,
-      description: c.description || '',
-      code: c.code,
-      discountType: c.discountType,
-      discountValue: parseFloat(c.discountValue).toString(),
-      imageUrl: c.imageUrl || '',
-      conditions: c.conditions || '',
-      maxUses: c.maxUses?.toString() || '',
-      validFrom: c.validFrom ? c.validFrom.slice(0, 10) : '',
-      validUntil: c.validUntil ? c.validUntil.slice(0, 10) : '',
-    });
-    setShowForm(true);
-  };
-
   return (
     <div className="space-y-3 text-[11px]">
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded flex items-center gap-1">
-          <AlertTriangle size={12} /> {error}
-          <button onClick={() => setError('')} className="ml-auto"><X size={10} /></button>
-        </div>
-      )}
-
       {/* ============================================ */}
       {/* SECCIÓN 1: Configuración del negocio (PIN)    */}
       {/* ============================================ */}
@@ -735,133 +494,17 @@ const SettingsPanel: React.FC<{ data: DiscountCouponConfig; onChange: (d: Discou
         )}
       </div>
 
-      {/* ============================================ */}
-      {/* SECCIÓN 3: Gestión de cupones (existente)    */}
-      {/* ============================================ */}
-      {data.appId ? (
-        <>
-          <div className="border-t pt-2 flex items-center justify-between">
-            <span className="font-bold text-gray-700">Gestión de Cupones</span>
-            {loading && <span className="text-[10px] text-gray-400">Cargando...</span>}
-          </div>
-
-          {/* Form */}
-          {showForm ? (
-            <div className="space-y-2 bg-gray-50 p-2 rounded border">
-              <input
-                type="text" placeholder="Título del cupón *" value={form.title}
-                onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full text-xs border rounded px-2 py-1"
-              />
-              <input
-                type="text" placeholder="Descripción" value={form.description}
-                onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full text-xs border rounded px-2 py-1"
-              />
-              <div className="flex gap-1 items-end">
-                <div className="flex-1">
-                  <label className="text-[10px] text-gray-500">Código *</label>
-                  <input
-                    type="text" value={form.code}
-                    onChange={e => setForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                    className="w-full text-xs border rounded px-2 py-1 font-mono"
-                  />
-                </div>
-                <button
-                  onClick={handleGenCode}
-                  disabled={generatingCode}
-                  className="flex items-center gap-1 text-[10px] text-amber-600 hover:text-amber-700 px-2 py-1 border rounded"
-                >
-                  <RefreshCw size={10} className={generatingCode ? 'animate-spin' : ''} /> Generar
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <div>
-                  <label className="text-[10px] text-gray-500">Tipo</label>
-                  <select
-                    value={form.discountType}
-                    onChange={e => setForm(prev => ({ ...prev, discountType: e.target.value as 'PERCENTAGE' | 'FIXED_AMOUNT' }))}
-                    className="w-full text-xs border rounded px-2 py-1"
-                  >
-                    <option value="PERCENTAGE">Porcentaje (%)</option>
-                    <option value="FIXED_AMOUNT">Monto fijo ({data.currency || '€'})</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500">Valor *</label>
-                  <input
-                    type="number" step="0.01" min="0" value={form.discountValue}
-                    onChange={e => setForm(prev => ({ ...prev, discountValue: e.target.value }))}
-                    className="w-20 text-xs border rounded px-2 py-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500">Máx. usos</label>
-                  <input
-                    type="number" min="0" value={form.maxUses} placeholder="∞"
-                    onChange={e => setForm(prev => ({ ...prev, maxUses: e.target.value }))}
-                    className="w-16 text-xs border rounded px-2 py-1"
-                  />
-                </div>
-              </div>
-              <input
-                type="text" placeholder="Condiciones (opcional)" value={form.conditions}
-                onChange={e => setForm(prev => ({ ...prev, conditions: e.target.value }))}
-                className="w-full text-xs border rounded px-2 py-1"
-              />
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="text-[10px] text-gray-500">Válido desde</label>
-                  <input type="date" value={form.validFrom} onChange={e => setForm(prev => ({ ...prev, validFrom: e.target.value }))} className="w-full text-xs border rounded px-2 py-1" />
-                </div>
-                <div className="flex-1">
-                  <label className="text-[10px] text-gray-500">Válido hasta</label>
-                  <input type="date" value={form.validUntil} onChange={e => setForm(prev => ({ ...prev, validUntil: e.target.value }))} className="w-full text-xs border rounded px-2 py-1" />
-                </div>
-              </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={handleSave}
-                  disabled={!form.title.trim() || !form.code.trim() || !form.discountValue}
-                  className="flex items-center gap-1 bg-emerald-600 text-white text-[10px] px-2 py-1 rounded hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  <Save size={10} /> {editingId ? 'Guardar' : 'Crear cupón'}
-                </button>
-                <button
-                  onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyCouponForm()); }}
-                  className="flex items-center gap-1 text-gray-500 text-[10px] px-2 py-1 rounded hover:bg-gray-100"
-                >
-                  <X size={10} /> Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyCouponForm()); }}
-              className="flex items-center gap-1 bg-amber-600 text-white text-[10px] px-2 py-1 rounded hover:bg-amber-700 w-full justify-center"
-            >
-              <Plus size={10} /> Nuevo cupón
-            </button>
-          )}
-
-          {/* Coupon list */}
-          {coupons.map(coupon => (
-            <CouponListItem
-              key={coupon.id}
-              coupon={coupon}
-              data={data}
-              token={token}
-              onToggleActive={handleToggleActive}
-              onEdit={startEdit}
-              onDelete={handleDelete}
-              onRefresh={() => { refresh(); triggerRefresh(); }}
-            />
-          ))}
-        </>
-      ) : (
-        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-[10px] p-2 rounded">
-          Guarda la app primero para gestionar cupones.
-        </div>
+      {/* Administrar cupones — página dedicada */}
+      {data.appId && (
+        <Link
+          to={`/apps/${data.appId}/coupons`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Ticket size={16} />
+            Administrar cupones
+          </span>
+        </Link>
       )}
     </div>
   );
