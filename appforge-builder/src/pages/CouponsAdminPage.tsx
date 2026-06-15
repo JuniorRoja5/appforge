@@ -237,6 +237,7 @@ const CouponForm: FC<{
           type="text"
           value={form.description}
           onChange={(e) => update('description', e.target.value)}
+          placeholder="Ej: Muestra este código en caja para canjear tu descuento"
           className="w-full text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
         />
       </div>
