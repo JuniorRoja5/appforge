@@ -2372,3 +2372,83 @@ posteriores. Buen candidato para "calm window" entre fases.
 
 **No bloquea**: ninguna fase. Es higiene a11y en una pieza compartida.
 
+### #66 — `RowAction.onClick` debería aceptar `void | Promise<void>`
+
+**Estado**: OPEN
+**Origen**: Fix `6ee3160` (Fase 2.1), 2026-06-15. El build de
+Fase 2.1 falló con `tsc -b` porque `RowAction.onClick` de la acción
+'edit' en `CouponsAdminPage` era síncrono (solo abre el FormModal con
+`openEdit(c)`, sin `await`). El fix fue marcar la función como
+`async (c) => { openEdit(c); }` — la promesa resuelve de inmediato,
+satisface el contrato sin cambiar comportamiento, pero queda un
+`async` aparente sin `await` que confunde al lector.
+
+**Problema de contrato**:
+`appforge-builder/src/components/admin/types.ts:25` declara
+`onClick: (item: T) => Promise<void>;`. Esto fuerza a todas las
+acciones a ser async, incluso las **legítimamente síncronas**:
+
+- "Editar X" → abre un modal o navega. No hay I/O.
+- "Ver detalles" → expande un acordeón o cambia state local.
+- "Copiar al portapapeles" → llamada síncrona a Clipboard API (o
+  async pero el caller no necesita esperarla).
+
+Hoy todas se ven obligadas a marcarse `async` y devolver
+`Promise<void>` por contrato, no por necesidad.
+
+**Patrón correcto ya aplicado en otra pieza Fase 0**:
+`FormModal.onSave` (commit `53d0a82`) usa `() => void | Promise<void>`
+por exactamente esta razón — el caller decide si necesita ser async
+en función de qué hace en el handler, no por imposición del tipo.
+
+**Fix** (cambio de una palabra en `types.ts`):
+
+```ts
+// antes
+onClick: (item: T) => Promise<void>;
+
+// después
+onClick: (item: T) => void | Promise<void>;
+```
+
+`WorkflowInbox` consume `onClick` en `runAction` con
+`await action.onClick(item)` ([WorkflowInbox.tsx:88](appforge-builder/src/components/admin/WorkflowInbox.tsx#L88)).
+`await` sobre un valor síncrono (`void`) es válido y se comporta
+correctamente — no rompe el callsite.
+
+Tras el fix, el `async` aparente del 'edit' de CouponsAdminPage
+(`6ee3160`) puede revertirse a su forma natural:
+
+```ts
+// antes (con #66 cerrado, vuelve a esto):
+onClick: (c) => openEdit(c),
+```
+
+**Por qué no se arregla en Fase 2.1**: tocar `types.ts` es cambiar
+contrato de una pieza Fase 0 compartida por **todos los
+consumidores de RowAction**: WorkflowInbox, BookingsPage, OrdersAdminPage,
+ContactInboxPage, SocialWallModerationPage, FanWallModerationPage,
+CouponsAdminPage. El cambio es ampliar tipo (`Promise<void>` →
+`void | Promise<void>`), compatible hacia atrás — código existente que
+devuelve `Promise<void>` sigue cuadrando. Pero re-verificar los seis
+consumidores y correr `npm run build` para cada uno es trabajo
+de su propio gate, no un cuelgue del commit de Coupons.
+
+**Cross-refs**:
+- Síntoma vivo en commit `6ee3160` (CouponsAdminPage.tsx:185+, el
+  `async` aparente con su comentario apuntando aquí).
+- Patrón correcto en `FormModal.onSave` desde `53d0a82`.
+- Tema relacionado de higiene de tipos Fase 0: ver [[#65]] (aria-id
+  fijo en ConfirmDialog). Los dos son buenos candidatos para una
+  "calm window" entre fases que limpie Fase 0.
+
+**Esfuerzo**: 30 minutos. Edición de una palabra en `types.ts` +
+`npm run build` para verificar los seis consumidores + revertir el
+`async` aparente de CouponsAdminPage.
+
+**Prioridad**: baja. Hoy no rompe nada (`async` aparente funciona
+correctamente). Subir a media cuando dos o más páginas más necesiten
+RowActions síncronas y la deuda visual se acumule.
+
+**No bloquea**: ninguna fase. Es higiene de contrato en pieza Fase 0.
+
