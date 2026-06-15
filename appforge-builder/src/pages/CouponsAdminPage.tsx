@@ -182,7 +182,12 @@ const buildRowActions = (
     label: 'Editar cupón',
     icon: <Pencil size={16} />,
     variant: 'primary',
-    onClick: (c) => openEdit(c),
+    // RowAction.onClick está tipado como (item: T) => Promise<void>. Abrir
+    // un modal es síncrono y devuelve void, así que se marca async para
+    // satisfacer el contrato sin cambiar comportamiento. Patrón cubierto
+    // como deuda futura: RowAction.onClick debería aceptar
+    // void | Promise<void> (mismo enfoque que FormModal.onSave).
+    onClick: async (c) => { openEdit(c); },
   },
   {
     id: 'delete',
