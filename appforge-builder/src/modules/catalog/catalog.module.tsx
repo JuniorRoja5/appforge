@@ -643,7 +643,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const handleAddProduct = async (colId: string) => {
     if (!productForm.name.trim() || !productForm.price || !data.appId) return;
     if (productForm.comparePrice && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      alert('El precio anterior debe ser mayor al precio actual');
+      setError('El precio anterior debe ser mayor al precio actual');
       return;
     }
     try {
@@ -664,7 +664,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const handleUpdateProduct = async (colId: string, productId: string) => {
     if (!data.appId) return;
     if (productForm.comparePrice && productForm.price && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      alert('El precio anterior debe ser mayor al precio actual');
+      setError('El precio anterior debe ser mayor al precio actual');
       return;
     }
     try {
