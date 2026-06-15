@@ -2267,3 +2267,108 @@ crear una reserva nueva — peor UX, pero el dato no se corrompe.
 **No bloquea**: ninguna fase del roadmap actual. Es feature limpia
 ausente, no feature rota expuesta al usuario (1.5b la oculta).
 
+### #64 — Currency hardcoded `€` en CouponsAdminPage
+
+**Estado**: OPEN
+**Origen**: Fase 2.1 commit 3 (CouponsAdminPage), 2026-06-15.
+
+**Descripción**: el módulo `discount_coupon` expone una sección "Opciones
+de visualización" con selector de 30+ monedas (`data.currency`). El
+runtime y el `PreviewComponent` respetan esa configuración. Pero
+`CouponsAdminPage` ignora el config del módulo y muestra todos los
+descuentos formateados con `€` hardcoded
+(`formatDiscount(coupon, '€')`).
+
+**Síntoma**: cliente que configura su módulo en USD/MXN/GBP verá los
+descuentos formateados correctamente en su app (runtime + preview), pero
+inconsistentemente con `€` en el panel de administración de cupones del
+builder.
+
+**Mitigación parcial ya hecha**: `formatDiscount` en
+`appforge-builder/src/lib/coupon-helpers.ts` ya acepta el parámetro
+`currency` (con default `€`). El fix futuro solo necesita pasar la
+currency real en vez del default — no hay que tocar la firma del helper.
+
+**Por qué se aceptó así en v1**: leer la currency configurada requiere
+una de tres rutas posibles: (a) endpoint backend nuevo de stats que
+incluya currency (no existe hoy); (b) la página fetcha el schema completo
+de la app via `getApp` y busca el config del módulo `discount_coupon`
+(acoplamiento desde la página al schema del builder); (c) backend
+devuelve currency en cada `DiscountCoupon` (cambio de contrato del
+endpoint). Las tres son scope ajeno a Fase 2.1.
+
+**Una opción de fix** (no decidida — cuando llegue el momento, se mide y
+se decide entre las tres rutas, no se hereda este comentario): (a)
+endpoint nuevo `GET /apps/:appId/coupons/stats` que devuelva `{ currency,
+totalCoupons, activeCoupons, totalRedemptions }`, y la página pasa
+`currency` a `formatDiscount`. Aprovecharía para mostrar stats cards
+arriba de la página (hoy descartadas por el mismo motivo: no hay
+endpoint).
+
+**Patrón ya documentado en otra superficie**: ver [[#60]] — currency
+hardcoded `€` en cuerpo de emails de orders. Es la misma deuda
+conceptual aplicada a otro consumidor; el fix global debería resolver
+ambos casos cuando se aborde.
+
+**Esfuerzo estimado**: ~1h por la ruta (a) (endpoint backend + fetch en
+página + paso a `formatDiscount`).
+
+**Prioridad**: baja hoy (1 cliente, currency `€`, sin impacto visible).
+Subir a media cuando aparezca cliente con currency ≠ `€`.
+
+**No bloquea**: ninguna fase del roadmap actual.
+
+### #65 — `ConfirmDialog` usa `aria-labelledby` con ID string fijo (HTML potencialmente inválido)
+
+**Estado**: OPEN
+**Origen**: Detectado durante la verificación de `useConfirm` con
+múltiples instancias en Fase 2.1 commit 3 (CouponsAdminPage),
+2026-06-15.
+
+**Descripción**: `appforge-builder/src/components/admin/ConfirmDialog.tsx`
+([L50](appforge-builder/src/components/admin/ConfirmDialog.tsx#L50))
+declara `aria-labelledby="confirm-dialog-title"` con un string literal
+fijo, y el `<h2>` del título usa `id="confirm-dialog-title"`. Si dos
+`ConfirmDialog` estuvieran abiertos simultáneamente, habría dos elementos
+DOM con el mismo `id`, lo cual es HTML inválido y rompe screen readers
+(no sabe a qué título asociar el dialog activo).
+
+**Hoy no rompe nada**: el overlay modal de `ConfirmDialog`
+(`fixed inset-0 z-50 bg-black/40`) cubre toda la pantalla y bloquea
+clicks fuera del dialog activo. Físicamente es imposible que el usuario
+inicie un segundo confirm mientras el primero está abierto — el botón
+que dispararía el segundo no es clickeable. Por eso `useConfirm` con
+N instancias en `CouponsAdminPage` (una por `CouponRow` + una en
+`WorkflowInbox`) funciona sin colisión real.
+
+**Por qué registrarla aun así**: es defensa preventiva. Si en el futuro
+se introduce un patrón que rompa la invariante "un confirm activo a la
+vez" — por ejemplo, un drawer no-modal con un confirm dentro mientras
+otro confirm modal está abierto — la colisión de IDs sale a la luz como
+bug de a11y silencioso. Y el coste de arreglarlo ahora es trivial.
+
+**Patrón correcto ya aplicado en otra pieza Fase 0**:
+`FormModal.tsx` (commit `53d0a82`, Fase 2.1) usa `useId()` de React 18
+para el `aria-labelledby` por exactamente esta razón. La misma técnica
+aplica a `ConfirmDialog.tsx`.
+
+**Fix** (~5 líneas):
+
+```tsx
+// dentro de useConfirm o de ConfirmDialog
+const titleId = useId();
+...
+<div role="dialog" aria-modal="true" aria-labelledby={titleId}>
+  <h2 id={titleId}>{config.title}</h2>
+  ...
+</div>
+```
+
+**Esfuerzo**: 15 minutos (edición + tsc + smoke del confirm en cualquier
+página que lo use).
+
+**Prioridad**: baja. Patrón de Fase 0, no bloqueante para Fase 2 o
+posteriores. Buen candidato para "calm window" entre fases.
+
+**No bloquea**: ninguna fase. Es higiene a11y en una pieza compartida.
+
