@@ -2559,9 +2559,63 @@ No es vulnerabilidad — es warning EBADENGINE. Subir node VPS a v22 LTS
 o pinear `file-type` a versión que soporta node 20. Fuera del alcance
 de esta ventana de seguridad.
 
-**Cierre**: tras deploy Fase C en VPS y smoke FCM dryRun verde
-(`messaging.send({...}, /* dryRun */ true)` contra topic real, sin
-entregar push), marcar como RESUELTO con commit/PR de cierre.
+**Cierre Fase C (2026-06-16)**:
+
+Validación en VPS tras `git pull` + `npm ci` en los 4 proyectos:
+
+1. **Lock contract respetado** — `npm ci` reproduce exactamente las
+   versiones medidas en seco. Audit por proyecto coincide con la rama:
+   - backend: 1 low (= [[#68]])
+   - builder: 3 low (= [[#68]] + [[#70]])
+   - admin: 0 vulnerabilities
+   - runtime: 5 (4 high build-tools = [[#69]] + 1 low [[#68]])
+
+2. **Builds frontends verdes y nginx sirviendo los hashes nuevos**:
+   - builder `index-DKzGONKM.js` (vite@8.0.16) — servido en
+     `https://app.creatu.app/` confirmado por curl
+   - admin `index-Ds_tXISc.js` — servido en `https://admin.creatu.app/`
+     confirmado por curl
+
+3. **Backend arranque limpio tras `pm2 reload appforge-api`**:
+   `Nest application successfully started +138ms` con RouterExplorer
+   mapeando todas las rutas (incluidas las nuevas de Fase 2.3
+   loyalty). **Cero stack trace de protobufjs/grpc/node-forge** —
+   confirma que el path de carga del cluster firebase resuelto por
+   newest-in-range (tras la poda de los pins de T1) funciona en
+   producción real. Este es el primer árbitro de la poda: el arranque
+   no rompe.
+
+4. **Smoke FCM dry-run real DIFERIDO condicional** (no saltado):
+   `fcm.service.ts` lee credenciales de `PlatformFcmConfig` en la DB,
+   no de `.env`. En este entorno de producción la tabla está vacía —
+   FCM no está activado todavía (sin proyecto Firebase configurado).
+   Consecuencia: no hay forma de ejecutar `messaging().send(msg,
+   dryRun=true)` contra Google con creds reales desde aquí. Tampoco
+   hay usuarios end-user recibiendo push hoy que pudieran romperse
+   por la poda.
+
+   La validación de la cascada de carga (protobufjs/grpc/node-forge
+   instancian y `messaging()` se accede) ya pasó en seco en local
+   antes de cada commit (smoke FCM offline en T1, T2 y poda). La
+   pieza que falta —que el `send()` con dryRun serialice y mande
+   contra Google con red real— **queda como gate pendiente para
+   cuando se configure Firebase en producción**, no como saltado.
+
+   **TODO de cierre real**: cuando se cree el proyecto Firebase y
+   se inserte el primer registro en `PlatformFcmConfig` desde el
+   admin, ejecutar el dryRun reusando la inicialización de
+   `fcm.service.ts` (reusar la instancia ya inicializada, no
+   replicar la auth manualmente). Si pasa, marcar la ventana como
+   100% cerrada. Si falla, revertir poda backend (`git revert
+   f13a784`) y re-pinear `protobufjs`/`@grpc/grpc-js`/`node-forge`
+   como T1.
+
+5. **Bake real de una PWA**: pendiente como última verificación
+   (superficie irreversible runtime). A ejecutar después de este doc.
+
+**Estado de la ventana #67**: cerrada en rama, desplegada y verificada
+en VPS al máximo posible dado el entorno. El dryRun real es un asterisco
+honesto, no un falso verde — registrado aquí explícitamente.
 
 ### #68 — `@babel/core <=7.29.0` Arbitrary File Read vía sourceMappingURL — sin fix upstream
 
