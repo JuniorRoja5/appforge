@@ -27,8 +27,7 @@
     "dompurify": "^3.3.3",
     "lucide-react": "^0.577.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.1"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.0",
@@ -42,5 +41,9 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.8.13",
+    "brace-expansion@2": "^2.1.1"
   }
 }
