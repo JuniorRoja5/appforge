@@ -2608,3 +2608,80 @@ sin breaking changes esperados dentro de 7.x.
 **Conexión con [[#67]]**: residual aceptado al cierre de la auditoría
 backend. Mismo gap reaparecerá al cerrar T1 en builder y runtime.
 
+### #69 — Runtime build-tools chain: vite 6→8, @capacitor/cli major, tar+esbuild transitivos
+
+**Estado**: OPEN, MEDIUM-LOW PRIORITY (supply-chain, no end-user)
+**Origen**: residual tras T2-runtime en rama `chore/security-audit`,
+2026-06-16. Limpiar el cluster de build-tools del runtime exige 2 majors
+sobre el bundler y el CLI de Capacitor — fuera del alcance de la
+ventana de [[#67]].
+
+**Paquetes afectados** (4 high en runtime, todos build-time):
+- `vite` (DIRECT ^6.3.5) — actualmente 6.4.1 resuelto. La vuln viene
+  vía `esbuild` (`0.17.0 - 0.28.0` rango). `vite@6.4.3` sigue declarando
+  `esbuild ^0.25.0` (no satisface fix `>=0.28.1`). `vite@7.3.1`
+  declara `esbuild ^0.27.0` (tampoco). `vite@8.0.16` ya **no usa
+  esbuild como dep** (migró a `rolldown 1.0.3` + `lightningcss`).
+- `esbuild` (trans via vite) — fix in `>=0.28.1`, no alcanzable sin
+  bumpear vite a 8.x.
+- `@capacitor/cli` (devDep ^6.2.0) — 6.x no tiene patch (6.2.1 es
+  última 6.x). Fix de `tar` requiere `@capacitor/cli@7+`.
+- `tar` (trans via @capacitor/cli) — 7 advisories (hardlink path
+  traversal, symlink poisoning, race condition macOS APFS, file
+  smuggling). Solo se cierra bumpeando @capacitor/cli a major.
+
+**Por qué se difiere** (no es residual upstream — hay fix, pero requiere
+2 majors sobre superficie sensible):
+1. **Runtime se hornea por-PWA** (línea irreversible del deploy según
+   memoria [[runtime-horneado-por-pwa]]). vite 6→8 cambia el bundler
+   completo — output del JS final puede diferir en chunking, tree-
+   shaking, code-split → cada PWA del cliente re-horneable con bundle
+   distinto. Necesita validación de bake completa antes y después.
+2. **`@capacitor/cli` 6→7** afecta `npx cap sync` para Android/iOS,
+   `capacitor.config.ts` puede cambiar de schema, plugins existentes
+   (`@capacitor/android@6`, `@capacitor/ios@6`, etc) podrían no ser
+   compatibles con cli@7 — exige bumpear toda la familia Capacitor a 7.
+
+**Por qué no bloquea producción**:
+- `esbuild` + `vite` + `tar` + `@capacitor/cli` son **build-tools**:
+  corren en la máquina de build (laptop dev / CI runner), NO se
+  hornean en el JS del usuario final ni se ejecutan en el dispositivo
+  móvil. Modelo de amenaza: supply-chain (atacante con acceso al
+  entorno de build), no end-user.
+- Los advisories de `tar` requieren un atacante con control sobre
+  archivos `.tar` que el build descomprima — vector teórico en CI
+  con artefactos no-confiables, no en build interno del equipo.
+- `vite`/`esbuild` advisories afectan al dev server (path traversal
+  optimized deps, WebSocket file read) o al modo de build con
+  argumentos atacante-controlados — no aplican al uso normal
+  `vite build` con código del equipo.
+
+**Acción**: estudio individual fuera de esta ventana. Cuando se
+aborde:
+1. Bumpear `vite ^6.3.5 → ^8.0.16` (2 majors). Validar:
+   - `npm run build` verde
+   - `npm run build:pwa` verde (modo crítico — se hornea por cliente)
+   - Diff del bundle final (`dist/assets/index-*.js`) vs estado actual:
+     verificar que no haya nuevos imports/excluds del tree-shake.
+   - Smoke en browser real de la PWA generada — flujos críticos del
+     end-user (carga inicial, navegación entre módulos, FCM).
+2. Bumpear `@capacitor/cli ^6.2.0 → ^7.x` junto a familia completa:
+   `@capacitor/android`, `@capacitor/ios`, `@capacitor/core`, todos
+   los plugins de la familia 6.x. Validar `cap sync` + build nativo.
+
+**Esfuerzo estimado**: 4-8 horas (vite major bump + verificación bundle
++ Capacitor family major + sync nativo). NO se hace en una tanda
+"rápida"; merece su sprint propio con plan de rollback.
+
+**Prioridad**: media-baja. Build-tools supply-chain, no end-user.
+Pero sí relevante para higiene general de deps + el ahorro de
+peso del bundle PWA al pasar a rolldown.
+
+**No bloquea**: nada del roadmap actual. Sí bloquea cierre limpio
+total de [[#67]] (runtime queda con 4 high diferidos a esta entrada).
+
+**Conexión con [[#67]]**: residual técnico aceptado al cierre de la
+auditoría runtime, separado de [[#68]] porque aquí SÍ existe fix
+upstream (vite 8 / Capacitor 7) — el bloqueador es coste de
+verificación + perímetro de cambio, no ausencia de parche.
+
