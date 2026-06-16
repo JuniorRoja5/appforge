@@ -108,5 +108,19 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "overrides": {
+    "protobufjs": "^7.6.4",
+    "@grpc/grpc-js": "^1.14.4",
+    "node-forge": "^1.4.0",
+    "fast-uri": "^3.1.2",
+    "form-data": "^4.0.6",
+    "@tootallnate/once": "^2.0.1",
+    "qs": "^6.15.2",
+    "handlebars": "^4.7.9",
+    "js-yaml": "^4.2.0",
+    "lodash": "^4.17.24",
+    "ajv": "^8.20.0",
+    "picomatch": "^4.0.4"
   }
 }
