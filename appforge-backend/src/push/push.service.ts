@@ -102,12 +102,14 @@ export class PushService {
 
   // --- Protected endpoints (builder client) ---
 
-  async getDeviceCount(appId: string): Promise<{ count: number }> {
+  async getDeviceCount(appId: string, tenantId: string): Promise<{ count: number }> {
+    await this.ensureAppOwnership(appId, tenantId);
     const count = await this.prisma.pushDevice.count({ where: { appId } });
     return { count };
   }
 
-  async findAll(appId: string) {
+  async findAll(appId: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
     return this.prisma.pushNotification.findMany({
       where: { appId },
       orderBy: { createdAt: 'desc' },
@@ -115,7 +117,8 @@ export class PushService {
     });
   }
 
-  async findOne(appId: string, id: string) {
+  async findOne(appId: string, id: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
     const notification = await this.prisma.pushNotification.findFirst({
       where: { id, appId },
     });
@@ -179,7 +182,8 @@ export class PushService {
     }
   }
 
-  async getStats(appId: string) {
+  async getStats(appId: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
     const [deviceCount, notificationsSent, lastNotification] =
       await Promise.all([
         this.prisma.pushDevice.count({ where: { appId } }),

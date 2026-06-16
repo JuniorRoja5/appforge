@@ -2896,4 +2896,77 @@ builder. Distinto de [[#68]] (donde no hay fix upstream) y [[#69]]
 (donde el fix existe pero requiere majors) — aquí el upstream sí
 publicó algo, pero ese "algo" es un downgrade que rechazamos.
 
+### #71 — Multi-tenant isolation gap: reads de `/apps/:appId/push` no verificaban ownership — FIXED IN PLACE
+
+**Estado**: RESUELTO en el mismo commit del hallazgo (Fase 3 M1,
+2026-06-16). Found-and-fixed simultáneo, no es deuda diferida — se
+registra aquí para trazabilidad del incidente.
+
+**Origen**: detectado al abrir Fase 3 (Push history admin page) y
+auditar los endpoints que la página iba a consumir. SQL count del
+estado en prod: `push: 4 notifications · 1 app` — gap minúsculo en
+volumen actual, pero exposición real de datos cross-tenant.
+
+**Vulnerabilidad**:
+Los 4 reads protegidos del módulo push (`GET /apps/:appId/push`,
+`GET /apps/:appId/push/:id`, `GET /apps/:appId/push/stats`,
+`GET /apps/:appId/push/devices/count`) filtraban solo por `appId`
+sin verificar que el `appId` pertenecía al tenant del JWT
+autenticado. `RolesGuard` solo valida que el rol sea `SUPER_ADMIN`
+o `CLIENT` — no comprueba ownership por tenant.
+
+Resultado: un cliente con JWT válido (rol `CLIENT`, tenant A)
+podía hacer `GET /apps/{appId-de-tenant-B}/push` y obtener las
+notificaciones del tenant B con HTTP 200. Mismo patrón en los
+otros 3 endpoints.
+
+**Asimetría con el resto del backend**: `sendNotification` (POST
+`/apps/:appId/push/send`) **ya hacía** `ensureAppOwnership(appId,
+tenantId)` correctamente desde la implementación original del
+módulo push. Y todos los módulos modernos (`loyalty.service`,
+`coupons.service`, etc.) aplican el mismo patrón canónico. El gap
+era específico de los reads de push, que se quedaron atrás del
+patrón.
+
+**Fix aplicado**:
+- `push.service.ts`: los 4 reads (`getDeviceCount`, `findAll`,
+  `findOne`, `getStats`) reciben `tenantId: string` como último
+  parámetro y llaman `await this.ensureAppOwnership(appId, tenantId)`
+  como primera línea, reusando el helper privado L22-30 que ya
+  existía.
+- `push.controller.ts`: los 4 handlers correspondientes inyectan
+  `@Request() req: any` y pasan `req.user.tenantId` al service.
+  Decoradores `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles(...)`
+  intactos — el `tenantId` sale del token server-side, transparente
+  para el caller.
+
+**Frontend**: cero cambios. `lib/api.ts` ya mandaba el JWT en
+esas llamadas (líneas 1437/1465/1478); `tenantId` se extrae del
+token en el server.
+
+**Nota sobre roles**: el `ensureAppOwnership` se aplica
+simétricamente a `SUPER_ADMIN` y `CLIENT`, igual que en
+`loyalty.service` y el propio `sendNotification`. Si el panel
+super-admin necesitara en el futuro leer cross-tenant para fines de
+soporte/auditoría, eso es decisión de diseño separada y preexistente
+(afectaría a loyalty, coupons, news, push send y otros endpoints por
+igual), no algo que abra este fix. En la práctica el panel
+super-admin no consume estos endpoints por-app: los llama el builder
+como CLIENT.
+
+**Smoke validación (post-deploy en VPS)**:
+1. Token CLIENT del tenant dueño → `GET /apps/{suApp}/push` → debe
+   seguir dando 200. `/push/stats` también 200.
+2. Mismo token → `GET /apps/{appDeOtroTenant}/push` → debe dar 403
+   (vía `ForbiddenException` de `ensureAppOwnership`). Antes daba
+   200 con datos ajenos. **Este es el árbitro del fix.**
+3. curl real contra `api.creatu.app`, no localhost.
+
+**No bloquea**: nada.
+
+**Conexión con [[#67]]**: ninguna directa. Auditoría independiente
+encontrada al abrir Fase 3 — el patrón aplicado (`ensureAppOwnership`
+como primera línea de toda lectura protegida) es el mismo que ya
+seguían los módulos posteriores a la unificación del backend.
+
 

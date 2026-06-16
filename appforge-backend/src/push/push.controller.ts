@@ -66,29 +66,33 @@ export class PushController {
   @Get('devices/count')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
-  getDeviceCount(@Param('appId') appId: string) {
-    return this.pushService.getDeviceCount(appId);
+  getDeviceCount(@Param('appId') appId: string, @Request() req: any) {
+    return this.pushService.getDeviceCount(appId, req.user.tenantId);
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
-  findAll(@Param('appId') appId: string) {
-    return this.pushService.findAll(appId);
+  findAll(@Param('appId') appId: string, @Request() req: any) {
+    return this.pushService.findAll(appId, req.user.tenantId);
   }
 
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
-  getStats(@Param('appId') appId: string) {
-    return this.pushService.getStats(appId);
+  getStats(@Param('appId') appId: string, @Request() req: any) {
+    return this.pushService.getStats(appId, req.user.tenantId);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPER_ADMIN, Role.CLIENT)
-  findOne(@Param('appId') appId: string, @Param('id') id: string) {
-    return this.pushService.findOne(appId, id);
+  findOne(
+    @Param('appId') appId: string,
+    @Param('id') id: string,
+    @Request() req: any,
+  ) {
+    return this.pushService.findOne(appId, id, req.user.tenantId);
   }
 
   @Post('send')
