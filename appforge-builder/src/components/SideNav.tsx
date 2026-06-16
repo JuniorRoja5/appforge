@@ -128,6 +128,17 @@ const getAppNavData = (appId: string): AppNavDataItem[] => [
     ),
   },
   {
+    to: `/apps/${appId}/loyalty`,
+    label: 'Lealtad',
+    moduleId: 'loyalty_card',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" x2="22" y1="10" y2="10" />
+      </svg>
+    ),
+  },
+  {
     to: `/apps/${appId}/contact`,
     label: 'Mensajes',
     moduleId: 'contact',
