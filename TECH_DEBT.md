@@ -2685,3 +2685,129 @@ auditoría runtime, separado de [[#68]] porque aquí SÍ existe fix
 upstream (vite 8 / Capacitor 7) — el bloqueador es coste de
 verificación + perímetro de cambio, no ausencia de parche.
 
+### #70 — `quill@2.0.3` + `react-quill-new@3.8.3` XSS al exportar HTML — mitigado en la superficie end-user
+
+**Estado**: OPEN, LOW PRIORITY (residual aceptado con mitigación
+verificada + TODO concreto de defense-in-depth)
+**Origen**: residual tras cierre de auditoría builder en rama
+`chore/security-audit`, 2026-06-16. Investigado al inicio de la ventana
+de [[#67]] cuando se evaluaba si el override de `quill` era seguro;
+conclusión documentada aquí para que no se reabra.
+
+**Vulnerabilidades**:
+- [GHSA-v3m3-f69x-jf25](https://github.com/advisories/GHSA-v3m3-f69x-jf25)
+  — `quill@2.0.3` vulnerable a XSS via HTML export feature. Severity: low.
+- `react-quill-new@>=3.8.2` depende de `quill@2.0.3` vulnerable —
+  también marcada low.
+
+**Proyectos afectados**: `appforge-builder` (3 ubicaciones de uso del
+editor: `TermsTab`, `custom_page`, `news_feed`). NO presente en
+`appforge-runtime` (el runtime no edita HTML, solo lo renderiza
+sanitizado), NO presente en `appforge-admin` (sin editor rich-text).
+
+**Por qué se rechaza el "fix" de `npm audit fix --force`**: la
+sugerencia es downgrade `react-quill-new` a `3.7.0` (que usa una quill
+distinta). **Un downgrade nunca es un fix** — pierde funcionalidad +
+versiones de seguridad de otros aspectos del editor, y mueve el
+problema en vez de cerrarlo. Es un anti-patrón del audit cuando el
+upstream no ha publicado parche.
+
+**Mitigación que hace el riesgo aceptable (verificada técnicamente)**:
+
+1. **Runtime (la PWA del end-user del cliente) sanitiza con DOMPurify
+   en cada render con HTML**. Helper central
+   `appforge-runtime/src/lib/sanitize.ts`:
+   ```ts
+   import DOMPurify from 'dompurify';
+   export const sanitize = (html: string): string => DOMPurify.sanitize(html);
+   ```
+   Aplicado vía `dangerouslySetInnerHTML={{ __html: sanitize(content) }}`
+   en los 4 puntos del runtime donde se inyecta HTML:
+   - `TermsScreen.tsx`
+   - `modules/custom-page/CustomPageRuntime.tsx`
+   - `modules/news-feed/NewsFeedRuntime.tsx`
+   - `modules/text/TextRuntime.tsx`
+
+   Tras T2-runtime DOMPurify está en 3.4.10 (último). Smoke funcional
+   ejecutado 2026-06-16 con 5 payloads XSS (img onerror, script tag,
+   svg onload, javascript: URI, contenido seguro) → 5/5 PASS.
+
+2. **Backend sanitiza con `sanitize-html` al persistir contenido de
+   `news_feed`** (defense-in-depth: limpia ANTES de guardar). En
+   `appforge-backend/src/news/news.service.ts` L43, L60:
+   ```ts
+   content: sanitizeHtmlContent(dto.content),
+   ```
+   `sanitize-html` está en 2.17.5 tras T2-backend.
+
+**Conclusión sobre la superficie end-user**: el XSS de quill **no es
+atacable contra el usuario final del cliente** — toda la cadena de
+render pasa por DOMPurify, y `news_feed` además se sanitiza al
+guardar. Un cliente malicioso que intentara inyectar `<script>` en su
+propio contenido vería su payload limpiado antes de que llegue al
+end-user.
+
+**Limitación conocida (TODO accionable, no solo vigilar)**:
+
+`sanitizeHtmlContent` en el backend **solo se aplica a `news_feed`**.
+Faltan los dos otros paths de persistencia de HTML que el editor
+produce:
+
+- `custom_page` (módulo del builder): el HTML del editor llega al
+  backend vía `apps.controller.ts → updateSchema` o
+  `update-app-config.dto.ts` sin pasar por `sanitizeHtmlContent`.
+  Comentario explícito en
+  `appforge-backend/src/apps/dto/update-app-config.dto.ts:29`:
+  "the service (e.g. extractCustomerFields, sanitizeHtmlContent — see
+  TECH_DEBT [[#9]])".
+- `terms` (en `TermsTab` del app-config): mismo path, sin sanitizar
+  al guardar.
+
+Además, los 2 `dangerouslySetInnerHTML` del builder mismo
+(preview del editor en `custom_page.module.tsx` L70 y
+`news_feed.module.tsx` L164) renderizan crudo sin pasar por
+sanitize.
+
+**Modelo de amenaza del gap**: self-XSS del cliente sobre sí mismo en
+su propia sesión admin del builder. NO afecta al end-user (los
+runtimes sanitizan), NO afecta cross-tenant (cada cliente solo ve su
+propio HTML), NO afecta a otros admins (cada cliente solo accede a
+sus apps). Riesgo: bajo.
+
+**Acción defense-in-depth** (no urgente, pero registrable):
+1. Extender `sanitizeHtmlContent` al path de `update-app-config`
+   para sanitizar contenido HTML de `custom_page` y `terms` al
+   guardar — defense-in-depth simétrica con `news_feed`.
+2. (Opcional) Aplicar `sanitize` también en los previews del
+   builder — riesgo bajo (self-XSS only), pero higiene.
+
+**Esfuerzo**: 1-2 horas (extender el helper backend + aplicar en 2
+puntos del flujo + tests unitarios).
+
+**Qué cambiaría la decisión** (criterios de re-evaluación):
+- Fix upstream de `react-quill-new`/`quill` que NO sea downgrade
+  (versión > 3.8.3 que use una `quill` parcheada) → bumpear directo,
+  cerrar #70.
+- Si el preview del builder pasara a renderizar contenido
+  cross-tenant (no es el caso hoy) → el gap del builder dejaría de
+  ser self-XSS y el TODO defense-in-depth pasaría a urgente.
+- Si DOMPurify upstream introdujera un breaking change que rompiera
+  alguno de los 4 puntos de inyección del runtime → la mitigación
+  caería, el riesgo subiría a high.
+
+**Prioridad**: baja. Mitigación end-user verificada. El TODO de
+extender `sanitizeHtmlContent` a `custom_page` + `terms` es higiene,
+no bloqueante.
+
+**No bloquea**: nada.
+
+**Conexión con [[#9]]** (sanitización al persistir contenido): mismo
+helper, mismo paradigma. El TODO de extender a `custom_page`/`terms`
+es exactamente el cierre defense-in-depth que [[#9]] pide.
+
+**Conexión con [[#67]]**: residual aceptado al cierre de la auditoría
+builder. Distinto de [[#68]] (donde no hay fix upstream) y [[#69]]
+(donde el fix existe pero requiere majors) — aquí el upstream sí
+publicó algo, pero ese "algo" es un downgrade que rechazamos.
+
+
