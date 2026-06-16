@@ -2454,7 +2454,9 @@ RowActions síncronas y la deuda visual se acumule.
 
 ### #67 — `npm audit` del backend reporta 60 vulnerabilidades (2 críticas, 16 high) + node engine mismatch
 
-**Estado**: OPEN, HIGH PRIORITY (seguridad)
+**Estado**: EN PROGRESO — resuelto en rama `chore/security-audit` (60 → 1
+low). Pendiente deploy Fase C + smoke FCM dryRun en VPS para cierre. El
+residual cross-project (3 árboles) va a [[#68]].
 **Origen**: Detectado durante deploy de Fase 2.3 backend (commit
 `ea44cfb`) en VPS, 2026-06-16. El `npm install` previo al `nest build`
 reportó:
@@ -2527,4 +2529,82 @@ periódica, **podría extenderse** a incluir `npm audit` semanal como
 parte del ciclo, lo que naturalmente atajaría futuras instancias de
 este tipo de deuda. Pero #67 hay que resolverlo manualmente la primera
 vez, no automatizable de entrada.
+
+**Progreso 2026-06-16** (rama `chore/security-audit`, no en main):
+- T1-backend (commit `7ee3011`): 12 overrides → 60 → 24 (0C / 9H / 14M / 1L)
+- T2-backend (commit `6876d0a`): bumps directos minor/patch
+  (`@nestjs/core` 11.0.1→11.1.27, `@nestjs/platform-express` 11.0.1→11.1.27,
+  `@nestjs/serve-static` 5.0.4→5.0.5, `@nestjs/cli` 11.0.0→11.0.23,
+  `@nestjs/schematics` 11.0.0→11.1.0, `prisma` 6.19.2→6.19.3,
+  `nodemailer` 8.0.3→8.0.11, `sanitize-html` 2.17.2→2.17.5,
+  `uuid` 13.0.0→13.0.2) + 8 overrides extra (cluster uuid anidado +
+  postcss + fast-xml-parser/builder + brace-expansion@{1,2,5}) → 24 → 1
+  (0C / 0H / 0M / 1L)
+- Poda overrides (commit `f13a784`): 20 → 6 load-bearing.
+  Quitar el resto resuelve a versión parcheada por newest-in-range del
+  rango — confirmado con `npm install` + `npm audit` + smoke FCM offline.
+  Audit estable en 1 low.
+- Smoke FCM offline OK: `firebase-admin` → `@grpc/grpc-js@1.14.4` →
+  `protobufjs@7.6.4` → `node-forge@1.4.0` cargan; `app.messaging()`
+  instancia; `.send`/`.subscribeToTopic` accesibles.
+- Smoke arranque NestJS local diferido al VPS (Postgres/Redis no
+  disponibles localmente).
+
+**Residual upstream → [[#68]]**: `@babel/core <=7.29.0` (low, sin fix
+upstream). Es cross-project (backend + builder + runtime), no
+overrideable, no específico de #67.
+
+**Node engine mismatch (`file-type@22.0.0`)**: sigue abierto sin tocar.
+No es vulnerabilidad — es warning EBADENGINE. Subir node VPS a v22 LTS
+o pinear `file-type` a versión que soporta node 20. Fuera del alcance
+de esta ventana de seguridad.
+
+**Cierre**: tras deploy Fase C en VPS y smoke FCM dryRun verde
+(`messaging.send({...}, /* dryRun */ true)` contra topic real, sin
+entregar push), marcar como RESUELTO con commit/PR de cierre.
+
+### #68 — `@babel/core <=7.29.0` Arbitrary File Read vía sourceMappingURL — sin fix upstream
+
+**Estado**: OPEN, LOW PRIORITY (residual upstream cross-project)
+**Origen**: residual tras cierre de auditoría de [[#67]] en rama
+`chore/security-audit`, 2026-06-16. El mismo CVE reaparece en builder
+y runtime al medir sus audits — es un gap upstream cross-project,
+no específico de un árbol.
+
+**CVE**: [GHSA-4x5r-pxfx-6jf8](https://github.com/advisories/GHSA-4x5r-pxfx-6jf8)
+— Arbitrary File Read via sourceMappingURL Comment. Severity: low.
+
+**Por qué no overrideable**: no existe versión parcheada de
+`@babel/core` a la que apuntar. La última 7.x es 7.29.0 (vulnerable);
+las siguientes versiones publicadas son `8.0.0-rc.*` (no estables).
+Un override sin destino no es un fix — es un pin a la misma versión
+vulnerable.
+
+**Por qué no bloquea producción**:
+- Dev/build-tree (jest/babel) — no se carga en el runtime del backend
+  ni en la PWA generada
+- El advisory requiere ejecutar babel sobre archivos con
+  `sourceMappingURL` controlados por atacante — vector teórico en
+  cadenas CI con código no-confiable, no en build interno del equipo
+- Si se materializa, la superficie de exposición es el sistema de
+  build (laptop dev / runner CI), no el end-user del cliente ni la
+  infraestructura de AppForge
+
+**Proyectos afectados**: `appforge-backend`, `appforge-builder`,
+`appforge-runtime` (no `appforge-admin`).
+
+**Acción**: aceptar como residual vigilable. Revisar cuando
+(a) salga `@babel/core@7.29.1+` (patch en 7.x), o
+(b) `@babel/core@8.x` se estabilice (mayor coordinación con jest 30/31).
+Ninguno tiene ETA upstream conocida.
+
+**Esfuerzo**: 5-10 min cuando salga fix — un solo bump por proyecto,
+sin breaking changes esperados dentro de 7.x.
+
+**Prioridad**: baja — riesgo teórico en build-tree, no en runtime.
+
+**No bloquea**: nada.
+
+**Conexión con [[#67]]**: residual aceptado al cierre de la auditoría
+backend. Mismo gap reaparecerá al cerrar T1 en builder y runtime.
 
