@@ -47,6 +47,23 @@ export class LoyaltyController {
     return this.loyaltyService.getStats(appId, req.user.tenantId);
   }
 
+  // Builder client: list of users with their loyalty card data
+  // (currentStamps derivado, canRedeem, totalRedemptions, last activity)
+  @Get('users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.CLIENT)
+  getUsers(@Param('appId') appId: string, @Request() req) {
+    return this.loyaltyService.getUsers(appId, req.user.tenantId);
+  }
+
+  // Builder client: redemption history timeline
+  @Get('redemptions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.CLIENT)
+  getRedemptions(@Param('appId') appId: string, @Request() req) {
+    return this.loyaltyService.getRedemptions(appId, req.user.tenantId);
+  }
+
   // App user: get my stamps + canRedeem
   @Get('my-card')
   @UseGuards(AppUserAuthGuard)
