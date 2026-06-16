@@ -1860,6 +1860,62 @@ export const stampLoyalty = async (
   return response.json();
 };
 
+// Shape devuelto por GET /loyalty/users (Fase 2.3 backend, ea44cfb).
+// currentStamps es derivado vía countStampsSinceLastRedemption del backend
+// (no almacenado); canRedeem viene defendido contra totalStamps <= 0.
+export interface LoyaltyUserCardItem {
+  appUserId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  currentStamps: number;
+  totalStamps: number;
+  canRedeem: boolean;
+  totalRedemptions: number;
+  lastStampAt: string | null;
+  lastRedeemedAt: string | null;
+}
+
+// Shape devuelto por GET /loyalty/redemptions (Fase 2.3 backend).
+// onDelete: Cascade en LoyaltyRedemption.appUserId garantiza que appUser
+// nunca es null (sin orphans), confirmado en schema.prisma.
+export interface LoyaltyRedemptionItem {
+  id: string;
+  appUserId: string;
+  redeemedAt: string;
+  appUser: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+}
+
+// 404 → null (card no configurada en backend). Otros errores → throw.
+// Mismo patrón que getLoyaltyConfig: distingue "estado" de "fallo".
+export const getLoyaltyUsers = async (
+  appId: string,
+  token: string,
+): Promise<LoyaltyUserCardItem[] | null> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/users`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Error al obtener usuarios de lealtad');
+  return response.json();
+};
+
+export const getLoyaltyRedemptions = async (
+  appId: string,
+  token: string,
+): Promise<LoyaltyRedemptionItem[] | null> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/redemptions`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Error al obtener historial de canjes');
+  return response.json();
+};
+
 // --- Coupon Redemption ---
 
 export const redeemCoupon = async (
