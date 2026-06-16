@@ -2610,12 +2610,44 @@ Validación en VPS tras `git pull` + `npm ci` en los 4 proyectos:
    f13a784`) y re-pinear `protobufjs`/`@grpc/grpc-js`/`node-forge`
    como T1.
 
-5. **Bake real de una PWA**: pendiente como última verificación
-   (superficie irreversible runtime). A ejecutar después de este doc.
+5. **Bake real de una PWA** (superficie irreversible runtime): ✅
+   `npm run build:pwa` verde con vite@6.4.1 (vite no se tocó —
+   diferido a [[#69]]). En `dist/assets/`:
+   - `grep -oE "react-router|createBrowserRouter|RouterProvider|useNavigate"` →
+     **0 ocurrencias en TODOS los index-*.js**. La huérfana borrada en
+     T1-runtime no entra al artefacto horneado — confirmado en la
+     superficie irreversible, no solo en el lock.
+   - `grep -oE "DOMPurify|sanitize"` → **11 ocurrencias en
+     `index-DEUxQqqD.js`** (388 kB chunk principal). DOMPurify@3.4.10
+     bundleado y vivo. Combinado con el smoke funcional 5/5 que pasó
+     en local pre-commit (onerror/script/svg onload/javascript: URI
+     todos tirados), el XSS gate del end-user está activo con la
+     versión parcheada en el JS servido al usuario.
+
+6. **Worker PM2 reciclado y arrancado limpio**: ✅
+   `pm2 reload appforge-worker --update-env` + log posterior al SIGINT
+   muestra PID nuevo (293203) con `[Worker] BullMQ build worker
+   started. Waiting for jobs...` y la línea clave
+   `FcmModule dependencies initialized` — el módulo de FCM (donde
+   vive firebase-admin en el path del worker) carga sin error con el
+   lock podado. Cero stack trace de protobufjs/grpc/node-forge en
+   bootstrap. Compilado ≠ en ejecución cerrado en LOS DOS procesos
+   PM2, no solo en API.
 
 **Estado de la ventana #67**: cerrada en rama, desplegada y verificada
-en VPS al máximo posible dado el entorno. El dryRun real es un asterisco
-honesto, no un falso verde — registrado aquí explícitamente.
+en VPS al máximo posible dado el entorno. 5 de 6 árbitros pasados con
+evidencia operativa. El 6º (FCM dryRun real) es un asterisco honesto
+diferido — sin Firebase configurado en prod no hay forma de ejecutarlo,
+y tampoco hay end-users recibiendo push hoy que la poda pudiera romper.
+El TODO con plan de revert (`git revert f13a784` si peta el primer
+dryRun real) está registrado arriba.
+
+**Decisión pendiente (no técnica)**: merge de `chore/security-audit` →
+`main`. Recomendación: `git merge --no-ff` para preservar los 11
+commits de la ventana como bloque coherente y revertible de una pieza
+en el historial, mismo patrón que el rediseño visual del builder
+(commit de merge `9765e0f`). Una vez mergeado, la ventana queda como
+unidad trazable de "auditoría de seguridad 2026-06-16".
 
 ### #68 — `@babel/core <=7.29.0` Arbitrary File Read vía sourceMappingURL — sin fix upstream
 
