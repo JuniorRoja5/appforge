@@ -110,34 +110,18 @@
     "testEnvironment": "node"
   },
   "overrides": {
-    "protobufjs": "^7.6.4",
-    "@grpc/grpc-js": "^1.14.4",
-    "node-forge": "^1.4.0",
-    "fast-uri": "^3.1.2",
-    "form-data": "^4.0.6",
-    "@tootallnate/once": "^2.0.1",
-    "qs": "^6.15.2",
-    "handlebars": "^4.7.9",
     "js-yaml": "^4.2.0",
     "lodash": "^4.17.24",
-    "ajv": "^8.20.0",
-    "picomatch": "^4.0.4",
-    "fast-xml-parser": "^5.7.0",
-    "fast-xml-builder": "^1.1.7",
-    "postcss": "^8.5.10",
-    "brace-expansion@1": "^1.1.15",
-    "brace-expansion@2": "^2.1.1",
-    "brace-expansion@5": "^5.0.6",
     "firebase-admin": {
       "uuid": "^11.1.1"
     },
     "bullmq": {
       "uuid": "^11.1.1"
     },
-    "@google-cloud/storage": {
+    "gaxios": {
       "uuid": "^11.1.1"
     },
-    "gaxios": {
+    "@google-cloud/storage": {
       "uuid": "^11.1.1"
     }
   }
