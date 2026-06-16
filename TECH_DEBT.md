@@ -2452,3 +2452,79 @@ RowActions síncronas y la deuda visual se acumule.
 
 **No bloquea**: ninguna fase. Es higiene de contrato en pieza Fase 0.
 
+### #67 — `npm audit` del backend reporta 60 vulnerabilidades (2 críticas, 16 high) + node engine mismatch
+
+**Estado**: OPEN, HIGH PRIORITY (seguridad)
+**Origen**: Detectado durante deploy de Fase 2.3 backend (commit
+`ea44cfb`) en VPS, 2026-06-16. El `npm install` previo al `nest build`
+reportó:
+
+```
+60 vulnerabilities (2 low, 40 moderate, 16 high, 2 critical)
+npm warn EBADENGINE Unsupported engine {
+  package: 'file-type@22.0.0',
+  required: { node: '>=22' },
+  current: { node: 'v20.20.2', npm: '10.8.2' }
+}
+```
+
+**Por qué NO se arregla en caliente con `npm audit fix --force`**:
+ese comando aplica breaking changes (major bumps) sin distinguir cuáles
+afectan al codepath productivo. En producción real puede romper imports,
+cambiar firmas de APIs, alterar comportamientos sutiles, sin warning.
+Es exactamente el tipo de cambio que necesita ventana programada + plan
+de rollback + smoke completo post-update.
+
+**Plan recomendado** (no se ejecuta ahora, queda registrado para
+calm window):
+
+1. `cd appforge-backend && npm audit > audit-report.txt` — reporte
+   detallado con paquetes, CVEs y rutas de dependencia.
+   **`audit-report.txt` NO se commitea** — es artefacto temporal, va a
+   `.gitignore` o se borra tras el triage. No queremos rastros de CVE
+   IDs en el repo.
+2. Triage en este orden:
+   - **2 críticas** primero. Identificar paquete + CVE + si update minor
+     resuelve (no breaking).
+   - **16 high** después. Mismo triage.
+   - **40 moderate + 2 low** al final, agrupadas.
+3. Para cada vuln que se resuelva con minor/patch bump: aplicar y correr
+   `npm run build` + test e2e clave (auth + un endpoint admin) en local.
+4. Para las que requieran major bump: estudio caso por caso. Algunas
+   pueden ser deps transitivas no usadas directamente (resolver vía
+   `overrides` en `package.json` sin reescribir código). Otras
+   requerirán refactor.
+5. Deploy con ventana programada y plan de rollback: snapshot del
+   `package-lock.json` antes, commit aislado del update, smoke de todos
+   los endpoints admin críticos tras el reload.
+
+**Node engine mismatch (`file-type@22.0.0`)**: la dep requiere node >=22
+pero VPS corre v20.20.2. Hoy es warning, no error. El paquete funciona
+en v20 hasta que use alguna API que solo existe en v22. Dos caminos:
+(a) pin `file-type` a la última versión que soporta node 20; (b) upgrade
+de node en VPS a v22 LTS. (b) es más limpio pero requiere coordinación
+con otras deps del runtime y testing exhaustivo. (a) es la mitigación
+rápida. **No es bloqueante hoy**, pero anotar para la misma ventana del
+audit fix.
+
+**Esfuerzo estimado**: 2-4 horas para triage + aplicar las que son
+minor/patch + verificar. Las que requieran major bump se estiman caso
+por caso tras el triage inicial.
+
+**Prioridad**: **alta** — 2 críticas + 16 high es señal real, no ruido.
+Pero **no bloqueante** de Fase 2/3 del roadmap (los endpoints nuevos
+funcionan correctamente). Programar **antes de aceptar primer cliente
+real con datos sensibles** en producción.
+
+**No bloquea**: ninguna fase del roadmap actual.
+
+**Conexión conceptual con [[#11]]** (No automated security patch
+monitoring): ambos pertenecen a la familia "seguridad — patches y
+deps", pero la conexión es conceptual, no funcional directa.
+`unattended-upgrades` (que propone #11) parchea el OS, NO resuelve
+`npm audit`. Si #11 se cierra con una pipeline de monitorización
+periódica, **podría extenderse** a incluir `npm audit` semanal como
+parte del ciclo, lo que naturalmente atajaría futuras instancias de
+este tipo de deuda. Pero #67 hay que resolverlo manualmente la primera
+vez, no automatizable de entrada.
+
