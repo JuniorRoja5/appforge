@@ -25,6 +25,15 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.message ?? `API error ${response.status}`);
   }
+  // Cuerpo vacío: los DELETE de NestJS resuelven a undefined → 200 OK con
+  // Content-Length: 0. Sin este check, response.json() lanza SyntaxError y
+  // el caller trata una operación exitosa como fallo (bug observado en
+  // deleteFanPost desde la PWA; latente también en deleteSocialPost y
+  // deleteSocialComment del propio autor). El 204 se anticipa por si un
+  // endpoint futuro lo usa explícitamente.
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
   return response.json();
 }
 

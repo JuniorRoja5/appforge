@@ -1,9 +1,10 @@
 import { IsString, IsNotEmpty, IsOptional, IsIn, MaxLength } from 'class-validator';
+import { REPORTABLE_TARGET_TYPES } from '../social-wall.constants';
 
 export class ReportContentDto {
   @IsString()
   @IsNotEmpty()
-  @IsIn(['social_post', 'social_comment', 'fan_post'])
+  @IsIn([...REPORTABLE_TARGET_TYPES])
   targetType!: string;
 
   @IsString()

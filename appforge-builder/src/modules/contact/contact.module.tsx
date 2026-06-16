@@ -1,17 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
-  Mail, Plus, Trash2, Save, X, Pencil,
+  Mail, Plus, Trash2, Save, X, Pencil, Inbox,
   ChevronDown, ChevronUp, ArrowUp, ArrowDown,
-  Eye, EyeOff, Phone, Type, AlignLeft, Upload, List,
+  Phone, Type, AlignLeft, Upload, List,
 } from 'lucide-react';
-import {
-  getContactSubmissions,
-  deleteContactSubmission,
-  type ContactSubmission,
-} from '../../lib/api';
-import { useAuthStore } from '../../store/useAuthStore';
 
 // --- Zod schemas ---
 
@@ -270,18 +265,11 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
   onChange,
 }) => {
   // --- Sección colapsable ---
-  const [openSection, setOpenSection] = useState<'config' | 'fields' | 'colors' | 'submissions'>('fields');
+  const [openSection, setOpenSection] = useState<'config' | 'fields' | 'colors' | null>('fields');
 
   // --- Field editor state ---
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [showAddField, setShowAddField] = useState(false);
-
-  // --- Submissions state ---
-  const [submissions, setSubmissions] = useState<ContactSubmission[]>([]);
-  const [loadingSubs, setLoadingSubs] = useState(false);
-  const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
-  const token = useAuthStore((s) => s.token);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const refreshPreview = useCallback(
     (updated: Partial<ContactConfig>) => {
@@ -289,31 +277,6 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
     },
     [data, onChange],
   );
-
-  // --- Cargar submissions ---
-  const loadSubmissions = useCallback(async () => {
-    if (!data.appId) return;
-    if (!token) {
-      setAuthError('Error de autenticación');
-      return;
-    }
-    setLoadingSubs(true);
-    setAuthError(null);
-    try {
-      const subs = await getContactSubmissions(data.appId, token);
-      setSubmissions(subs);
-    } catch (err) {
-      console.error('Error loading submissions', err);
-    } finally {
-      setLoadingSubs(false);
-    }
-  }, [data.appId, token]);
-
-  useEffect(() => {
-    if (data.appId && openSection === 'submissions') {
-      loadSubmissions();
-    }
-  }, [data.appId, openSection, loadSubmissions]);
 
   // --- Field management ---
   const moveField = (idx: number, dir: -1 | 1) => {
@@ -339,24 +302,14 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
     setShowAddField(false);
   };
 
-  const handleDeleteSubmission = async (id: string) => {
-    if (!data.appId || !token) return;
-    try {
-      await deleteContactSubmission(data.appId, id, token);
-      setSubmissions(prev => prev.filter(s => s.id !== id));
-    } catch (err) {
-      console.error('Error deleting submission', err);
-    }
-  };
-
   // --- Section toggle helper ---
   const SectionHeader: React.FC<{
-    id: 'config' | 'fields' | 'colors' | 'submissions';
+    id: 'config' | 'fields' | 'colors';
     title: string;
     count?: number;
   }> = ({ id, title, count }) => (
     <button
-      onClick={() => setOpenSection(openSection === id ? id : id)}
+      onClick={() => setOpenSection(openSection === id ? null : id)}
       className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
         openSection === id
           ? 'bg-purple-100 text-purple-800'
@@ -377,6 +330,19 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
 
   return (
     <div className="space-y-3">
+      {/* Administrar mensajes — página dedicada */}
+      {data.appId && (
+        <Link
+          to={`/apps/${data.appId}/contact`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Inbox size={16} />
+            Administrar mensajes
+          </span>
+        </Link>
+      )}
+
       {/* ====== SECCIÓN 1: Configuración general ====== */}
       <SectionHeader id="config" title="Configuración general" />
       {openSection === 'config' && (
@@ -576,98 +542,6 @@ const SettingsPanel: React.FC<{ data: ContactConfig; onChange: (data: ContactCon
         </div>
       )}
 
-      {/* ====== SECCIÓN 4: Submissions ====== */}
-      <SectionHeader id="submissions" title="Mensajes recibidos" count={submissions.length} />
-      {openSection === 'submissions' && (
-        <div className="space-y-2 px-1">
-          {!data.appId ? (
-            <div className="text-center py-4 text-xs text-gray-500 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="font-medium text-yellow-700">Guarda la app primero</p>
-              <p className="mt-1">Los mensajes se habilitarán después de guardar.</p>
-            </div>
-          ) : loadingSubs ? (
-            <div className="text-center py-4 text-xs text-gray-400">Cargando...</div>
-          ) : authError ? (
-            <div className="text-center py-4 text-xs text-red-500">{authError}</div>
-          ) : submissions.length === 0 ? (
-            <div className="text-center py-4 text-xs text-gray-400">
-              No hay mensajes todavía.
-            </div>
-          ) : (
-            submissions.map(sub => (
-              <div key={sub.id} className="border rounded-lg bg-white overflow-hidden">
-                <div
-                  className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50"
-                  onClick={() => setExpandedSubId(expandedSubId === sub.id ? null : sub.id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-gray-400">
-                      {new Date(sub.createdAt).toLocaleString('es-ES')}
-                    </div>
-                    <div className="text-xs text-gray-700 truncate">
-                      {Object.entries(sub.data as Record<string, unknown>)
-                        .slice(0, 2)
-                        .map(([k, v]) => `${k}: ${String(v)}`)
-                        .join(' | ')}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 ml-2">
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleDeleteSubmission(sub.id);
-                      }}
-                      className="p-1 text-red-400 hover:text-red-600"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                    {expandedSubId === sub.id ? (
-                      <EyeOff size={14} className="text-gray-400" />
-                    ) : (
-                      <Eye size={14} className="text-gray-400" />
-                    )}
-                  </div>
-                </div>
-                {expandedSubId === sub.id && (
-                  <div className="border-t px-3 py-2 bg-gray-50 space-y-1">
-                    {Object.entries(sub.data as Record<string, unknown>).map(([key, val]) => (
-                      <div key={key} className="text-xs">
-                        <span className="font-medium text-gray-600">{key}:</span>{' '}
-                        <span className="text-gray-800">{String(val)}</span>
-                      </div>
-                    ))}
-                    {sub.fileUrls.length > 0 && (
-                      <div className="text-xs mt-1">
-                        <span className="font-medium text-gray-600">Archivos:</span>
-                        {sub.fileUrls.map((url, i) => (
-                          <a
-                            key={i}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-1 text-purple-600 underline"
-                          >
-                            Archivo {i + 1}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-          {data.appId && !loadingSubs && (
-            <button
-              onClick={loadSubmissions}
-              className="w-full py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded"
-            >
-              Recargar mensajes
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 };

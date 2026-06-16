@@ -115,8 +115,22 @@ export class SocialWallController {
   @Get('reports')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CLIENT, Role.SUPER_ADMIN)
-  getReports(@Param('appId') appId: string, @Req() req: any) {
-    return this.socialWallService.getReports(appId, req.user.tenantId, req.user.role);
+  getReports(
+    @Param('appId') appId: string,
+    @Query('targetType') targetTypeQuery: string | undefined,
+    @Req() req: any,
+  ) {
+    // CSV → array. Ausencia / cadena vacía → undefined (sin filtro,
+    // retrocompatible con consumidores que no pasen el query).
+    const targetTypes = targetTypeQuery
+      ? targetTypeQuery.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    return this.socialWallService.getReports(
+      appId,
+      req.user.tenantId,
+      req.user.role,
+      targetTypes,
+    );
   }
 
   @Put('reports/:reportId/resolve')
@@ -139,6 +153,22 @@ export class SocialWallController {
     @Req() req: any,
   ) {
     return this.socialWallService.moderateDeletePost(appId, postId, req.user.tenantId, req.user.role);
+  }
+
+  @Delete('comments/:commentId/moderate')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CLIENT, Role.SUPER_ADMIN)
+  moderateDeleteComment(
+    @Param('appId') appId: string,
+    @Param('commentId') commentId: string,
+    @Req() req: any,
+  ) {
+    return this.socialWallService.moderateDeleteComment(
+      appId,
+      commentId,
+      req.user.tenantId,
+      req.user.role,
+    );
   }
 
   // ──────────────────── Private helpers ────────────────────

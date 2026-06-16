@@ -197,6 +197,106 @@ export class LoyaltyService {
     return { activeUsers, stampsThisMonth, totalRedemptions };
   }
 
+  // --- Admin: list of users with loyalty card data ---
+  async getUsers(appId: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
+    const card = await this.prisma.loyaltyCard.findUnique({ where: { appId } });
+    if (!card) throw new NotFoundException('Loyalty card not configured');
+
+    // Distinct list de usuarios con stamps o redemptions en esta app
+    const [stampUsers, redemptionUsers] = await Promise.all([
+      this.prisma.loyaltyStamp.findMany({
+        where: { appId },
+        select: { appUserId: true },
+        distinct: ['appUserId'],
+      }),
+      this.prisma.loyaltyRedemption.findMany({
+        where: { appId },
+        select: { appUserId: true },
+        distinct: ['appUserId'],
+      }),
+    ]);
+    const userIds = Array.from(
+      new Set([
+        ...stampUsers.map((s) => s.appUserId),
+        ...redemptionUsers.map((r) => r.appUserId),
+      ]),
+    );
+    if (userIds.length === 0) return [];
+
+    // Cargar AppUser data. El filtro `appId` extra es defense-in-depth:
+    // si un userId hipotético perteneciera a otro tenant, lo bloquea.
+    const users = await this.prisma.appUser.findMany({
+      where: { id: { in: userIds }, appId },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+
+    // Por usuario: N+1 deliberado. Reusamos countStampsSinceLastRedemption
+    // para no duplicar la lógica del conteo derivado — si divergiera, el
+    // panel mostraría stampsCollected distinto al que ve el cliente en su
+    // /my-card. Con 1 usuario activo en producción hoy, ~5 queries totales;
+    // optimizable a groupBy/raw SQL si volumen crece.
+    return Promise.all(
+      users.map(async (user) => {
+        const [currentStamps, totalRedemptions, lastStamp, lastRedemption] =
+          await Promise.all([
+            this.countStampsSinceLastRedemption(appId, user.id),
+            this.prisma.loyaltyRedemption.count({
+              where: { appId, appUserId: user.id },
+            }),
+            this.prisma.loyaltyStamp.findFirst({
+              where: { appId, appUserId: user.id },
+              orderBy: { createdAt: 'desc' },
+              select: { createdAt: true },
+            }),
+            this.prisma.loyaltyRedemption.findFirst({
+              where: { appId, appUserId: user.id },
+              orderBy: { redeemedAt: 'desc' },
+              select: { redeemedAt: true },
+            }),
+          ]);
+        return {
+          appUserId: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          currentStamps,
+          totalStamps: card.totalStamps,
+          // Defensa contra totalStamps <= 0 (anómalo, fuera del flujo del
+          // DTO que fuerza 4..20, pero blinda contra dato metido vía SQL
+          // directo o seed sucio).
+          canRedeem: card.totalStamps > 0 && currentStamps >= card.totalStamps,
+          totalRedemptions,
+          lastStampAt: lastStamp?.createdAt ?? null,
+          lastRedeemedAt: lastRedemption?.redeemedAt ?? null,
+        };
+      }),
+    );
+  }
+
+  // --- Admin: timeline of redemptions with appUser info ---
+  async getRedemptions(appId: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
+    // Simetría con getUsers: si la card no está configurada, 404 (no [])
+    // para que el frontend tenga un único contrato para "módulo no
+    // configurado".
+    const card = await this.prisma.loyaltyCard.findUnique({ where: { appId } });
+    if (!card) throw new NotFoundException('Loyalty card not configured');
+
+    return this.prisma.loyaltyRedemption.findMany({
+      where: { appId },
+      select: {
+        id: true,
+        appUserId: true,
+        redeemedAt: true,
+        appUser: {
+          select: { email: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { redeemedAt: 'desc' },
+    });
+  }
+
   // --- Helper: count stamps since last redemption ---
   private async countStampsSinceLastRedemption(appId: string, appUserId: string): Promise<number> {
     const lastRedemption = await this.prisma.loyaltyRedemption.findFirst({

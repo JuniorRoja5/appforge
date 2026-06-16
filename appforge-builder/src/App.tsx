@@ -13,6 +13,12 @@ import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AppUsersPage } from './pages/AppUsersPage';
 import { BookingsPage } from './pages/BookingsPage';
+import { OrdersAdminPage } from './pages/OrdersAdminPage';
+import { ContactInboxPage } from './pages/ContactInboxPage';
+import { SocialWallModerationPage } from './pages/SocialWallModerationPage';
+import { FanWallModerationPage } from './pages/FanWallModerationPage';
+import { CouponsAdminPage } from './pages/CouponsAdminPage';
+import { LoyaltyAdminPage } from './pages/LoyaltyAdminPage';
 import { PwaPage } from './pages/PwaPage';
 import { BillingPage } from './pages/BillingPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
@@ -54,6 +60,12 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/analytics', element: <AnalyticsPage /> },
       { path: '/apps/:appId/users', element: <AppUsersPage /> },
       { path: '/apps/:appId/bookings', element: <BookingsPage /> },
+      { path: '/apps/:appId/orders', element: <OrdersAdminPage /> },
+      { path: '/apps/:appId/contact', element: <ContactInboxPage /> },
+      { path: '/apps/:appId/social', element: <SocialWallModerationPage /> },
+      { path: '/apps/:appId/fan-wall', element: <FanWallModerationPage /> },
+      { path: '/apps/:appId/coupons', element: <CouponsAdminPage /> },
+      { path: '/apps/:appId/loyalty', element: <LoyaltyAdminPage /> },
       { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
       { path: '/billing', element: <BillingPage /> },

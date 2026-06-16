@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
@@ -19,16 +20,13 @@ import {
   updateCatalogProduct,
   deleteCatalogProduct,
   reorderCatalogProducts,
-  getOrders,
-  updateOrderStatus,
   getOrderStats,
   createOrder,
-  type OrderData,
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import type { CatalogCollection, CatalogProduct } from '../../lib/api';
-import { Loader2, Package, Clock as ClockIcon, CheckCircle, XCircle, Truck } from 'lucide-react';
+import { Loader2, Package, CheckCircle } from 'lucide-react';
 
 // ===== CONFIG =====
 
@@ -554,180 +552,6 @@ const RuntimeComponent: React.FC<{ data: CatalogConfig }> = ({ data: _data }) =>
   </div>
 );
 
-// ===== ORDER STATUS =====
-
-const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  PENDING: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-700', icon: <ClockIcon size={12} /> },
-  CONFIRMED: { label: 'Confirmado', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle size={12} /> },
-  READY: { label: 'Preparado', color: 'bg-green-100 text-green-700', icon: <Package size={12} /> },
-  DELIVERED: { label: 'Entregado', color: 'bg-gray-100 text-gray-600', icon: <Truck size={12} /> },
-  CANCELLED: { label: 'Cancelado', color: 'bg-red-100 text-red-700', icon: <XCircle size={12} /> },
-};
-
-const STATUS_TRANSITIONS: Record<string, { status: string; label: string; color: string }[]> = {
-  PENDING: [
-    { status: 'CONFIRMED', label: 'Confirmar', color: 'bg-blue-600 hover:bg-blue-700' },
-    { status: 'CANCELLED', label: 'Cancelar', color: 'bg-red-600 hover:bg-red-700' },
-  ],
-  CONFIRMED: [
-    { status: 'READY', label: 'Preparado', color: 'bg-green-600 hover:bg-green-700' },
-    { status: 'CANCELLED', label: 'Cancelar', color: 'bg-red-600 hover:bg-red-700' },
-  ],
-  READY: [
-    { status: 'DELIVERED', label: 'Entregado', color: 'bg-gray-600 hover:bg-gray-700' },
-  ],
-};
-
-// ===== ORDERS TAB =====
-
-const OrdersTab: React.FC<{ appId: string; currency: string }> = ({ appId, currency }) => {
-  const token = useAuthStore((s) => s.token) ?? '';
-  const [orders, setOrders] = useState<OrderData[]>([]);
-  const [stats, setStats] = useState<{ pendingCount: number; todayCount: number; totalRevenue: number } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const fetchOrders = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const res = await getOrders(appId, token, { status: statusFilter || undefined, page });
-      setOrders(res.data);
-      setTotal(res.total);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [appId, token, statusFilter, page]);
-
-  const fetchStats = useCallback(async () => {
-    if (!token) return;
-    try { setStats(await getOrderStats(appId, token)); } catch { /* ignore */ }
-  }, [appId, token]);
-
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    setUpdatingId(orderId);
-    try {
-      await updateOrderStatus(appId, orderId, newStatus, token);
-      await Promise.all([fetchOrders(), fetchStats()]);
-    } catch { /* ignore */ }
-    setUpdatingId(null);
-  };
-
-  const totalPages = Math.ceil(total / 20);
-
-  return (
-    <div className="space-y-3">
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-center">
-            <div className="text-lg font-bold text-yellow-700">{stats.pendingCount}</div>
-            <div className="text-[9px] text-yellow-600">Pendientes</div>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
-            <div className="text-lg font-bold text-blue-700">{stats.todayCount}</div>
-            <div className="text-[9px] text-blue-600">Hoy</div>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded p-2 text-center">
-            <div className="text-lg font-bold text-green-700">{stats.totalRevenue.toFixed(2)}</div>
-            <div className="text-[9px] text-green-600">Ingresos</div>
-          </div>
-        </div>
-      )}
-
-      {/* Status filter */}
-      <div className="flex gap-1 flex-wrap">
-        <button
-          onClick={() => { setStatusFilter(''); setPage(1); }}
-          className={`text-[10px] px-2 py-0.5 rounded-full border ${!statusFilter ? 'bg-primary/10 border-primary/30' : 'border-gray-200'}`}
-        >Todos</button>
-        {Object.entries(STATUS_LABELS).map(([key, { label }]) => (
-          <button key={key}
-            onClick={() => { setStatusFilter(key); setPage(1); }}
-            className={`text-[10px] px-2 py-0.5 rounded-full border ${statusFilter === key ? 'bg-primary/10 border-primary/30' : 'border-gray-200'}`}
-          >{label}</button>
-        ))}
-      </div>
-
-      {/* Orders list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-6">
-          <Loader2 size={16} className="animate-spin text-gray-400" />
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="text-center py-6 text-gray-400 text-[11px]">
-          <Package size={24} className="mx-auto mb-2 text-gray-300" />
-          No hay pedidos {statusFilter ? 'con este estado' : 'todavia'}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {orders.map(order => {
-            const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.PENDING;
-            const items = order.items as Array<{ name: string; quantity: number; price: number }>;
-            const transitions = STATUS_TRANSITIONS[order.status] || [];
-            return (
-              <div key={order.id} className="border rounded p-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-semibold">{order.customerName}</span>
-                    {order.customerPhone && <span className="text-[9px] text-gray-400 ml-1">{order.customerPhone}</span>}
-                  </div>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${statusInfo.color}`}>
-                    {statusInfo.icon} {statusInfo.label}
-                  </span>
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  {items.map((item, i) => (
-                    <span key={i}>{i > 0 ? ', ' : ''}{item.quantity}x {item.name}</span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold" style={{ color: 'hsl(var(--primary))' }}>
-                    {parseFloat(String(order.total)).toFixed(2)}{currency}
-                  </span>
-                  <span className="text-[9px] text-gray-400">{new Date(order.createdAt).toLocaleString('es')}</span>
-                </div>
-                {order.customerNotes && (
-                  <div className="text-[9px] text-gray-500 bg-gray-50 rounded p-1">Nota: {order.customerNotes}</div>
-                )}
-                {transitions.length > 0 && (
-                  <div className="flex gap-1 pt-0.5">
-                    {transitions.map(t => (
-                      <button key={t.status}
-                        onClick={() => handleStatusChange(order.id, t.status)}
-                        disabled={updatingId === order.id}
-                        className={`text-[9px] text-white px-2 py-0.5 rounded ${t.color} disabled:opacity-50`}
-                      >
-                        {updatingId === order.id ? <Loader2 size={10} className="animate-spin" /> : t.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-            className="text-[10px] text-gray-500 disabled:opacity-30"><ChevronLeft size={14} /></button>
-          <span className="text-[10px] text-gray-500">{page} / {totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-            className="text-[10px] text-gray-500 disabled:opacity-30"><ChevronRight size={14} /></button>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ===== SETTINGS PANEL =====
 
 interface ProductForm {
@@ -751,7 +575,6 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const token = useAuthStore((s) => s.token) ?? '';
   const [error, setError] = useState('');
   const [showVisual, setShowVisual] = useState(true);
-  const [settingsTab, setSettingsTab] = useState<'products' | 'orders'>('products');
   const [pendingCount, setPendingCount] = useState(0);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
@@ -766,6 +589,19 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const [productForm, setProductForm] = useState<ProductForm>(emptyProductForm());
   const [addingProductToCol, setAddingProductToCol] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Derivado puro del form state — valida coherencia comparePrice > price.
+  // Se "limpia" automáticamente cuando el usuario corrige (sin setState, sin
+  // limpieza manual al cerrar el form). null si comparePrice está vacío
+  // (campo opcional, no fuerza Save). Replica el guard productForm.price &&
+  // de handleUpdateProduct: en modo edit el price puede estar vacío (merge
+  // parcial); sin price no hay base para validar.
+  const priceError =
+    productForm.comparePrice &&
+    productForm.price &&
+    parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)
+      ? 'El precio anterior debe ser mayor al precio actual'
+      : null;
 
   const refresh = useCallback(async () => {
     if (!data.appId || !token) return;
@@ -819,10 +655,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   // ---- Product CRUD ----
   const handleAddProduct = async (colId: string) => {
     if (!productForm.name.trim() || !productForm.price || !data.appId) return;
-    if (productForm.comparePrice && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      alert('El precio anterior debe ser mayor al precio actual');
-      return;
-    }
+    if (priceError) return;
     try {
       await createCatalogProduct(data.appId, colId, {
         name: productForm.name.trim(),
@@ -840,10 +673,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
 
   const handleUpdateProduct = async (colId: string, productId: string) => {
     if (!data.appId) return;
-    if (productForm.comparePrice && productForm.price && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      alert('El precio anterior debe ser mayor al precio actual');
-      return;
-    }
+    if (priceError) return;
     try {
       await updateCatalogProduct(data.appId, colId, productId, {
         name: productForm.name.trim() || undefined,
@@ -917,7 +747,8 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
           <label className="text-[10px] text-gray-500">Precio anterior</label>
           <input type="number" step="0.01" min="0" value={productForm.comparePrice} placeholder="—"
             onChange={e => setProductForm(prev => ({ ...prev, comparePrice: e.target.value }))}
-            className="w-20 text-xs border rounded px-2 py-1" />
+            className={`w-20 text-xs border rounded px-2 py-1 ${priceError ? 'border-red-400' : ''}`} />
+          {priceError && <p className="text-[9px] text-red-500 mt-0.5">{priceError}</p>}
         </div>
       </div>
       {/* Images */}
@@ -965,7 +796,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
       <div className="flex gap-1">
         <button
           onClick={() => isEditing ? handleUpdateProduct(colId, editingProductId!) : handleAddProduct(colId)}
-          disabled={!productForm.name.trim() || !productForm.price}
+          disabled={!productForm.name.trim() || !productForm.price || !!priceError}
           className="flex items-center gap-1 bg-emerald-600 text-white text-[10px] px-2 py-1 rounded hover:bg-emerald-700 disabled:opacity-50"
         >
           <Save size={10} /> {isEditing ? 'Guardar' : 'Añadir'}
@@ -1006,34 +837,23 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
         </div>
       )}
 
-      {/* Tabs: Productos | Pedidos */}
+      {/* Administrar pedidos — página dedicada */}
       {data.appId && (
-        <div className="flex border-b border-gray-200">
-          <button
-            onClick={() => setSettingsTab('products')}
-            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors ${settingsTab === 'products' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            Productos
-          </button>
-          <button
-            onClick={() => setSettingsTab('orders')}
-            className={`flex-1 text-[11px] font-semibold py-1.5 border-b-2 transition-colors flex items-center justify-center gap-1 ${settingsTab === 'orders' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            Pedidos
-            {pendingCount > 0 && (
-              <span className="bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{pendingCount}</span>
-            )}
-          </button>
-        </div>
+        <Link
+          to={`/apps/${data.appId}/orders`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Package size={16} />
+            Administrar pedidos
+          </span>
+          {pendingCount > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+              {pendingCount}
+            </span>
+          )}
+        </Link>
       )}
-
-      {/* Orders Tab */}
-      {settingsTab === 'orders' && data.appId && (
-        <OrdersTab appId={data.appId} currency={data.currency} />
-      )}
-
-      {/* Products Tab */}
-      {settingsTab === 'products' && <>
 
       {/* Visual Config */}
       <button onClick={() => setShowVisual(!showVisual)} className="w-full flex items-center justify-between font-bold text-gray-700">
@@ -1205,8 +1025,6 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
           Guarda la app primero para gestionar el catalogo.
         </div>
       )}
-
-      </>}
     </div>
   );
 };

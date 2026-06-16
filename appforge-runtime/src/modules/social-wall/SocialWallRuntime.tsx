@@ -141,6 +141,17 @@ const CommentSection: React.FC<{ postId: string; currentUserId?: string }> = ({ 
     }
   };
 
+  const handleReportComment = async (commentId: string) => {
+    const reason = await showPrompt('¿Por qué quieres reportar este comentario?', { placeholder: 'Motivo (opcional)' });
+    if (reason === null) return; // cancelled
+    try {
+      await reportSocialContent('social_comment', commentId, reason || undefined);
+      await showAlert('Reporte enviado. Gracias.');
+    } catch (err: any) {
+      await showAlert(err.message || 'Error al reportar');
+    }
+  };
+
   return (
     <div style={{ padding: '0 16px 16px', background: 'var(--color-surface-card, #fff)', borderRadius: '0 0 12px 12px', marginTop: -12, marginBottom: 12 }}>
       <div style={{ maxHeight: 200, overflowY: 'auto' }}>
@@ -150,6 +161,22 @@ const CommentSection: React.FC<{ postId: string; currentUserId?: string }> = ({ 
             <div key={c.id} style={{ display: 'flex', gap: 8, padding: '6px 0', fontSize: 13 }}>
               <span style={{ fontWeight: 600, color: 'var(--color-text-primary, #1f2937)', flexShrink: 0 }}>{name}</span>
               <span style={{ color: 'var(--color-text-primary, #1f2937)', flex: 1 }}>{c.content}</span>
+              {currentUserId && currentUserId !== c.author.id && (
+                <button
+                  onClick={() => handleReportComment(c.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-secondary, #6b7280)',
+                    fontSize: 11,
+                    flexShrink: 0,
+                    padding: 0,
+                  }}
+                >
+                  Reportar
+                </button>
+              )}
               {currentUserId === c.author.id && (
                 <button onClick={() => handleDelete(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, flexShrink: 0 }}>×</button>
               )}

@@ -1613,6 +1613,11 @@ export interface SocialPostItem {
   createdAt: string;
 }
 
+// Tipo del contenido reportado polimórfico — re-exportado de la pieza común
+// de Fase 0 para mantener una sola fuente de verdad.
+export type { ReportedContent } from '../components/admin/ModerationQueue';
+import type { ReportedContent as _ReportedContent } from '../components/admin/ModerationQueue';
+
 export interface ContentReportItem {
   id: string;
   targetType: string;
@@ -1620,6 +1625,11 @@ export interface ContentReportItem {
   reason?: string;
   appUser: { email: string; firstName?: string };
   createdAt: string;
+  // Sin `?` — el endpoint enriquecido de 1.3c-api siempre devuelve este
+  // campo (poblado o null para huérfanos). El frontend puede asumir su
+  // presencia. El `?` opcional vive solo en BaseReportShape (módulos
+  // futuros que no enriquezcan).
+  reportedContent: _ReportedContent | null;
 }
 
 export const getSocialPosts = async (
@@ -1642,8 +1652,15 @@ export const getSocialWallStats = async (
   return response.json();
 };
 
-export const getSocialReports = async (appId: string, token: string): Promise<ContentReportItem[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/reports`, {
+export const getSocialReports = async (
+  appId: string,
+  token: string,
+  targetTypes?: string[],
+): Promise<ContentReportItem[]> => {
+  const qs = targetTypes && targetTypes.length > 0
+    ? `?targetType=${encodeURIComponent(targetTypes.join(','))}`
+    : '';
+  const response = await fetch(`${API_URL}/apps/${appId}/social/reports${qs}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener reportes');
@@ -1664,6 +1681,21 @@ export const deleteSocialPost = async (appId: string, postId: string, token: str
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al eliminar post');
+};
+
+export const moderateDeleteSocialComment = async (
+  appId: string,
+  commentId: string,
+  token: string,
+): Promise<void> => {
+  const response = await fetch(
+    `${API_URL}/apps/${appId}/social/comments/${commentId}/moderate`,
+    {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) throw new Error('Error al eliminar comentario');
 };
 
 // ──────────────────── Fan Wall ────────────────────
@@ -1825,6 +1857,62 @@ export const stampLoyalty = async (
     const err = await response.json().catch(() => ({}));
     throw new Error(err.message || 'Error al sellar');
   }
+  return response.json();
+};
+
+// Shape devuelto por GET /loyalty/users (Fase 2.3 backend, ea44cfb).
+// currentStamps es derivado vía countStampsSinceLastRedemption del backend
+// (no almacenado); canRedeem viene defendido contra totalStamps <= 0.
+export interface LoyaltyUserCardItem {
+  appUserId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  currentStamps: number;
+  totalStamps: number;
+  canRedeem: boolean;
+  totalRedemptions: number;
+  lastStampAt: string | null;
+  lastRedeemedAt: string | null;
+}
+
+// Shape devuelto por GET /loyalty/redemptions (Fase 2.3 backend).
+// onDelete: Cascade en LoyaltyRedemption.appUserId garantiza que appUser
+// nunca es null (sin orphans), confirmado en schema.prisma.
+export interface LoyaltyRedemptionItem {
+  id: string;
+  appUserId: string;
+  redeemedAt: string;
+  appUser: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+}
+
+// 404 → null (card no configurada en backend). Otros errores → throw.
+// Mismo patrón que getLoyaltyConfig: distingue "estado" de "fallo".
+export const getLoyaltyUsers = async (
+  appId: string,
+  token: string,
+): Promise<LoyaltyUserCardItem[] | null> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/users`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Error al obtener usuarios de lealtad');
+  return response.json();
+};
+
+export const getLoyaltyRedemptions = async (
+  appId: string,
+  token: string,
+): Promise<LoyaltyRedemptionItem[] | null> => {
+  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/redemptions`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Error al obtener historial de canjes');
   return response.json();
 };
 
@@ -2034,7 +2122,7 @@ export const updateOrderStatus = async (
 
 export const getOrderStats = async (
   appId: string, token: string,
-): Promise<{ pendingCount: number; todayCount: number; totalRevenue: number }> => {
+): Promise<{ pendingCount: number; todayCount: number; totalRevenue: number; currency: string }> => {
   const response = await fetch(`${API_URL}/apps/${appId}/orders/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });

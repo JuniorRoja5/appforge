@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { z } from 'zod';
 import type { ModuleDefinition } from '../base/module.interface';
 import { setupLoyalty, getLoyaltyConfig, getLoyaltyStats } from '../../lib/api';
@@ -239,6 +240,19 @@ const SettingsPanel: React.FC<{ data: LoyaltyCardConfig; onChange: (d: LoyaltyCa
 
   return (
     <div className="space-y-5">
+      {/* Administrar lealtad — página dedicada */}
+      {data.appId && (
+        <Link
+          to={`/apps/${data.appId}/loyalty`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Trophy size={16} />
+            Administrar lealtad
+          </span>
+        </Link>
+      )}
+
       {/* Configuración del negocio (PIN) */}
       <div className="border border-gray-200 rounded-xl overflow-hidden">
         <button onClick={() => setBusinessOpen(!businessOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">

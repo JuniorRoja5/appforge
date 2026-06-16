@@ -1995,3 +1995,905 @@ de reset a clientes potenciales — verán indigo AppForge donde debería verse 
 **Prioridad**: alta antes de beta. Media en el corto plazo si no se hace demo
 white-label en las próximas semanas.
 
+---
+
+### #60 — Currency hardcoded `€` en cuerpo de emails de orders
+
+**Estado**: CLOSED. Fix aplicado tras detección durante Fase 1.1 — el helper
+`resolveCatalogCurrency` se reusa en `sendOrderEmails` y se pasa como campo
+`currency` a `renderCustomerEmail` y `renderMerchantEmail`. Los cuatro
+`€` literales del HTML de emails sustituidos por la variable. Mismo
+comportamiento que el helper en el dashboard: cuando hay catálogo con
+currency, se respeta; cuando no, fallback `€`. Coherencia visual cliente +
+app + email restaurada.
+**Origen**: Detectado durante medición de side-effects de orders en Fase 1.1
+(commit backend `1c6680e` añadió `resolveCatalogCurrency` para el dashboard de
+pedidos, pero el helper no se aplica al renderizado HTML de los emails).
+
+**Problema**: en `appforge-backend/src/orders/orders.service.ts:230-231` y `:236`,
+el cuerpo del email enviado al crear un pedido tiene el símbolo `€` hardcoded:
+
+```ts
+`<td>${item.price.toFixed(2)}€</td>`
+`<td>${(item.price * item.quantity).toFixed(2)}€</td>`
+// ...
+const totalFormatted = Number(order.total).toFixed(2);
+// luego concatenado con `€` en el HTML del email
+```
+
+Y el método `sendOrderEmails` NO lee el currency del schema del módulo catalog
+(no usa `resolveCatalogCurrency`).
+
+**Consecuencia visible**: un cliente que cobra en dólares (como el cliente de
+prueba que mostró `24.99$` en el dashboard de pedidos tras Fase 1.1) envía a
+sus usuarios un email "Pedido confirmado" que dice `24.99€`. Dashboard y app
+muestran `$`, email muestra `€`, mismo pedido. Inconsistencia visible al
+usuario final, no solo interna.
+
+**Por qué no se resolvió en Fase 1.1**: el scope era el dashboard del cliente
+(la página de admin de pedidos). Los emails son side-effect del create de Order
+y conviven en el mismo service pero pertenecen al ámbito "comunicación con el
+usuario final", no "admin del cliente". Mezclar las dos cosas en el mismo
+commit habría inflado el scope. Pero está claramente identificado, y la
+solución es trivial.
+
+**Trabajo necesario** (~3 líneas):
+- En `sendOrderEmails`, llamar `this.resolveCatalogCurrency(appId)` antes del
+  bucle de `itemsHtml`.
+- Sustituir los `€` literales por la variable.
+- Variable también para `totalFormatted`.
+
+**Bloquea**: nada técnicamente, pero la inconsistencia es visible al usuario
+final del cliente — cobrar en dólares y enviar email en euros es mala
+imagen. Candidata a fix rápido cuando se toque el backend de orders por
+cualquier otro motivo, no requiere PR dedicado.
+
+**Prioridad**: baja en backlog, alta si llega un cliente real cobrando en
+moneda distinta de `€` y se queja del email.
+
+---
+
+### #61 — Cascada de SocialComment al borrar un SocialPost deja reports de comentarios huérfanos
+
+**Estado**: CLOSED 2026-06-11, confirmado por smoke en producción
+(commit 96e021a, Fase 1.4-backend). Cerrado por ambas puertas (moderador
+y autor):
+
+- `moderateDeletePost` de social (modificación retroactiva del commit 4088b79
+  de 1.3a) y `deleteOwnPost` de social usan ahora **interactive transaction
+  de Prisma** (callback con `tx`) para que el `findMany` de commentIds, el
+  `delete` del post y el `updateMany` de reports vivan en la misma transacción
+  secuencial. El `updateMany` amplía su filtro a `targetType: { in:
+  ['social_post','social_comment'] }` y `targetId: { in: [postId, ...commentIds] }`.
+- La race window (commentId creado entre `findMany` y `delete` en transacciones
+  separadas) queda cerrada por construcción — no por nivel de aislamiento, sino
+  porque ambas operaciones viven dentro del mismo bloque transaccional. El
+  default READ COMMITTED de Postgres es suficiente; no se sube a SERIALIZABLE.
+- Fan ya estaba cerrado por construcción en 1.4a — FanPost no tiene entidad
+  hija con `onDelete: Cascade`.
+
+**Validación del smoke**: paso 4 del smoke de 1.4-backend dio `resolved=t`
+sobre el SELECT directo en BD, validando la reescritura de `moderateDeletePost`
+a callback (re-confirma que el caso simple de 1.3a sigue funcionando tras la
+modificación retroactiva). El paso 3 (post con comentarios reportados, social)
+queda probado por construcción — el código es espejo exacto del paso 4
+validado, no añade rutas distintas.
+
+Nota de mantenimiento: el interactive transaction tiene timeout default de 5s.
+Si apareciera P2028 al borrar posts con cientos de comentarios+likes que la BD
+cascadea, la mitigación es pasar `{ timeout: <ms> }` como segundo arg al
+`$transaction`. No tocar antes — sería optimización prematura.
+
+**Estado original (histórico)**: OPEN.
+**Origen**: Detectado en review de Fase 1.3a (commit `4088b79`, que añadió la
+cascada `delete + updateMany(reports resolved:true)` en `moderateDeletePost` y
+`moderateDeleteComment`).
+
+**Problema**: el modelo `SocialComment` tiene `postId @relation(fields: [postId],
+references: [id], onDelete: Cascade)` ([schema.prisma:607](appforge-backend/prisma/schema.prisma#L607)).
+Cuando el moderador llama `moderateDeletePost(postId)`:
+- El post se borra ✓
+- Sus comentarios se borran en cascada por la BD ✓ (sin tocar código)
+- Los reports de tipo `social_post` con ese `targetId` se resuelven por nuestro
+  `updateMany` ✓ (commit `4088b79`)
+- **PERO** los reports de tipo `social_comment` cuyos `targetId` apuntan a
+  comentarios que la BD acaba de borrar en cascada **NO se resuelven**. Quedan
+  huérfanos en la cola de moderación.
+
+**Consecuencia visible**: el moderador ve reports en la página de moderación
+de social wall que apuntan a comentarios que ya no existen. Si clickea
+"Eliminar contenido" en uno de esos, `moderateDeleteComment` devuelve 404
+(comentario no encontrado). El `onActionError` cableado al banner del Shell
+muestra el error, así que no es fallo silencioso — pero es UX confusa.
+
+**Workaround actual**: el botón "Resolver" del report sigue funcionando (solo
+marca `resolved: true`, no toca el target). El moderador puede limpiar los
+huérfanos a mano clickeando Resolver.
+
+**Por qué no se cerró en Fase 1.3a**: requiere la combinación específica de
+borrar un post (no un comentario directo) cuando un comentario hijo tiene
+report pendiente. Caso borde de segundo orden, no regresión (hoy ya pasa,
+peor — sin la cascada de `4088b79` ningún report se resuelve solo). Ampliar
+el método por un caso de baja frecuencia mientras el moderador tiene salida
+(Resolver) ensanchaba el commit.
+
+**Trabajo necesario** (~4 líneas en `moderateDeletePost` de
+`social-wall.service.ts`):
+- Antes de la `$transaction`, `findMany` los `id`s de SocialComment del post a
+  borrar.
+- Incluir en el `updateMany` una segunda condición que también resuelva
+  `{ targetType: 'social_comment', targetId: { in: commentIds } }`.
+
+Quedaría como una sola `$transaction` con tres operaciones (delete post +
+updateMany social_post + updateMany social_comment para los commentIds del
+post).
+
+**Bloquea**: nada. UX confusa solo en el caso borde descrito.
+
+**Prioridad**: baja en backlog. Subir a media si llega cliente con muro
+activo + uso intensivo de reports + queja sobre reports huérfanos.
+
+**Alcance**: `fan_post` cerrado por construcción en Fase 1.4a — FanPost no
+tiene entidad hija con `onDelete: Cascade`, así que no genera huérfanos.
+#61 permanece abierto solo para `social_comment` tras borrado del SocialPost
+padre.
+
+### #62 — Builder bundle 1.76 MB sin code-splitting
+
+**Estado**: OPEN
+**Origen**: Observado durante deploy de Fase 1.5a (commit `bdf68dc`,
+2026-06-14) en el output de `npm run build` de `appforge-builder`.
+
+**Descripción**: `vite build` emite el bundle principal en
+`dist/assets/index-*.js` con tamaño 1.76 MB (≈420 KB gzip), excediendo el
+umbral por defecto de Vite (500 KB sin gzip) y disparando el warning `(!)
+Some chunks are larger than 500 kB after minification`. La causa es que todas
+las páginas del builder se importan de forma **estática** en
+`appforge-builder/src/App.tsx` (~25 imports tipo
+`import { BookingsPage } from './pages/BookingsPage'`), así que React Router
+no puede partir el grafo en chunks por ruta.
+
+**Impacto**:
+- Carga inicial del panel descarga todo el JS de páginas que el usuario
+  probablemente no va a abrir en esa sesión (Coupons, Loyalty, PWA settings,
+  Stripe billing, etc.).
+- En conexiones lentas cada KB cuenta. Hoy con un único cliente y volumen
+  bajo no se nota; con carga real + más páginas admin a futuro, sí.
+- El warning aparece en el output del build cada deploy. Ruido visual que
+  enmascara warnings nuevos que sí importen.
+
+**Crecerá según**: cada nueva página admin que añadamos en Fase 2/3 (Coupons
+admin, Loyalty admin, Push history, News/Events admin) suma a este mismo
+chunk. Más urgente a más páginas.
+
+**Fix**: pasar las rutas a `React.lazy(() => import(...))` + `<Suspense>` en
+`App.tsx`. Vite emite un chunk por ruta automáticamente. Las rutas críticas
+(Dashboard, Login) pueden quedarse estáticas para que la primera vista no
+muestre un fallback.
+
+Cuidado con el patrón de export: hoy las páginas usan `export const X`, no
+`export default`. El wrapper típico
+`lazy(() => import('./pages/X').then(m => ({ default: m.X })))` mantiene la
+compatibilidad sin tocar las páginas. Alternativa más invasiva: re-exportar
+cada página como default (~25 archivos).
+
+Implicación operacional: si se hace, el grep de testigos al desplegar deja
+de apuntar SOLO a `dist/assets/index-*.js` y debe ampliarse a
+`dist/assets/*.js` — el string del componente vivirá en el chunk de su
+ruta, no en el bundle principal.
+
+**Esfuerzo estimado**: 1-2 horas. Conversion mecánica + un smoke por ruta
+para confirmar que el fallback de Suspense aparece <100ms y la página
+carga.
+
+**Prioridad**: baja hoy (panel funciona, deploy funciona). Subir a media
+cuando se añadan las páginas admin de Fase 2 (Coupons + Loyalty + Catalog
+products) — es el momento natural antes de que el chunk siga creciendo.
+
+**No bloquea**: ninguna fase del roadmap actual. Es deuda de tamaño de
+bundle, no de funcionalidad.
+
+### #63 — Reactivación CANCELLED→CONFIRMED deja la reserva en estado inconsistente
+
+**Estado**: OPEN
+**Origen**: Detectado durante la medición de Fase 1.5b (vaciado del bloque
+residual de `booking.module.tsx`), 2026-06-14. El bloque residual ofrecía
+un botón "Reactivar" (CANCELLED → CONFIRMED) que se borra con el resto
+del bloque. Revisión del backend de `updateStatus`
+([booking.service.ts:285-345](appforge-backend/src/booking/booking.service.ts#L285-L345))
+confirmó que la operación está rota por tres caminos independientes, ninguno
+mitigable desde el frontend. Eliminar el botón en 1.5b es "dejar de exponer
+un bug"; restaurar reactivación de verdad es trabajo de backend.
+
+**Problema 1 — Metadata de cancelación colgando**:
+`updateStatus` solo escribe `cancelledAt` y `cancelledBy` cuando
+`status === BookingStatus.CANCELLED`
+([service.ts:306-309](appforge-backend/src/booking/booking.service.ts#L306-L309)).
+Nunca los limpia. Una reserva reactivada queda en BD:
+
+```
+status      = CONFIRMED
+cancelledAt = <fecha vieja>
+cancelledBy = 'MERCHANT' | 'CUSTOMER'
+```
+
+Estado incoherente. Pista que enmascara los otros dos problemas.
+
+**Problema 2 — Recordatorios desprogramados**:
+Al cancelar, [service.ts:317-323](appforge-backend/src/booking/booking.service.ts#L317-L323)
+llama a `cancelReminderJobs` que elimina los BullMQ `booking-<id>-24h` y
+`booking-<id>-2h`. Reactivar **no los re-programa**. La reserva queda
+CONFIRMED pero no se enviará el aviso de 24h ni el de 2h. Reduce
+no-shows es el caso de uso principal de booking; sin recordatorios la
+reactivación "funciona" pero el cliente puede no aparecer.
+
+**Problema 3 — Cliente no notificado**:
+El push FCM solo dispara dentro de `STATUS_PUSH_MAP`
+([service.ts:22-28](appforge-backend/src/booking/booking.service.ts#L22-L28)),
+que solo cubre `CANCELLED`. La app del cliente sigue mostrando la reserva
+como cancelada hasta que entre al detalle y refetche.
+
+**Workaround actual**: ninguno. Por eso "Reactivar" no se porta a
+BookingsPage en 1.5a/b: portarlo expondría el bug en lugar de cerrarlo.
+
+**Defensa colateral en BookingRow (Fase 1.5 commit 2, cancelledBy chips)**:
+los chips "por cliente" / "por ti" que renderizan `cancelledBy` se gatean
+por `booking.status === 'CANCELLED'`, no solo por el valor de
+`cancelledBy`. Si en producción aparece una reserva con `cancelledBy`
+colgando en CONFIRMED por este bug, el chip **no se pinta** y el badge
+"Confirmada" no entra en contradicción visual con "por ti". El bug sigue
+en BD; el frontend no lo expone.
+
+**Fix correcto** (~30 líneas backend, no tocar antes de necesitarlo):
+
+1. En `updateStatus`, cuando `status === CONFIRMED && previousStatus ===
+   CANCELLED`, limpiar metadata: `cancelledAt = null`, `cancelledBy = null`.
+2. Re-llamar a `scheduleReminders(booking, config)` tras el `update` cuando
+   se reactiva.
+3. Añadir notificación al cliente para la transición CANCELLED→CONFIRMED.
+   `STATUS_PUSH_MAP` hoy es por `status` final; necesitará incluir contexto
+   de transición, o un check directo en `updateStatus`.
+4. Una vez el backend esté limpio, añadir 5ª RowAction a BookingsPage con
+   `id: 'reactivate'`, `isAvailable: b.status === 'CANCELLED'`. ~10 líneas.
+
+**Esfuerzo estimado**: 1-2 horas backend + ~10 líneas frontend. Incluye
+tests del flujo cancel → reactivate (limpieza de metadata, re-schedule
+de jobs, push enviado).
+
+**Prioridad**: baja por defecto. Subir a media cuando llegue cliente real
+que cancele por error y pida deshacerlo. Hasta entonces el cliente puede
+crear una reserva nueva — peor UX, pero el dato no se corrompe.
+
+**No bloquea**: ninguna fase del roadmap actual. Es feature limpia
+ausente, no feature rota expuesta al usuario (1.5b la oculta).
+
+### #64 — Currency hardcoded `€` en CouponsAdminPage
+
+**Estado**: OPEN
+**Origen**: Fase 2.1 commit 3 (CouponsAdminPage), 2026-06-15.
+
+**Descripción**: el módulo `discount_coupon` expone una sección "Opciones
+de visualización" con selector de 30+ monedas (`data.currency`). El
+runtime y el `PreviewComponent` respetan esa configuración. Pero
+`CouponsAdminPage` ignora el config del módulo y muestra todos los
+descuentos formateados con `€` hardcoded
+(`formatDiscount(coupon, '€')`).
+
+**Síntoma**: cliente que configura su módulo en USD/MXN/GBP verá los
+descuentos formateados correctamente en su app (runtime + preview), pero
+inconsistentemente con `€` en el panel de administración de cupones del
+builder.
+
+**Mitigación parcial ya hecha**: `formatDiscount` en
+`appforge-builder/src/lib/coupon-helpers.ts` ya acepta el parámetro
+`currency` (con default `€`). El fix futuro solo necesita pasar la
+currency real en vez del default — no hay que tocar la firma del helper.
+
+**Por qué se aceptó así en v1**: leer la currency configurada requiere
+una de tres rutas posibles: (a) endpoint backend nuevo de stats que
+incluya currency (no existe hoy); (b) la página fetcha el schema completo
+de la app via `getApp` y busca el config del módulo `discount_coupon`
+(acoplamiento desde la página al schema del builder); (c) backend
+devuelve currency en cada `DiscountCoupon` (cambio de contrato del
+endpoint). Las tres son scope ajeno a Fase 2.1.
+
+**Una opción de fix** (no decidida — cuando llegue el momento, se mide y
+se decide entre las tres rutas, no se hereda este comentario): (a)
+endpoint nuevo `GET /apps/:appId/coupons/stats` que devuelva `{ currency,
+totalCoupons, activeCoupons, totalRedemptions }`, y la página pasa
+`currency` a `formatDiscount`. Aprovecharía para mostrar stats cards
+arriba de la página (hoy descartadas por el mismo motivo: no hay
+endpoint).
+
+**Patrón ya documentado en otra superficie**: ver [[#60]] — currency
+hardcoded `€` en cuerpo de emails de orders. Es la misma deuda
+conceptual aplicada a otro consumidor; el fix global debería resolver
+ambos casos cuando se aborde.
+
+**Esfuerzo estimado**: ~1h por la ruta (a) (endpoint backend + fetch en
+página + paso a `formatDiscount`).
+
+**Prioridad**: baja hoy (1 cliente, currency `€`, sin impacto visible).
+Subir a media cuando aparezca cliente con currency ≠ `€`.
+
+**No bloquea**: ninguna fase del roadmap actual.
+
+### #65 — `ConfirmDialog` usa `aria-labelledby` con ID string fijo (HTML potencialmente inválido)
+
+**Estado**: OPEN
+**Origen**: Detectado durante la verificación de `useConfirm` con
+múltiples instancias en Fase 2.1 commit 3 (CouponsAdminPage),
+2026-06-15.
+
+**Descripción**: `appforge-builder/src/components/admin/ConfirmDialog.tsx`
+([L50](appforge-builder/src/components/admin/ConfirmDialog.tsx#L50))
+declara `aria-labelledby="confirm-dialog-title"` con un string literal
+fijo, y el `<h2>` del título usa `id="confirm-dialog-title"`. Si dos
+`ConfirmDialog` estuvieran abiertos simultáneamente, habría dos elementos
+DOM con el mismo `id`, lo cual es HTML inválido y rompe screen readers
+(no sabe a qué título asociar el dialog activo).
+
+**Hoy no rompe nada**: el overlay modal de `ConfirmDialog`
+(`fixed inset-0 z-50 bg-black/40`) cubre toda la pantalla y bloquea
+clicks fuera del dialog activo. Físicamente es imposible que el usuario
+inicie un segundo confirm mientras el primero está abierto — el botón
+que dispararía el segundo no es clickeable. Por eso `useConfirm` con
+N instancias en `CouponsAdminPage` (una por `CouponRow` + una en
+`WorkflowInbox`) funciona sin colisión real.
+
+**Por qué registrarla aun así**: es defensa preventiva. Si en el futuro
+se introduce un patrón que rompa la invariante "un confirm activo a la
+vez" — por ejemplo, un drawer no-modal con un confirm dentro mientras
+otro confirm modal está abierto — la colisión de IDs sale a la luz como
+bug de a11y silencioso. Y el coste de arreglarlo ahora es trivial.
+
+**Patrón correcto ya aplicado en otra pieza Fase 0**:
+`FormModal.tsx` (commit `53d0a82`, Fase 2.1) usa `useId()` de React 18
+para el `aria-labelledby` por exactamente esta razón. La misma técnica
+aplica a `ConfirmDialog.tsx`.
+
+**Fix** (~5 líneas):
+
+```tsx
+// dentro de useConfirm o de ConfirmDialog
+const titleId = useId();
+...
+<div role="dialog" aria-modal="true" aria-labelledby={titleId}>
+  <h2 id={titleId}>{config.title}</h2>
+  ...
+</div>
+```
+
+**Esfuerzo**: 15 minutos (edición + tsc + smoke del confirm en cualquier
+página que lo use).
+
+**Prioridad**: baja. Patrón de Fase 0, no bloqueante para Fase 2 o
+posteriores. Buen candidato para "calm window" entre fases.
+
+**No bloquea**: ninguna fase. Es higiene a11y en una pieza compartida.
+
+### #66 — `RowAction.onClick` debería aceptar `void | Promise<void>`
+
+**Estado**: OPEN
+**Origen**: Fix `6ee3160` (Fase 2.1), 2026-06-15. El build de
+Fase 2.1 falló con `tsc -b` porque `RowAction.onClick` de la acción
+'edit' en `CouponsAdminPage` era síncrono (solo abre el FormModal con
+`openEdit(c)`, sin `await`). El fix fue marcar la función como
+`async (c) => { openEdit(c); }` — la promesa resuelve de inmediato,
+satisface el contrato sin cambiar comportamiento, pero queda un
+`async` aparente sin `await` que confunde al lector.
+
+**Problema de contrato**:
+`appforge-builder/src/components/admin/types.ts:25` declara
+`onClick: (item: T) => Promise<void>;`. Esto fuerza a todas las
+acciones a ser async, incluso las **legítimamente síncronas**:
+
+- "Editar X" → abre un modal o navega. No hay I/O.
+- "Ver detalles" → expande un acordeón o cambia state local.
+- "Copiar al portapapeles" → llamada síncrona a Clipboard API (o
+  async pero el caller no necesita esperarla).
+
+Hoy todas se ven obligadas a marcarse `async` y devolver
+`Promise<void>` por contrato, no por necesidad.
+
+**Patrón correcto ya aplicado en otra pieza Fase 0**:
+`FormModal.onSave` (commit `53d0a82`) usa `() => void | Promise<void>`
+por exactamente esta razón — el caller decide si necesita ser async
+en función de qué hace en el handler, no por imposición del tipo.
+
+**Fix** (cambio de una palabra en `types.ts`):
+
+```ts
+// antes
+onClick: (item: T) => Promise<void>;
+
+// después
+onClick: (item: T) => void | Promise<void>;
+```
+
+`WorkflowInbox` consume `onClick` en `runAction` con
+`await action.onClick(item)` ([WorkflowInbox.tsx:88](appforge-builder/src/components/admin/WorkflowInbox.tsx#L88)).
+`await` sobre un valor síncrono (`void`) es válido y se comporta
+correctamente — no rompe el callsite.
+
+Tras el fix, el `async` aparente del 'edit' de CouponsAdminPage
+(`6ee3160`) puede revertirse a su forma natural:
+
+```ts
+// antes (con #66 cerrado, vuelve a esto):
+onClick: (c) => openEdit(c),
+```
+
+**Por qué no se arregla en Fase 2.1**: tocar `types.ts` es cambiar
+contrato de una pieza Fase 0 compartida por **todos los
+consumidores de RowAction**: WorkflowInbox, BookingsPage, OrdersAdminPage,
+ContactInboxPage, SocialWallModerationPage, FanWallModerationPage,
+CouponsAdminPage. El cambio es ampliar tipo (`Promise<void>` →
+`void | Promise<void>`), compatible hacia atrás — código existente que
+devuelve `Promise<void>` sigue cuadrando. Pero re-verificar los seis
+consumidores y correr `npm run build` para cada uno es trabajo
+de su propio gate, no un cuelgue del commit de Coupons.
+
+**Cross-refs**:
+- Síntoma vivo en commit `6ee3160` (CouponsAdminPage.tsx:185+, el
+  `async` aparente con su comentario apuntando aquí).
+- Patrón correcto en `FormModal.onSave` desde `53d0a82`.
+- Tema relacionado de higiene de tipos Fase 0: ver [[#65]] (aria-id
+  fijo en ConfirmDialog). Los dos son buenos candidatos para una
+  "calm window" entre fases que limpie Fase 0.
+
+**Esfuerzo**: 30 minutos. Edición de una palabra en `types.ts` +
+`npm run build` para verificar los seis consumidores + revertir el
+`async` aparente de CouponsAdminPage.
+
+**Prioridad**: baja. Hoy no rompe nada (`async` aparente funciona
+correctamente). Subir a media cuando dos o más páginas más necesiten
+RowActions síncronas y la deuda visual se acumule.
+
+**No bloquea**: ninguna fase. Es higiene de contrato en pieza Fase 0.
+
+### #67 — `npm audit` del backend reporta 60 vulnerabilidades (2 críticas, 16 high) + node engine mismatch
+
+**Estado**: EN PROGRESO — resuelto en rama `chore/security-audit` (60 → 1
+low). Pendiente deploy Fase C + smoke FCM dryRun en VPS para cierre. El
+residual cross-project (3 árboles) va a [[#68]].
+**Origen**: Detectado durante deploy de Fase 2.3 backend (commit
+`ea44cfb`) en VPS, 2026-06-16. El `npm install` previo al `nest build`
+reportó:
+
+```
+60 vulnerabilities (2 low, 40 moderate, 16 high, 2 critical)
+npm warn EBADENGINE Unsupported engine {
+  package: 'file-type@22.0.0',
+  required: { node: '>=22' },
+  current: { node: 'v20.20.2', npm: '10.8.2' }
+}
+```
+
+**Por qué NO se arregla en caliente con `npm audit fix --force`**:
+ese comando aplica breaking changes (major bumps) sin distinguir cuáles
+afectan al codepath productivo. En producción real puede romper imports,
+cambiar firmas de APIs, alterar comportamientos sutiles, sin warning.
+Es exactamente el tipo de cambio que necesita ventana programada + plan
+de rollback + smoke completo post-update.
+
+**Plan recomendado** (no se ejecuta ahora, queda registrado para
+calm window):
+
+1. `cd appforge-backend && npm audit > audit-report.txt` — reporte
+   detallado con paquetes, CVEs y rutas de dependencia.
+   **`audit-report.txt` NO se commitea** — es artefacto temporal, va a
+   `.gitignore` o se borra tras el triage. No queremos rastros de CVE
+   IDs en el repo.
+2. Triage en este orden:
+   - **2 críticas** primero. Identificar paquete + CVE + si update minor
+     resuelve (no breaking).
+   - **16 high** después. Mismo triage.
+   - **40 moderate + 2 low** al final, agrupadas.
+3. Para cada vuln que se resuelva con minor/patch bump: aplicar y correr
+   `npm run build` + test e2e clave (auth + un endpoint admin) en local.
+4. Para las que requieran major bump: estudio caso por caso. Algunas
+   pueden ser deps transitivas no usadas directamente (resolver vía
+   `overrides` en `package.json` sin reescribir código). Otras
+   requerirán refactor.
+5. Deploy con ventana programada y plan de rollback: snapshot del
+   `package-lock.json` antes, commit aislado del update, smoke de todos
+   los endpoints admin críticos tras el reload.
+
+**Node engine mismatch (`file-type@22.0.0`)**: la dep requiere node >=22
+pero VPS corre v20.20.2. Hoy es warning, no error. El paquete funciona
+en v20 hasta que use alguna API que solo existe en v22. Dos caminos:
+(a) pin `file-type` a la última versión que soporta node 20; (b) upgrade
+de node en VPS a v22 LTS. (b) es más limpio pero requiere coordinación
+con otras deps del runtime y testing exhaustivo. (a) es la mitigación
+rápida. **No es bloqueante hoy**, pero anotar para la misma ventana del
+audit fix.
+
+**Esfuerzo estimado**: 2-4 horas para triage + aplicar las que son
+minor/patch + verificar. Las que requieran major bump se estiman caso
+por caso tras el triage inicial.
+
+**Prioridad**: **alta** — 2 críticas + 16 high es señal real, no ruido.
+Pero **no bloqueante** de Fase 2/3 del roadmap (los endpoints nuevos
+funcionan correctamente). Programar **antes de aceptar primer cliente
+real con datos sensibles** en producción.
+
+**No bloquea**: ninguna fase del roadmap actual.
+
+**Conexión conceptual con [[#11]]** (No automated security patch
+monitoring): ambos pertenecen a la familia "seguridad — patches y
+deps", pero la conexión es conceptual, no funcional directa.
+`unattended-upgrades` (que propone #11) parchea el OS, NO resuelve
+`npm audit`. Si #11 se cierra con una pipeline de monitorización
+periódica, **podría extenderse** a incluir `npm audit` semanal como
+parte del ciclo, lo que naturalmente atajaría futuras instancias de
+este tipo de deuda. Pero #67 hay que resolverlo manualmente la primera
+vez, no automatizable de entrada.
+
+**Progreso 2026-06-16** (rama `chore/security-audit`, no en main):
+- T1-backend (commit `7ee3011`): 12 overrides → 60 → 24 (0C / 9H / 14M / 1L)
+- T2-backend (commit `6876d0a`): bumps directos minor/patch
+  (`@nestjs/core` 11.0.1→11.1.27, `@nestjs/platform-express` 11.0.1→11.1.27,
+  `@nestjs/serve-static` 5.0.4→5.0.5, `@nestjs/cli` 11.0.0→11.0.23,
+  `@nestjs/schematics` 11.0.0→11.1.0, `prisma` 6.19.2→6.19.3,
+  `nodemailer` 8.0.3→8.0.11, `sanitize-html` 2.17.2→2.17.5,
+  `uuid` 13.0.0→13.0.2) + 8 overrides extra (cluster uuid anidado +
+  postcss + fast-xml-parser/builder + brace-expansion@{1,2,5}) → 24 → 1
+  (0C / 0H / 0M / 1L)
+- Poda overrides (commit `f13a784`): 20 → 6 load-bearing.
+  Quitar el resto resuelve a versión parcheada por newest-in-range del
+  rango — confirmado con `npm install` + `npm audit` + smoke FCM offline.
+  Audit estable en 1 low.
+- Smoke FCM offline OK: `firebase-admin` → `@grpc/grpc-js@1.14.4` →
+  `protobufjs@7.6.4` → `node-forge@1.4.0` cargan; `app.messaging()`
+  instancia; `.send`/`.subscribeToTopic` accesibles.
+- Smoke arranque NestJS local diferido al VPS (Postgres/Redis no
+  disponibles localmente).
+
+**Residual upstream → [[#68]]**: `@babel/core <=7.29.0` (low, sin fix
+upstream). Es cross-project (backend + builder + runtime), no
+overrideable, no específico de #67.
+
+**Node engine mismatch (`file-type@22.0.0`)**: sigue abierto sin tocar.
+No es vulnerabilidad — es warning EBADENGINE. Subir node VPS a v22 LTS
+o pinear `file-type` a versión que soporta node 20. Fuera del alcance
+de esta ventana de seguridad.
+
+**Cierre Fase C (2026-06-16)**:
+
+Validación en VPS tras `git pull` + `npm ci` en los 4 proyectos:
+
+1. **Lock contract respetado** — `npm ci` reproduce exactamente las
+   versiones medidas en seco. Audit por proyecto coincide con la rama:
+   - backend: 1 low (= [[#68]])
+   - builder: 3 low (= [[#68]] + [[#70]])
+   - admin: 0 vulnerabilities
+   - runtime: 5 (4 high build-tools = [[#69]] + 1 low [[#68]])
+
+2. **Builds frontends verdes y nginx sirviendo los hashes nuevos**:
+   - builder `index-DKzGONKM.js` (vite@8.0.16) — servido en
+     `https://app.creatu.app/` confirmado por curl
+   - admin `index-Ds_tXISc.js` — servido en `https://admin.creatu.app/`
+     confirmado por curl
+
+3. **Backend arranque limpio tras `pm2 reload appforge-api`**:
+   `Nest application successfully started +138ms` con RouterExplorer
+   mapeando todas las rutas (incluidas las nuevas de Fase 2.3
+   loyalty). **Cero stack trace de protobufjs/grpc/node-forge** —
+   confirma que el path de carga del cluster firebase resuelto por
+   newest-in-range (tras la poda de los pins de T1) funciona en
+   producción real. Este es el primer árbitro de la poda: el arranque
+   no rompe.
+
+4. **Smoke FCM dry-run real DIFERIDO condicional** (no saltado):
+   `fcm.service.ts` lee credenciales de `PlatformFcmConfig` en la DB,
+   no de `.env`. En este entorno de producción la tabla está vacía —
+   FCM no está activado todavía (sin proyecto Firebase configurado).
+   Consecuencia: no hay forma de ejecutar `messaging().send(msg,
+   dryRun=true)` contra Google con creds reales desde aquí. Tampoco
+   hay usuarios end-user recibiendo push hoy que pudieran romperse
+   por la poda.
+
+   La validación de la cascada de carga (protobufjs/grpc/node-forge
+   instancian y `messaging()` se accede) ya pasó en seco en local
+   antes de cada commit (smoke FCM offline en T1, T2 y poda). La
+   pieza que falta —que el `send()` con dryRun serialice y mande
+   contra Google con red real— **queda como gate pendiente para
+   cuando se configure Firebase en producción**, no como saltado.
+
+   **TODO de cierre real**: cuando se cree el proyecto Firebase y
+   se inserte el primer registro en `PlatformFcmConfig` desde el
+   admin, ejecutar el dryRun reusando la inicialización de
+   `fcm.service.ts` (reusar la instancia ya inicializada, no
+   replicar la auth manualmente). Si pasa, marcar la ventana como
+   100% cerrada. Si falla, revertir poda backend (`git revert
+   f13a784`) y re-pinear `protobufjs`/`@grpc/grpc-js`/`node-forge`
+   como T1.
+
+5. **Bake real de una PWA** (superficie irreversible runtime): ✅
+   `npm run build:pwa` verde con vite@6.4.1 (vite no se tocó —
+   diferido a [[#69]]). En `dist/assets/`:
+   - `grep -oE "react-router|createBrowserRouter|RouterProvider|useNavigate"` →
+     **0 ocurrencias en TODOS los index-*.js**. La huérfana borrada en
+     T1-runtime no entra al artefacto horneado — confirmado en la
+     superficie irreversible, no solo en el lock.
+   - `grep -oE "DOMPurify|sanitize"` → **11 ocurrencias en
+     `index-DEUxQqqD.js`** (388 kB chunk principal). DOMPurify@3.4.10
+     bundleado y vivo. Combinado con el smoke funcional 5/5 que pasó
+     en local pre-commit (onerror/script/svg onload/javascript: URI
+     todos tirados), el XSS gate del end-user está activo con la
+     versión parcheada en el JS servido al usuario.
+
+6. **Worker PM2 reciclado y arrancado limpio**: ✅
+   `pm2 reload appforge-worker --update-env` + log posterior al SIGINT
+   muestra PID nuevo (293203) con `[Worker] BullMQ build worker
+   started. Waiting for jobs...` y la línea clave
+   `FcmModule dependencies initialized` — el módulo de FCM (donde
+   vive firebase-admin en el path del worker) carga sin error con el
+   lock podado. Cero stack trace de protobufjs/grpc/node-forge en
+   bootstrap. Compilado ≠ en ejecución cerrado en LOS DOS procesos
+   PM2, no solo en API.
+
+**Estado de la ventana #67**: cerrada en rama, desplegada y verificada
+en VPS al máximo posible dado el entorno. 5 de 6 árbitros pasados con
+evidencia operativa. El 6º (FCM dryRun real) es un asterisco honesto
+diferido — sin Firebase configurado en prod no hay forma de ejecutarlo,
+y tampoco hay end-users recibiendo push hoy que la poda pudiera romper.
+El TODO con plan de revert (`git revert f13a784` si peta el primer
+dryRun real) está registrado arriba.
+
+**Decisión pendiente (no técnica)**: merge de `chore/security-audit` →
+`main`. Recomendación: `git merge --no-ff` para preservar los 11
+commits de la ventana como bloque coherente y revertible de una pieza
+en el historial, mismo patrón que el rediseño visual del builder
+(commit de merge `9765e0f`). Una vez mergeado, la ventana queda como
+unidad trazable de "auditoría de seguridad 2026-06-16".
+
+### #68 — `@babel/core <=7.29.0` Arbitrary File Read vía sourceMappingURL — sin fix upstream
+
+**Estado**: OPEN, LOW PRIORITY (residual upstream cross-project)
+**Origen**: residual tras cierre de auditoría de [[#67]] en rama
+`chore/security-audit`, 2026-06-16. El mismo CVE reaparece en builder
+y runtime al medir sus audits — es un gap upstream cross-project,
+no específico de un árbol.
+
+**CVE**: [GHSA-4x5r-pxfx-6jf8](https://github.com/advisories/GHSA-4x5r-pxfx-6jf8)
+— Arbitrary File Read via sourceMappingURL Comment. Severity: low.
+
+**Por qué no overrideable**: no existe versión parcheada de
+`@babel/core` a la que apuntar. La última 7.x es 7.29.0 (vulnerable);
+las siguientes versiones publicadas son `8.0.0-rc.*` (no estables).
+Un override sin destino no es un fix — es un pin a la misma versión
+vulnerable.
+
+**Por qué no bloquea producción**:
+- Dev/build-tree (jest/babel) — no se carga en el runtime del backend
+  ni en la PWA generada
+- El advisory requiere ejecutar babel sobre archivos con
+  `sourceMappingURL` controlados por atacante — vector teórico en
+  cadenas CI con código no-confiable, no en build interno del equipo
+- Si se materializa, la superficie de exposición es el sistema de
+  build (laptop dev / runner CI), no el end-user del cliente ni la
+  infraestructura de AppForge
+
+**Proyectos afectados**: `appforge-backend`, `appforge-builder`,
+`appforge-runtime` (no `appforge-admin`).
+
+**Acción**: aceptar como residual vigilable. Revisar cuando
+(a) salga `@babel/core@7.29.1+` (patch en 7.x), o
+(b) `@babel/core@8.x` se estabilice (mayor coordinación con jest 30/31).
+Ninguno tiene ETA upstream conocida.
+
+**Esfuerzo**: 5-10 min cuando salga fix — un solo bump por proyecto,
+sin breaking changes esperados dentro de 7.x.
+
+**Prioridad**: baja — riesgo teórico en build-tree, no en runtime.
+
+**No bloquea**: nada.
+
+**Conexión con [[#67]]**: residual aceptado al cierre de la auditoría
+backend. Mismo gap reaparecerá al cerrar T1 en builder y runtime.
+
+### #69 — Runtime build-tools chain: vite 6→8, @capacitor/cli major, tar+esbuild transitivos
+
+**Estado**: OPEN, MEDIUM-LOW PRIORITY (supply-chain, no end-user)
+**Origen**: residual tras T2-runtime en rama `chore/security-audit`,
+2026-06-16. Limpiar el cluster de build-tools del runtime exige 2 majors
+sobre el bundler y el CLI de Capacitor — fuera del alcance de la
+ventana de [[#67]].
+
+**Paquetes afectados** (4 high en runtime, todos build-time):
+- `vite` (DIRECT ^6.3.5) — actualmente 6.4.1 resuelto. La vuln viene
+  vía `esbuild` (`0.17.0 - 0.28.0` rango). `vite@6.4.3` sigue declarando
+  `esbuild ^0.25.0` (no satisface fix `>=0.28.1`). `vite@7.3.1`
+  declara `esbuild ^0.27.0` (tampoco). `vite@8.0.16` ya **no usa
+  esbuild como dep** (migró a `rolldown 1.0.3` + `lightningcss`).
+- `esbuild` (trans via vite) — fix in `>=0.28.1`, no alcanzable sin
+  bumpear vite a 8.x.
+- `@capacitor/cli` (devDep ^6.2.0) — 6.x no tiene patch (6.2.1 es
+  última 6.x). Fix de `tar` requiere `@capacitor/cli@7+`.
+- `tar` (trans via @capacitor/cli) — 7 advisories (hardlink path
+  traversal, symlink poisoning, race condition macOS APFS, file
+  smuggling). Solo se cierra bumpeando @capacitor/cli a major.
+
+**Por qué se difiere** (no es residual upstream — hay fix, pero requiere
+2 majors sobre superficie sensible):
+1. **Runtime se hornea por-PWA** (línea irreversible del deploy según
+   memoria [[runtime-horneado-por-pwa]]). vite 6→8 cambia el bundler
+   completo — output del JS final puede diferir en chunking, tree-
+   shaking, code-split → cada PWA del cliente re-horneable con bundle
+   distinto. Necesita validación de bake completa antes y después.
+2. **`@capacitor/cli` 6→7** afecta `npx cap sync` para Android/iOS,
+   `capacitor.config.ts` puede cambiar de schema, plugins existentes
+   (`@capacitor/android@6`, `@capacitor/ios@6`, etc) podrían no ser
+   compatibles con cli@7 — exige bumpear toda la familia Capacitor a 7.
+
+**Por qué no bloquea producción**:
+- `esbuild` + `vite` + `tar` + `@capacitor/cli` son **build-tools**:
+  corren en la máquina de build (laptop dev / CI runner), NO se
+  hornean en el JS del usuario final ni se ejecutan en el dispositivo
+  móvil. Modelo de amenaza: supply-chain (atacante con acceso al
+  entorno de build), no end-user.
+- Los advisories de `tar` requieren un atacante con control sobre
+  archivos `.tar` que el build descomprima — vector teórico en CI
+  con artefactos no-confiables, no en build interno del equipo.
+- `vite`/`esbuild` advisories afectan al dev server (path traversal
+  optimized deps, WebSocket file read) o al modo de build con
+  argumentos atacante-controlados — no aplican al uso normal
+  `vite build` con código del equipo.
+
+**Acción**: estudio individual fuera de esta ventana. Cuando se
+aborde:
+1. Bumpear `vite ^6.3.5 → ^8.0.16` (2 majors). Validar:
+   - `npm run build` verde
+   - `npm run build:pwa` verde (modo crítico — se hornea por cliente)
+   - Diff del bundle final (`dist/assets/index-*.js`) vs estado actual:
+     verificar que no haya nuevos imports/excluds del tree-shake.
+   - Smoke en browser real de la PWA generada — flujos críticos del
+     end-user (carga inicial, navegación entre módulos, FCM).
+2. Bumpear `@capacitor/cli ^6.2.0 → ^7.x` junto a familia completa:
+   `@capacitor/android`, `@capacitor/ios`, `@capacitor/core`, todos
+   los plugins de la familia 6.x. Validar `cap sync` + build nativo.
+
+**Esfuerzo estimado**: 4-8 horas (vite major bump + verificación bundle
++ Capacitor family major + sync nativo). NO se hace en una tanda
+"rápida"; merece su sprint propio con plan de rollback.
+
+**Prioridad**: media-baja. Build-tools supply-chain, no end-user.
+Pero sí relevante para higiene general de deps + el ahorro de
+peso del bundle PWA al pasar a rolldown.
+
+**No bloquea**: nada del roadmap actual. Sí bloquea cierre limpio
+total de [[#67]] (runtime queda con 4 high diferidos a esta entrada).
+
+**Conexión con [[#67]]**: residual técnico aceptado al cierre de la
+auditoría runtime, separado de [[#68]] porque aquí SÍ existe fix
+upstream (vite 8 / Capacitor 7) — el bloqueador es coste de
+verificación + perímetro de cambio, no ausencia de parche.
+
+### #70 — `quill@2.0.3` + `react-quill-new@3.8.3` XSS al exportar HTML — mitigado en la superficie end-user
+
+**Estado**: OPEN, LOW PRIORITY (residual aceptado con mitigación
+verificada + TODO concreto de defense-in-depth)
+**Origen**: residual tras cierre de auditoría builder en rama
+`chore/security-audit`, 2026-06-16. Investigado al inicio de la ventana
+de [[#67]] cuando se evaluaba si el override de `quill` era seguro;
+conclusión documentada aquí para que no se reabra.
+
+**Vulnerabilidades**:
+- [GHSA-v3m3-f69x-jf25](https://github.com/advisories/GHSA-v3m3-f69x-jf25)
+  — `quill@2.0.3` vulnerable a XSS via HTML export feature. Severity: low.
+- `react-quill-new@>=3.8.2` depende de `quill@2.0.3` vulnerable —
+  también marcada low.
+
+**Proyectos afectados**: `appforge-builder` (3 ubicaciones de uso del
+editor: `TermsTab`, `custom_page`, `news_feed`). NO presente en
+`appforge-runtime` (el runtime no edita HTML, solo lo renderiza
+sanitizado), NO presente en `appforge-admin` (sin editor rich-text).
+
+**Por qué se rechaza el "fix" de `npm audit fix --force`**: la
+sugerencia es downgrade `react-quill-new` a `3.7.0` (que usa una quill
+distinta). **Un downgrade nunca es un fix** — pierde funcionalidad +
+versiones de seguridad de otros aspectos del editor, y mueve el
+problema en vez de cerrarlo. Es un anti-patrón del audit cuando el
+upstream no ha publicado parche.
+
+**Mitigación que hace el riesgo aceptable (verificada técnicamente)**:
+
+1. **Runtime (la PWA del end-user del cliente) sanitiza con DOMPurify
+   en cada render con HTML**. Helper central
+   `appforge-runtime/src/lib/sanitize.ts`:
+   ```ts
+   import DOMPurify from 'dompurify';
+   export const sanitize = (html: string): string => DOMPurify.sanitize(html);
+   ```
+   Aplicado vía `dangerouslySetInnerHTML={{ __html: sanitize(content) }}`
+   en los 4 puntos del runtime donde se inyecta HTML:
+   - `TermsScreen.tsx`
+   - `modules/custom-page/CustomPageRuntime.tsx`
+   - `modules/news-feed/NewsFeedRuntime.tsx`
+   - `modules/text/TextRuntime.tsx`
+
+   Tras T2-runtime DOMPurify está en 3.4.10 (último). Smoke funcional
+   ejecutado 2026-06-16 con 5 payloads XSS (img onerror, script tag,
+   svg onload, javascript: URI, contenido seguro) → 5/5 PASS.
+
+2. **Backend sanitiza con `sanitize-html` al persistir contenido de
+   `news_feed`** (defense-in-depth: limpia ANTES de guardar). En
+   `appforge-backend/src/news/news.service.ts` L43, L60:
+   ```ts
+   content: sanitizeHtmlContent(dto.content),
+   ```
+   `sanitize-html` está en 2.17.5 tras T2-backend.
+
+**Conclusión sobre la superficie end-user**: el XSS de quill **no es
+atacable contra el usuario final del cliente** — toda la cadena de
+render pasa por DOMPurify, y `news_feed` además se sanitiza al
+guardar. Un cliente malicioso que intentara inyectar `<script>` en su
+propio contenido vería su payload limpiado antes de que llegue al
+end-user.
+
+**Limitación conocida (TODO accionable, no solo vigilar)**:
+
+`sanitizeHtmlContent` en el backend **solo se aplica a `news_feed`**.
+Faltan los dos otros paths de persistencia de HTML que el editor
+produce:
+
+- `custom_page` (módulo del builder): el HTML del editor llega al
+  backend vía `apps.controller.ts → updateSchema` o
+  `update-app-config.dto.ts` sin pasar por `sanitizeHtmlContent`.
+  Comentario explícito en
+  `appforge-backend/src/apps/dto/update-app-config.dto.ts:29`:
+  "the service (e.g. extractCustomerFields, sanitizeHtmlContent — see
+  TECH_DEBT [[#9]])".
+- `terms` (en `TermsTab` del app-config): mismo path, sin sanitizar
+  al guardar.
+
+Además, los 2 `dangerouslySetInnerHTML` del builder mismo
+(preview del editor en `custom_page.module.tsx` L70 y
+`news_feed.module.tsx` L164) renderizan crudo sin pasar por
+sanitize.
+
+**Modelo de amenaza del gap**: self-XSS del cliente sobre sí mismo en
+su propia sesión admin del builder. NO afecta al end-user (los
+runtimes sanitizan), NO afecta cross-tenant (cada cliente solo ve su
+propio HTML), NO afecta a otros admins (cada cliente solo accede a
+sus apps). Riesgo: bajo.
+
+**Acción defense-in-depth** (no urgente, pero registrable):
+1. Extender `sanitizeHtmlContent` al path de `update-app-config`
+   para sanitizar contenido HTML de `custom_page` y `terms` al
+   guardar — defense-in-depth simétrica con `news_feed`.
+2. (Opcional) Aplicar `sanitize` también en los previews del
+   builder — riesgo bajo (self-XSS only), pero higiene.
+
+**Esfuerzo**: 1-2 horas (extender el helper backend + aplicar en 2
+puntos del flujo + tests unitarios).
+
+**Qué cambiaría la decisión** (criterios de re-evaluación):
+- Fix upstream de `react-quill-new`/`quill` que NO sea downgrade
+  (versión > 3.8.3 que use una `quill` parcheada) → bumpear directo,
+  cerrar #70.
+- Si el preview del builder pasara a renderizar contenido
+  cross-tenant (no es el caso hoy) → el gap del builder dejaría de
+  ser self-XSS y el TODO defense-in-depth pasaría a urgente.
+- Si DOMPurify upstream introdujera un breaking change que rompiera
+  alguno de los 4 puntos de inyección del runtime → la mitigación
+  caería, el riesgo subiría a high.
+
+**Prioridad**: baja. Mitigación end-user verificada. El TODO de
+extender `sanitizeHtmlContent` a `custom_page` + `terms` es higiene,
+no bloqueante.
+
+**No bloquea**: nada.
+
+**Conexión con [[#9]]** (sanitización al persistir contenido): mismo
+helper, mismo paradigma. El TODO de extender a `custom_page`/`terms`
+es exactamente el cierre defense-in-depth que [[#9]] pide.
+
+**Conexión con [[#67]]**: residual aceptado al cierre de la auditoría
+builder. Distinto de [[#68]] (donde no hay fix upstream) y [[#69]]
+(donde el fix existe pero requiere majors) — aquí el upstream sí
+publicó algo, pero ese "algo" es un downgrade que rechazamos.
+
+

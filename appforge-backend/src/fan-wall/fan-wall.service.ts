@@ -94,7 +94,18 @@ export class FanWallService {
     if (!post) throw new NotFoundException('Post no encontrado.');
     if (post.appUserId !== appUserId) throw new ForbiddenException('Solo puedes eliminar tus propias fotos.');
 
-    await this.prisma.fanPost.delete({ where: { id: postId } });
+    // Cascada: borrar la foto Y resolver sus reports. Espejo de
+    // moderateDeletePost (1.4a, commit 42c216c). Mismo bug por distinta
+    // puerta (autor vs moderador). post.appId viene gratis del findUnique
+    // anterior. FanPost no tiene entidad hija — no aplica la ampliación de
+    // TECH_DEBT #61 que sí se hace en deleteOwnPost de social.
+    await this.prisma.$transaction([
+      this.prisma.fanPost.delete({ where: { id: postId } }),
+      this.prisma.contentReport.updateMany({
+        where: { appId: post.appId, targetType: 'fan_post', targetId: postId, resolved: false },
+        data: { resolved: true },
+      }),
+    ]);
   }
 
   // ──────────────────── Reports ────────────────────
@@ -131,7 +142,31 @@ export class FanWallService {
     const post = await this.prisma.fanPost.findUnique({ where: { id: postId } });
     if (!post || post.appId !== appId) throw new NotFoundException('Post no encontrado.');
 
-    await this.prisma.fanPost.delete({ where: { id: postId } });
+    // Cascada: borrar la foto Y marcar como resueltos todos los reports que
+    // apuntaban a esta foto. Sin esto los reports quedarían huérfanos —
+    // apuntando a un targetId que ya no existe — y el moderador los seguiría
+    // viendo en la cola con el render "Contenido eliminado" sin posibilidad
+    // de cerrarlos automáticamente.
+    //
+    // Espejo exacto del moderateDeletePost de social-wall (commit 4088b79
+    // de Fase 1.3a), que cerró el mismo bug para social_post. Atómico via
+    // $transaction: si la delete falla, el updateMany no se ejecuta. Cubre
+    // el caso de varios reports sobre la misma foto (el @@unique de
+    // ContentReport es [appUserId, targetType, targetId], distintos usuarios
+    // pueden reportar la misma foto).
+    //
+    // Subtilidad respecto a social: FanPost no tiene una entidad "FanComment"
+    // ni onDelete: Cascade que arrastre hijos. La cascada de fan cierra el
+    // caso completo — no queda el coletazo de TECH_DEBT #61 (reports de
+    // comentarios huérfanos tras delete del post padre) que sí dejamos
+    // abierto en social. Fan sale más limpio.
+    await this.prisma.$transaction([
+      this.prisma.fanPost.delete({ where: { id: postId } }),
+      this.prisma.contentReport.updateMany({
+        where: { appId, targetType: 'fan_post', targetId: postId, resolved: false },
+        data: { resolved: true },
+      }),
+    ]);
   }
 
   async getStats(appId: string, tenantId?: string, role?: string) {

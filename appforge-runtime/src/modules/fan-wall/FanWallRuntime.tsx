@@ -38,6 +38,25 @@ const PhotoDetail: React.FC<{
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', flexDirection: 'column' }} onClick={onClose}>
+      <button
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        aria-label="Cerrar foto"
+        style={{
+          position: 'absolute',
+          top: 'max(12px, env(safe-area-inset-top))',
+          right: 'max(12px, env(safe-area-inset-right))',
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'rgba(0, 0, 0, 0.5)',
+          border: 'none',
+          color: '#fff',
+          fontSize: 22, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 1001,
+        }}
+      >
+        ✕
+      </button>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={(e) => e.stopPropagation()}>
         <img src={resolveAssetUrl(post.imageUrl)} alt="" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, objectFit: 'contain' }} onError={imgFallback} />
       </div>

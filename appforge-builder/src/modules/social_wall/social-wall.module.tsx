@@ -1,21 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
 import { z } from 'zod';
 import {
-  MessageSquare, Heart, Trash2, Loader2,
-  ChevronDown, ChevronUp, AlertTriangle, CheckCircle,
-  Flag,
+  MessageSquare, Heart,
+  ChevronDown, ChevronUp,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
-import {
-  getSocialPosts,
-  getSocialWallStats,
-  getSocialReports,
-  resolveSocialReport,
-  deleteSocialPost,
-  type SocialPostItem,
-  type ContentReportItem,
-} from '../../lib/api';
+import { getSocialWallStats } from '../../lib/api';
 
 // --- Zod schema ---
 const displayModes = ['default', 'fullwidth'] as const;
@@ -175,60 +168,52 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
   onChange,
 }) => {
   const token = useAuthStore((s) => s.token);
-  const [stats, setStats] = useState<{ totalPosts: number; totalComments: number; totalLikes: number; pendingReports: number } | null>(null);
-  const [posts, setPosts] = useState<SocialPostItem[]>([]);
-  const [postsTotal, setPostsTotal] = useState(0);
-  const [postsPage, setPostsPage] = useState(1);
-  const [reports, setReports] = useState<ContentReportItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // stats reducido — solo se usa para el badge del botón "Administrar muro".
+  // La página dedicada (SocialWallModerationPage) fetcha sus propias stats
+  // completas. Aquí solo necesitamos pendingReports.
+  const [stats, setStats] = useState<{
+    pendingReports: number;
+  } | null>(null);
   const [configOpen, setConfigOpen] = useState(true);
-  const [moderationOpen, setModerationOpen] = useState(false);
-  const [reportsOpen, setReportsOpen] = useState(false);
 
-  const loadData = useCallback(async (page = 1) => {
+  useEffect(() => {
     if (!data.appId || !token) return;
-    setLoading(true);
-    try {
-      const [s, p, r] = await Promise.all([
-        getSocialWallStats(data.appId, token),
-        getSocialPosts(data.appId, token, page),
-        getSocialReports(data.appId, token),
-      ]);
-      setStats(s);
-      if (page === 1) {
-        setPosts(p.data);
-      } else {
-        setPosts((prev) => [...prev, ...p.data]);
-      }
-      setPostsTotal(p.total);
-      setPostsPage(page);
-      setReports(r);
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [data.appId, token]);
-
-  useEffect(() => { loadData(1); }, [loadData, data._refreshKey]);
-
-  const handleDeletePost = async (postId: string) => {
-    if (!data.appId || !token || !confirm('¿Eliminar este post?')) return;
-    try {
-      await deleteSocialPost(data.appId, postId, token);
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      setPostsTotal((t) => t - 1);
-      onChange({ ...data, _refreshKey: Date.now() });
-    } catch { /* ignore */ }
-  };
-
-  const handleResolveReport = async (reportId: string) => {
-    if (!data.appId || !token) return;
-    try {
-      await resolveSocialReport(data.appId, reportId, token);
-      setReports((prev) => prev.filter((r) => r.id !== reportId));
-    } catch { /* ignore */ }
-  };
+    let cancelled = false;
+    getSocialWallStats(data.appId, token)
+      .then((s) => {
+        if (!cancelled) setStats({ pendingReports: s.pendingReports });
+      })
+      .catch((err) => {
+        // No silencioso: deja rastro en consola. El badge no aparece si stats
+        // falla (stats queda null), la configuración del muro sigue funcionando.
+        // eslint-disable-next-line no-console
+        console.error('[SocialWallSettingsPanel] stats fetch failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.appId, token, data._refreshKey]);
 
   return (
     <div className="space-y-4">
+      {/* Administrar muro — página dedicada */}
+      {data.appId && (
+        <Link
+          to={`/apps/${data.appId}/social`}
+          className="flex items-center justify-between gap-2 w-full bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors rounded-lg px-3 py-2.5 text-sm"
+        >
+          <span className="flex items-center gap-2 text-primary font-medium">
+            <Shield size={16} />
+            Administrar muro
+          </span>
+          {stats && stats.pendingReports > 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+              {stats.pendingReports}
+            </span>
+          )}
+        </Link>
+      )}
+
       {/* Configuración */}
       <div className="border border-gray-200 rounded-xl overflow-hidden">
         <button onClick={() => setConfigOpen(!configOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -400,114 +385,6 @@ const SettingsPanel: React.FC<{ data: SocialWallConfig; onChange: (d: SocialWall
         )}
       </div>
 
-      {/* Moderación */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <button onClick={() => setModerationOpen(!moderationOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
-          <span className="text-sm font-semibold text-gray-700">Moderación</span>
-          {moderationOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </button>
-        {moderationOpen && (
-          <div className="p-4 space-y-4">
-            {/* Stats */}
-            {stats && (
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Posts', value: stats.totalPosts, icon: MessageSquare },
-                  { label: 'Comentarios', value: stats.totalComments, icon: MessageSquare },
-                  { label: 'Likes', value: stats.totalLikes, icon: Heart },
-                  { label: 'Reportes', value: stats.pendingReports, icon: AlertTriangle },
-                ].map(({ label, value, icon: Icon }) => (
-                  <div key={label} className="bg-gray-50 rounded-lg p-2.5 flex items-center gap-2">
-                    <Icon size={14} className="text-gray-400" />
-                    <div>
-                      <p className="text-xs text-gray-500">{label}</p>
-                      <p className="text-sm font-bold text-gray-800">{value}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Post list */}
-            {!data.appId ? (
-              <p className="text-xs text-gray-400 text-center py-4">Guarda la app para ver los posts</p>
-            ) : loading && posts.length === 0 ? (
-              <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-gray-400" /></div>
-            ) : posts.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">Sin posts aún</p>
-            ) : (
-              <div className="space-y-2">
-                {posts.map((post) => (
-                  <div key={post.id} className="bg-gray-50 rounded-lg p-3 flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-700 truncate">{post.author.email}</p>
-                      <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{post.content}</p>
-                      <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
-                        <span><Heart size={10} className="inline" /> {post.likesCount}</span>
-                        <span><MessageSquare size={10} className="inline" /> {post.commentCount}</span>
-                        <span>{new Date(post.createdAt).toLocaleDateString('es-ES')}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => handleDeletePost(post.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-                {posts.length < postsTotal && (
-                  <button onClick={() => loadData(postsPage + 1)} disabled={loading} className="w-full py-2 text-xs text-primary hover:opacity-80 font-medium disabled:opacity-50">
-                    {loading ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Cargar más'}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Reportes */}
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <button onClick={() => setReportsOpen(!reportsOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700">Reportes</span>
-            {reports.length > 0 && (
-              <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{reports.length}</span>
-            )}
-          </div>
-          {reportsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </button>
-        {reportsOpen && (
-          <div className="p-4">
-            {reports.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">Sin reportes pendientes</p>
-            ) : (
-              <div className="space-y-2">
-                {reports.map((report) => (
-                  <div key={report.id} className="bg-orange-50 border border-orange-100 rounded-lg p-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-gray-700">
-                          <Flag size={10} className="inline text-orange-500 mr-1" />
-                          {report.targetType.replace('_', ' ')} reportado
-                        </p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">Por: {report.appUser.email}</p>
-                        {report.reason && <p className="text-[10px] text-gray-500 mt-0.5 italic">"{report.reason}"</p>}
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleDeletePost(report.targetId)} className="p-1 text-red-400 hover:text-red-600" title="Eliminar contenido">
-                          <Trash2 size={12} />
-                        </button>
-                        <button onClick={() => handleResolveReport(report.id)} className="p-1 text-green-500 hover:text-green-700" title="Resolver">
-                          <CheckCircle size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 };
