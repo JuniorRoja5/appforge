@@ -590,6 +590,19 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   const [addingProductToCol, setAddingProductToCol] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // Derivado puro del form state — valida coherencia comparePrice > price.
+  // Se "limpia" automáticamente cuando el usuario corrige (sin setState, sin
+  // limpieza manual al cerrar el form). null si comparePrice está vacío
+  // (campo opcional, no fuerza Save). Replica el guard productForm.price &&
+  // de handleUpdateProduct: en modo edit el price puede estar vacío (merge
+  // parcial); sin price no hay base para validar.
+  const priceError =
+    productForm.comparePrice &&
+    productForm.price &&
+    parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)
+      ? 'El precio anterior debe ser mayor al precio actual'
+      : null;
+
   const refresh = useCallback(async () => {
     if (!data.appId || !token) return;
     setLoading(true);
@@ -642,10 +655,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
   // ---- Product CRUD ----
   const handleAddProduct = async (colId: string) => {
     if (!productForm.name.trim() || !productForm.price || !data.appId) return;
-    if (productForm.comparePrice && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      setError('El precio anterior debe ser mayor al precio actual');
-      return;
-    }
+    if (priceError) return;
     try {
       await createCatalogProduct(data.appId, colId, {
         name: productForm.name.trim(),
@@ -663,10 +673,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
 
   const handleUpdateProduct = async (colId: string, productId: string) => {
     if (!data.appId) return;
-    if (productForm.comparePrice && productForm.price && parseFloat(productForm.comparePrice) <= parseFloat(productForm.price)) {
-      setError('El precio anterior debe ser mayor al precio actual');
-      return;
-    }
+    if (priceError) return;
     try {
       await updateCatalogProduct(data.appId, colId, productId, {
         name: productForm.name.trim() || undefined,
@@ -740,7 +747,8 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
           <label className="text-[10px] text-gray-500">Precio anterior</label>
           <input type="number" step="0.01" min="0" value={productForm.comparePrice} placeholder="—"
             onChange={e => setProductForm(prev => ({ ...prev, comparePrice: e.target.value }))}
-            className="w-20 text-xs border rounded px-2 py-1" />
+            className={`w-20 text-xs border rounded px-2 py-1 ${priceError ? 'border-red-400' : ''}`} />
+          {priceError && <p className="text-[9px] text-red-500 mt-0.5">{priceError}</p>}
         </div>
       </div>
       {/* Images */}
@@ -788,7 +796,7 @@ const SettingsPanel: React.FC<{ data: CatalogConfig; onChange: (d: CatalogConfig
       <div className="flex gap-1">
         <button
           onClick={() => isEditing ? handleUpdateProduct(colId, editingProductId!) : handleAddProduct(colId)}
-          disabled={!productForm.name.trim() || !productForm.price}
+          disabled={!productForm.name.trim() || !productForm.price || !!priceError}
           className="flex items-center gap-1 bg-emerald-600 text-white text-[10px] px-2 py-1 rounded hover:bg-emerald-700 disabled:opacity-50"
         >
           <Save size={10} /> {isEditing ? 'Guardar' : 'Añadir'}
