@@ -2986,4 +2986,70 @@ encontrada al abrir Fase 3 — el patrón aplicado (`ensureAppOwnership`
 como primera línea de toda lectura protegida) es el mismo que ya
 seguían los módulos posteriores a la unificación del backend.
 
+### #72 — Strings de usuario hardcodeados en el backend de push (mezcla ES/EN) — absorbible por feature i18n
+
+**Estado**: OPEN, LOW PRIORITY — sin arreglo standalone correcto. Se
+resolverá extrayendo los strings a claves i18n cuando aterrice la
+feature multidioma del producto. Se registra aquí solo como instancia
+conocida del problema más amplio para que no se pierda.
+
+**Origen**: detectado al smoke de la PushHistoryPage (Fase 3 M2,
+2026-06-18). Una notificación FAILED mostró su `errorMessage` en
+inglés: `"No devices registered for user"`. Al auditar el módulo
+push completo aparece una **mezcla incoherente de idiomas**:
+
+- Español: `'No tienes acceso a esta app'`, `'Token inválido'`,
+  `'FCM no está configurado. Configúralo en Admin > Settings.'`
+- Inglés: `'App not found'`, `'No devices registered for user'`,
+  `'title and body are required'`, `'Notification not found'`
+
+Origen exacto de la string del incidente: `fcm.service.ts:190`
+(persistido en `errorMessage` de `PushNotification` al marcar como
+`FAILED` por ausencia de devices).
+
+**Por qué NO se arregla hardcodeando todo a español**: ese fix sería
+el equivocado. Si toda la plataforma va a i18n (el producto tendrá
+clientes de distintos países y sus PWAs van a usuarios finales en
+idiomas distintos), hardcodear español acumula más deuda en vez de
+cerrarla. La traducción correcta es a **claves de traducción**, no a
+strings de otro idioma fijo.
+
+**Modelo de amenaza**: ninguno. Es un problema de UX/consistencia,
+no de seguridad. Los strings se rendean en el panel admin del
+cliente (no end-user). Si el cliente no entiende inglés, ve un
+mensaje técnico no útil — fricción menor.
+
+**Acción**: ninguna directa. Cuando la feature multidioma de la
+plataforma aterrice (ver memoria de roadmap), su barrido absorberá
+estos strings como parte del trabajo natural de extracción a claves.
+
+**Alcance del problema más amplio**: este #72 es una instancia. Hay
+strings hardcodeados similares en:
+- `auth.service.ts`, `loyalty.service.ts`, `coupons.service.ts`,
+  `apps.service.ts` y otros módulos del backend
+- Strings literales en JSX de la UI del builder
+- Strings de fallback en el runtime (PWA generada)
+
+No tiene sentido abrir entrada por cada módulo — la feature i18n
+los absorberá todos. Esta entrada cierra cuando el push se haya
+migrado a claves.
+
+**No bloquea**: nada.
+
+**Conexión**: con la feature i18n del roadmap. Tres superficies
+distintas a coordinar cuando se aborde:
+1. **UI del builder/admin** (SPAs React) — idioma del operador del
+   cliente.
+2. **Strings del backend** (errores/respuestas) — devueltos a esos
+   SPAs.
+3. **PWAs generadas para el usuario final** — eje independiente: el
+   idioma de la app que el cliente publica para SUS usuarios NO está
+   acoplado al idioma del builder de ese cliente. Un cliente alemán
+   puede querer su builder en alemán pero su app en español, o que
+   la app sea multilingüe.
+
+La (3) es la que se subestima fácil. Cuando se scopee la feature, no
+tratarla como un único `i18next` y ya: son tres superficies con
+dueños y políticas distintas.
+
 
