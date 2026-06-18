@@ -4,14 +4,103 @@ import { AppModule } from './app.module';
 import { json, urlencoded, raw } from 'express';
 
 async function bootstrap() {
-  // SECURITY: Fail-fast if critical environment variables are missing.
-  // Prevents running with insecure fallback secrets.
-  const requiredEnvVars = ['JWT_SECRET', 'APP_USER_JWT_SECRET', 'SMTP_ENCRYPTION_KEY', 'KEYSTORE_ENCRYPTION_KEY'];
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      console.error(`[FATAL] Missing required environment variable: ${envVar}`);
-      process.exit(1);
+  // SECURITY: Fail-fast validation of critical secrets at boot.
+  //
+  // Why this lives here (not in crypto.ts / strategy modules):
+  //   - main.ts boot is the only place where ALL failures can be reported in
+  //     a single arranque. Lazy validation in crypto.ts fires at first
+  //     encrypt/decrypt — broken keys crash at runtime (first SMTP send /
+  //     first APK build), not at deploy time.
+  //   - For SMTP_ENCRYPTION_KEY / KEYSTORE_ENCRYPTION_KEY the regex enforces
+  //     32 ASCII printable chars in a SINGLE expression. This is load-bearing:
+  //     value.length === 32 is NOT enough — a 32-char string with multibyte
+  //     (e.g. "ñ".repeat(32)) has Buffer.from(utf8).length === 64 and would
+  //     crash createCipheriv. The regex makes that class of bug unrepresentable.
+  //   - PLACEHOLDER_PATTERNS uses normalized substring match (lowercase +
+  //     strip -_) so a single canonical pattern catches multiple spellings
+  //     ("CHANGE_ME", "change-me", "ChangeMe" all match "changeme").
+  //   - All secrets are validated; we accumulate errors instead of bailing on
+  //     the first so a single boot reports every fix needed.
+  //
+  // Historic JWT_SECRET leak is NOT in PLACEHOLDER_PATTERNS by design: that
+  // would write the secret into git history. Rotation already happened; the
+  // entropy floor + length minimum + placeholder list cover the failure modes
+  // that matter without storing past compromised values.
+
+  // 'test' and 'todo' deliberately excluded: their false-positive surface
+  // exceeds their signal. A 32-char high-entropy key embedding "latest" or a
+  // Spanish "TodoSeguro…" would boot-fail despite being secure. The real
+  // dummies those would catch ("test", "testtesttest", "todoXXX") already
+  // fail the length floor (< 32) or the entropy floor (uniq <= 4). Long
+  // patterns below have negligible collision with real passphrases.
+  const PLACEHOLDER_PATTERNS = [
+    'changeme', 'yoursecret', 'yourapikey', 'pleasechange', 'replaceme',
+    'changeit', 'changethis', 'secret', 'password', 'default', 'example',
+    'placeholder', 'fixme', 'dummy',
+  ];
+
+  // 32 ASCII printable chars, no spaces. Guarantees length=32, bytes=32, and
+  // no whitespace footgun (env files commonly leak leading/trailing spaces).
+  const KEY_32_REGEX = /^[\x21-\x7E]{32}$/;
+
+  type SecretSpec =
+    | { name: string; kind: 'key32'; ascii: RegExp }
+    | { name: string; kind: 'minLength'; min: number };
+
+  const REQUIRED_SECRETS: SecretSpec[] = [
+    { name: 'JWT_SECRET',              kind: 'minLength', min: 32 },
+    { name: 'APP_USER_JWT_SECRET',     kind: 'minLength', min: 32 },
+    { name: 'SMTP_ENCRYPTION_KEY',     kind: 'key32',     ascii: KEY_32_REGEX },
+    { name: 'KEYSTORE_ENCRYPTION_KEY', kind: 'key32',     ascii: KEY_32_REGEX },
+  ];
+
+  const normalizeForPlaceholderMatch = (value: string): string =>
+    value.toLowerCase().replace(/[-_]/g, '');
+
+  const validateSecret = (
+    spec: SecretSpec,
+    value: string | undefined,
+  ): string | null => {
+    if (!value) return 'is missing or empty';
+
+    if (spec.kind === 'key32') {
+      // Single regex covers: length=32, byte count=32 (ASCII-only), no whitespace.
+      if (!spec.ascii.test(value)) {
+        return (
+          'must be exactly 32 ASCII printable chars (no spaces, no multibyte). ' +
+          `Got length=${value.length}, byte length=${Buffer.from(value, 'utf8').length}.`
+        );
+      }
+    } else if (value.length < spec.min) {
+      return `must be at least ${spec.min} chars (got ${value.length})`;
     }
+
+    const normalized = normalizeForPlaceholderMatch(value);
+    const matched = PLACEHOLDER_PATTERNS.find((p) => normalized.includes(p));
+    if (matched) {
+      return `matches a known insecure placeholder pattern ("${matched}")`;
+    }
+
+    const uniqueChars = new Set(value).size;
+    if (uniqueChars <= 4) {
+      return `has too few unique characters (${uniqueChars}) — looks like dummy input (e.g. "aaaa..." or "1234123412341234")`;
+    }
+
+    return null;
+  };
+
+  const secretErrors: string[] = [];
+  for (const spec of REQUIRED_SECRETS) {
+    const reason = validateSecret(spec, process.env[spec.name]);
+    if (reason) secretErrors.push(`  - ${spec.name}: ${reason}`);
+  }
+  if (secretErrors.length > 0) {
+    console.error('[FATAL] Secret validation failed:');
+    for (const e of secretErrors) console.error(e);
+    console.error(
+      '\nFix all of the above and restart. See SECURITY.md for guidance on generating strong secrets.',
+    );
+    process.exit(1);
   }
 
   const app = await NestFactory.create(AppModule);

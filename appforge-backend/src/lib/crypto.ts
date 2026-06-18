@@ -2,24 +2,34 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 
+// Defense-in-depth: the canonical secret validation lives in main.ts boot
+// (fail-fast, structured, validates ALL secrets). These checks repeat the
+// byte-count guarantee here because crypto.ts can be loaded via paths that
+// bypass boot (CLI scripts, e2e tests). Byte-based — not key.length — because
+// a 32-char string with multibyte chars produces >32 bytes and crashes
+// createCipheriv with a cryptic OpenSSL error instead of a useful message.
 function getKey(): Buffer {
   const key = process.env.SMTP_ENCRYPTION_KEY;
-  if (!key || key.length !== 32) {
+  const buf = key ? Buffer.from(key, 'utf8') : null;
+  if (!buf || buf.length !== 32) {
     throw new Error(
-      'SMTP_ENCRYPTION_KEY must be exactly 32 characters. Set it in your .env file.',
+      'SMTP_ENCRYPTION_KEY must encode to exactly 32 bytes (use 32 ASCII printable chars). ' +
+        'Set it in your .env file.',
     );
   }
-  return Buffer.from(key, 'utf8');
+  return buf;
 }
 
 function getKeystoreKey(): Buffer {
   const key = process.env.KEYSTORE_ENCRYPTION_KEY;
-  if (!key || key.length !== 32) {
+  const buf = key ? Buffer.from(key, 'utf8') : null;
+  if (!buf || buf.length !== 32) {
     throw new Error(
-      'KEYSTORE_ENCRYPTION_KEY must be exactly 32 characters. Set it in your .env file.',
+      'KEYSTORE_ENCRYPTION_KEY must encode to exactly 32 bytes (use 32 ASCII printable chars). ' +
+        'Set it in your .env file.',
     );
   }
-  return Buffer.from(key, 'utf8');
+  return buf;
 }
 
 /** Encrypt a plaintext string with AES-256-GCM. Returns "iv:tag:ciphertext" in hex. */
