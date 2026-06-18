@@ -729,4 +729,52 @@ export class AdminService {
       },
     };
   }
+
+  /**
+   * Self-stop: revoke this impersonation session (#43). Called by the
+   * impersonation token itself — sets revokedAt and revokedBy: 'self'.
+   *
+   * Idempotent for the concurrent double-submit window: a second call that
+   * raced past the JwtStrategy guard returns { alreadyRevoked: true } instead
+   * of erroring. A sequential second call never reaches here — the strategy's
+   * gated lookup rejects with 401 once revokedAt is set.
+   */
+  async stopImpersonation(impersonationLogId: string) {
+    const log = await this.prisma.impersonationLog.findUnique({
+      where: { id: impersonationLogId },
+      select: { id: true, revokedAt: true },
+    });
+    if (!log) {
+      throw new NotFoundException('Impersonation session not found.');
+    }
+    if (log.revokedAt) {
+      return { revoked: true, alreadyRevoked: true };
+    }
+    await this.prisma.impersonationLog.update({
+      where: { id: impersonationLogId },
+      data: { revokedAt: new Date(), revokedBy: 'self' },
+    });
+    return { revoked: true, alreadyRevoked: false };
+  }
+
+  /**
+   * Panic button (#43): revoke ALL live impersonation sessions in one shot.
+   * Live = not yet revoked AND not yet past server-side expiresAt. This is
+   * the only path that doesn't require knowing the logId of the leaked
+   * token — the original use case for the kill switch.
+   *
+   * Returns the count of sessions actually flipped. Idempotent: re-running
+   * when there are no live sessions returns { revoked: 0 } cleanly.
+   */
+  async revokeAllImpersonations(superAdminId: string) {
+    const now = new Date();
+    const result = await this.prisma.impersonationLog.updateMany({
+      where: {
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { revokedAt: now, revokedBy: superAdminId },
+    });
+    return { revoked: result.count };
+  }
 }

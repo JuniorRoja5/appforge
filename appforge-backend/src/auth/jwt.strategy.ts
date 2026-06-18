@@ -41,6 +41,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    // Impersonation kill switch (#43). Gated by `if (payload.impersonationLogId)`
+    // so normal sessions never pay the extra query — only impersonation tokens
+    // carry this claim. Three rejections, in order of cheapness:
+    //  - log not found      (record deleted / malformed token)
+    //  - log.revokedAt set  (self-stop or panic revoke-all)
+    //  - log.expiresAt past (redundant with JWT exp — passport rejects before
+    //    validate() runs — but cheap defense against any future drift between
+    //    the two timestamps).
+    if (payload.impersonationLogId) {
+      const log = await this.prisma.impersonationLog.findUnique({
+        where: { id: payload.impersonationLogId },
+        select: { revokedAt: true, expiresAt: true },
+      });
+      if (!log) {
+        throw new UnauthorizedException('Impersonation session not found.');
+      }
+      if (log.revokedAt) {
+        throw new UnauthorizedException('Impersonation session has been revoked.');
+      }
+      if (log.expiresAt < new Date()) {
+        throw new UnauthorizedException('Impersonation session has expired.');
+      }
+    }
+
     // Always use current DB values, not stale JWT payload.
     // Pass through impersonation flags untouched — they live in the
     // signed payload and identify the super-admin who initiated the

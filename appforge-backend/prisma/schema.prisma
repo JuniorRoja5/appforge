@@ -85,13 +85,19 @@ model User {
 /// the time window. Pulling this table answers "who impersonated whom
 /// and when?" — required for support disputes and compliance.
 model ImpersonationLog {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   superAdminId       String
-  superAdmin         User     @relation("ImpersonationActor", fields: [superAdminId], references: [id], onDelete: Cascade)
+  superAdmin         User      @relation("ImpersonationActor", fields: [superAdminId], references: [id], onDelete: Cascade)
   impersonatedUserId String
-  impersonatedUser   User     @relation("ImpersonationTarget", fields: [impersonatedUserId], references: [id], onDelete: Cascade)
-  startedAt          DateTime @default(now())
+  impersonatedUser   User      @relation("ImpersonationTarget", fields: [impersonatedUserId], references: [id], onDelete: Cascade)
+  startedAt          DateTime  @default(now())
   expiresAt          DateTime
+  // Kill switch (#43). Plain String sentinel — NOT @relation — because two
+  // distinct sources write here: a super-admin UUID (panic button
+  // revoke-all) or the literal 'self' (self-stop by the impersonation token
+  // itself). Converting this to FK would break the 'self' sentinel.
+  revokedAt          DateTime?
+  revokedBy          String?
 
   @@index([superAdminId])
   @@index([impersonatedUserId])

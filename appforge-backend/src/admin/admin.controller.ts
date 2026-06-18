@@ -1,6 +1,7 @@
 import {
   Controller, Get, Put, Delete, Post,
   Param, ParseUUIDPipe, Query, Body, Request, UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -104,5 +105,34 @@ export class AdminController {
     @Request() req: any,
   ) {
     return this.adminService.impersonateUser(req.user.userId, tenantId, userId);
+  }
+
+  /**
+   * Self-stop the current impersonation session (#43). Callable WITH the
+   * impersonation token itself — req.user.impersonationLogId identifies the
+   * session being terminated. No @Roles: RolesGuard passes when metadata is
+   * absent (see RolesGuard L15-17), and the impersonation token's role is
+   * CLIENT (the impersonated user's role), which @Roles(SUPER_ADMIN) would
+   * reject. The handler-level BadRequest fence prevents misuse from a
+   * normal (non-impersonation) JWT.
+   */
+  @Post('impersonation/stop')
+  stopImpersonation(@Request() req: any) {
+    if (!req.user.impersonationLogId) {
+      throw new BadRequestException('Not an impersonation session.');
+    }
+    return this.adminService.stopImpersonation(req.user.impersonationLogId);
+  }
+
+  /**
+   * Panic button (#43): revoke ALL live impersonation sessions. SUPER_ADMIN
+   * only. Doesn't require knowing the logId of the leaked token — that's the
+   * whole point. Returns { revoked: <count> } with the number of sessions
+   * actually flipped.
+   */
+  @Post('impersonation/revoke-all')
+  @Roles(Role.SUPER_ADMIN)
+  revokeAllImpersonations(@Request() req: any) {
+    return this.adminService.revokeAllImpersonations(req.user.userId);
   }
 }
