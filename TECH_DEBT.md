@@ -3110,4 +3110,96 @@ destilado: ver memoria `project_data_dashboards_phase3_done.md`.
 
 **No bloquea**: nada.
 
+### #74 — SMTP saliente del VPS sin SPF/DKIM — entrega a Gmail rebota (bloquea reset password de clientes)
+
+**Estado**: OPEN, HIGH PRIORITY para go-live serio con clientes reales.
+**Origen**: detectado 2026-06-18 durante el hardening de #11. Postfix
+local del VPS intenta entregar correo directo desde su IP (sin relay
+autenticado) y Gmail responde con `550-5.7.26 unauthenticated, requires
+SPF or DKIM`. DKIM y SPF para `creatu.app` no están publicados en DNS.
+
+**Impacto operacional confirmado**:
+- Cualquier email originado en el VPS (notificaciones, alertas
+  internas, password reset de end-users del cliente, etc.) que vaya
+  a Gmail (y casi cualquier proveedor moderno) **rebota**.
+- El flujo de **reset password del cliente** dispara `sendmail` desde
+  el backend → el código de reset nunca llega → el usuario no puede
+  recuperar acceso. Verificable manualmente.
+- Alertas de #11 (originalmente diseñadas para email) se desviaron a
+  Telegram precisamente por este motivo; el canal Telegram es estable
+  pero la causa raíz sigue abierta.
+
+**Modelo de amenaza**: no es agujero de seguridad — es agujero de
+entregabilidad. Pero los efectos son operacionalmente graves: pérdida
+de funcionalidad documentada (reset password) + acumulación silenciosa
+de bounces en `/var/mail/root` mientras postfix reintenta.
+
+**Acción cuando se aborde** (dos caminos):
+- **MTA propio** (2-4h): publicar SPF + configurar opendkim + publicar
+  DKIM en DNS + DMARC. Requiere mantenimiento continuo de reputación
+  de la IP del VPS.
+- **Relay autenticado** (1-2h, recomendado para operador en solitario):
+  Mailgun / Postmark / SendGrid / Amazon SES / Brevo. El backend pasa
+  credenciales SMTP del proveedor y hereda su reputación.
+
+**Mientras tanto**: nota para postfix → local-only o limpiar
+`/var/mail/root` periódicamente (higiene, no urgente).
+
+**Prioridad**: **alta — bloquea go-live con clientes reales** porque
+el reset password queda roto. Si el go-live se acota a beta cerrada
+con clientes a los que se les pueda resetear contraseña por canal
+fuera-de-banda, no bloquea, pero hay que tenerlo claro.
+
+**No bloquea**: hardening de seguridad interno (#7, #11 alerta vía
+Telegram ya operativa).
+
+**Conexión con [[#72]]**: ambos son deudas operacionales del módulo de
+comunicación con clientes, descubiertas durante el hardening de
+seguridad. Diferentes en kind pero aterrizan en la misma capa cuando
+se priorice la salida-a-cliente.
+
+### #75 — Patrón aprendido: `grep -qF` sin filtrar comentarios da falso positivo en configs declarativas
+
+**Estado**: OPEN — recordatorio metodológico, no fix de código.
+**Origen**: detectado 2026-06-18 durante la aplicación del hardening
+de #11. El bloque inicial usaba `grep -qF "<directive>"` para decidir
+si añadir una línea al `50unattended-upgrades`. El archivo de Ubuntu
+trae cada directiva **comentada** como ejemplo (`//Unattended-
+Upgrade::Automatic-Reboot "false";`). El grep encontró el comentario,
+asumió "ya está", y NO añadió la línea activa.
+
+Resultado pre-corrección: el config mostraba **solo 1 de 3** líneas
+activas, con las otras 2 silenciosamente ausentes. El operador creyó
+que las 3 estaban aplicadas porque el script decía "escrito"; solo se
+detectó al verificar con `grep -vE '^\s*//'` después.
+
+**Patrón a evitar**:
+```bash
+grep -qF "Unattended-Upgrade::Automatic-Reboot" /etc/... || echo "..." >> ...
+# Falso positivo: el archivo de ejemplo de Ubuntu trae la directiva comentada
+```
+
+**Patrón correcto** (filtrar comentarios antes de comparar):
+```bash
+grep -vE '^\s*//' /etc/... | grep -qE "^\s*Unattended-Upgrade::Automatic-Reboot" \
+  || echo "..." >> ...
+```
+
+**Familia del patrón** (mismo riesgo en configs donde el proveedor
+publica todas las directivas como comentarios):
+- `^\s*#` en config files de Linux clásicos
+- `^\s*//` en config files estilo APT
+- `^\s*;` en config files estilo PHP/INI
+
+**Conexión metodológica**: misma disciplina que "commit ≠ desplegado"
+y "el agente dijo que lo hizo ≠ está hecho". El check de presencia
+debe ejercitar la condición que importa (línea **activa**), no la
+sintáctica laxa (línea **existe** en el archivo).
+
+**Acción**: no es fix de un archivo — es checklist de revisión para
+scripts futuros que toquen configs declarativas con comentarios-
+ejemplo.
+
+**No bloquea**: nada.
+
 
