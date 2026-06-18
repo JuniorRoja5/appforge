@@ -2898,9 +2898,26 @@ publicó algo, pero ese "algo" es un downgrade que rechazamos.
 
 ### #71 — Multi-tenant isolation gap: reads de `/apps/:appId/push` no verificaban ownership — FIXED IN PLACE
 
-**Estado**: RESUELTO en el mismo commit del hallazgo (Fase 3 M1,
-2026-06-16). Found-and-fixed simultáneo, no es deuda diferida — se
-registra aquí para trazabilidad del incidente.
+**Estado**: RESUELTO y VERIFICADO EN PROD (Fase 3 M1, 2026-06-16).
+Found-and-fixed simultáneo, no es deuda diferida — se registra aquí
+para trazabilidad del incidente.
+
+**Verificación en prod (2026-06-16, tras `pm2 reload appforge-api`)**:
+- Token CLIENT del tenant dueño → `GET /apps/{appPropia}/push` → 200 ✅
+- Mismo token → `GET /apps/{appPropia}/push/stats` → 200 ✅
+- Mismo token → `GET /apps/{appPropia}/push/devices/count` → 200 ✅
+- Mismo token → `GET /apps/00000000-0000-0000-0000-000000000000/push`
+  → 404 con body `{"message":"App not found","error":"Not Found","statusCode":404}` ✅
+- Mismo token → `GET /apps/.../push/stats` (mismo appId inexistente)
+  → 404 ✅
+
+El árbitro: el negativo cortó en `ensureAppOwnership` con `App not
+found` antes de leer datos. Pre-fix esa misma llamada habría
+devuelto 200 con `[]` (filtrando solo por appId). Gap cross-tenant
+cerrado. Como la prod tiene 1 sola app, se ejercitó la rama 404 del
+helper; la rama 403 (`No tienes acceso a esta app`) es la misma
+función dos líneas más abajo. Las dos juntas prueban que el helper
+corre y discrimina.
 
 **Origen**: detectado al abrir Fase 3 (Push history admin page) y
 auditar los endpoints que la página iba a consumir. SQL count del
