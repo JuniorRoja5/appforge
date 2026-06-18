@@ -1,6 +1,7 @@
 import React from 'react';
 import { LogOut, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { stopImpersonation } from '../lib/api';
 
 /**
  * Persistent top banner shown when the active session was issued by a
@@ -8,19 +9,36 @@ import { useAuthStore } from '../store/useAuthStore';
  * impossible to ignore: red strip across the entire viewport, exit
  * button on the right.
  *
- * Click "Salir" → wipes the auth store and reloads the page. The user
- * lands on the regular login screen of the builder. The super-admin's
- * own session lives in another tab (the admin panel) — closing this
- * tab is also a clean exit.
+ * Click "Salir" → revokes the session server-side (#43) and then wipes
+ * the local auth store + reloads. The server-side revoke is what makes
+ * the token actually die: before #43, "Salir" only discarded the JWT
+ * locally; the token stayed cryptographically valid until exp (1h).
+ *
+ * The super-admin's own session lives in another tab (the admin panel)
+ * — closing this tab is also a clean exit.
  */
 export const ImpersonationBanner: React.FC = () => {
   const impersonation = useAuthStore((s) => s.impersonation);
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
 
   if (!impersonation) return null;
 
-  const handleExit = () => {
+  const handleExit = async () => {
+    // Revoke server-side BEFORE clearing local state. If logout() ran first,
+    // token would be null and we'd lose the only credential capable of
+    // identifying the session to revoke. Best-effort: a network failure or
+    // an already-expired token must not trap the user inside the impersonated
+    // UI — the local logout + reload still runs in the catch.
+    if (token) {
+      try {
+        await stopImpersonation(token);
+      } catch {
+        // Intentional swallow — see comment above. The server-side state may
+        // be inconsistent for at most until the JWT's natural exp (1h).
+      }
+    }
     logout();
     // Hard reload to clear any in-memory state from the impersonated session.
     window.location.href = '/';

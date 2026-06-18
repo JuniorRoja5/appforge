@@ -169,6 +169,25 @@ export const deleteApp = async (appId: string, token: string): Promise<void> => 
   }
 };
 
+// Revoke the current impersonation session server-side (#43). Called with
+// the impersonation token itself — the backend reads req.user.impersonationLogId
+// and flips revokedAt. After this, jwt.strategy will reject any further use
+// of this token with 401, even if it has not reached its 1h exp yet.
+//
+// Returns void by design: success or already-revoked are both "session is
+// dead", and the caller (handleExit) wraps this in a best-effort catch so
+// network failure cannot trap the user inside the impersonated UI.
+export const stopImpersonation = async (token: string): Promise<void> => {
+  const response = await fetch(`${API_URL}/admin/impersonation/stop`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al revocar la sesión de suplantación');
+  }
+};
+
 export const uploadFile = async (file: File, token: string) => {
   const formData = new FormData();
   formData.append('file', file);
