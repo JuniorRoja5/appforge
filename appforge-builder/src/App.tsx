@@ -20,7 +20,6 @@ import { FanWallModerationPage } from './pages/FanWallModerationPage';
 import { CouponsAdminPage } from './pages/CouponsAdminPage';
 import { LoyaltyAdminPage } from './pages/LoyaltyAdminPage';
 import { PushHistoryPage } from './pages/PushHistoryPage';
-import { NewsAdminPage } from './pages/NewsAdminPage';
 import { PwaPage } from './pages/PwaPage';
 import { BillingPage } from './pages/BillingPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
@@ -69,7 +68,6 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/coupons', element: <CouponsAdminPage /> },
       { path: '/apps/:appId/loyalty', element: <LoyaltyAdminPage /> },
       { path: '/apps/:appId/push', element: <PushHistoryPage /> },
-      { path: '/apps/:appId/news', element: <NewsAdminPage /> },
       { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
       { path: '/billing', element: <BillingPage /> },

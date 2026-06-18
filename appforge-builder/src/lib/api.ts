@@ -353,16 +353,6 @@ export const getNewsArticles = async (appId: string, token: string): Promise<New
   return response.json();
 };
 
-// Variante tenant-scoped del listado, para la NewsAdminPage. El público de
-// arriba sirve a la PWA runtime sin auth — coexiste, no se sustituye.
-export const getNewsAdmin = async (appId: string, token: string): Promise<NewsArticle[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/news/admin`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error('Error al obtener artículos');
-  return response.json();
-};
-
 export const createNewsArticle = async (
   appId: string,
   data: { title: string; content: string; imageUrl?: string; videoUrl?: string; publishedAt?: string },
