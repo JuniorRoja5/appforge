@@ -18,6 +18,17 @@ export class NewsController {
     return this.newsService.findAll(appId);
   }
 
+  // @Get('admin') DEBE declararse antes que @Get(':id'). Express resuelve
+  // por orden de declaración, no prioriza segmento estático sobre param.
+  // Invertir el orden hace que /apps/:appId/news/admin caiga en findOne con
+  // id='admin' — comportamiento roto sin error visible. No reordenar.
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPER_ADMIN, Role.CLIENT)
+  findAllForAdmin(@Param('appId') appId: string, @Request() req) {
+    return this.newsService.findAllForAdmin(appId, req.user.tenantId);
+  }
+
   @Get(':id')
   findOne(@Param('appId') appId: string, @Param('id') id: string) {
     return this.newsService.findOne(appId, id);

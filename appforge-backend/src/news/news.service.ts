@@ -31,6 +31,17 @@ export class NewsService {
     return article;
   }
 
+  // Variante admin tenant-scoped del findAll: misma query, ownership por
+  // delante. NO sustituye al findAll público (consumido por la PWA runtime
+  // sin auth) — coexiste como ruta separada protegida del admin del builder.
+  async findAllForAdmin(appId: string, tenantId: string) {
+    await this.ensureAppOwnership(appId, tenantId);
+    return this.prisma.newsArticle.findMany({
+      where: { appId },
+      orderBy: { publishedAt: 'desc' },
+    });
+  }
+
   async create(appId: string, dto: CreateNewsArticleDto, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
     if (!dto.title || !dto.content) {
