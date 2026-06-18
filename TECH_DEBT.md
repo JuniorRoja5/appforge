@@ -3052,4 +3052,62 @@ La (3) es la que se subestima fácil. Cuando se scopee la feature, no
 tratarla como un único `i18next` y ya: son tres superficies con
 dueños y políticas distintas.
 
+### #73 — `GET /apps/:appId/news/admin` sin consumidor frontend tras revert M3 + M4 Events cancelado
+
+**Estado**: OPEN, LOW PRIORITY — endpoint backend sin consumidor UI;
+se conserva con motivo documentado. M4 Events documentado como
+cancelado dentro de esta entrada (no es deuda, es decisión de
+no-construir).
+
+**Origen**: 2026-06-18. Tras smoke UI de `NewsAdminPage` (Fase 3 M3),
+una crítica del founder reveló que la página era una versión más pobre
+del editor del módulo `news_feed` (que ya tiene CRUD completo + Quill +
+imágenes/vídeo + lista con miniaturas). El panel admin de news no
+tenía razón de ser. Se ejecutó revert quirúrgico del frontend (commit
+`aefc129` revierte `1104f9d` + `c419e09`).
+
+**El endpoint backend se queda (NO se revierte)**:
+El método `findAllForAdmin` en `news.service.ts` + `@Get('admin')` en
+`news.controller.ts` (commit `5a721da`) se conservan en su sitio.
+
+**Por qué se queda**:
+- Código limpio: `ensureAppOwnership` desde la línea 1 (patrón [[#71]]
+  aplicado de nacimiento).
+- El comentario en `news.controller.ts` documenta el gotcha del orden
+  `@Get('admin')` vs `@Get(':id')` — la próxima vez que alguien añada
+  un endpoint admin a news no caerá en la trampa.
+- Si en el futuro aparece un consumidor real (panel de analítica de
+  engagement, métricas de lectura — cosas que el editor no hace porque
+  no es su responsabilidad), el endpoint ya está construido y seguro.
+
+**Honestidad del registro** (la trazabilidad importa más que aparentar
+que estuviera planificado): el endpoint se construyó por una premisa
+equivocada — asumir `News ≈ Push` sin medir si el editor del módulo
+ya cubría la gestión. Se conserva solo porque ya es código limpio y
+seguro, no porque estuviera planeado para coexistir sin consumidor. Si
+en una limpieza futura se decide eliminar todo código sin consumidor,
+este endpoint es candidato razonable.
+
+**M4 Events cancelado por la misma razón**:
+Antes de planificar M4 ("Events sobre el mismo molde que News"), se
+midió `events.module.tsx` y se confirmó que el editor del módulo
+events ya tiene CRUD completo (`createEvent`/`updateEvent`/
+`deleteEvent`) + edición inline + todos los campos del evento (título,
+descripción, location con Google Maps, eventDate/eventEndDate,
+imageUrl con preview, category, price, ticketUrl) + lista con
+miniaturas. Es CMS, igual que News. M4 no se construye. **No se
+registra entrada propia para M4**: no es deuda, es decisión de
+no-construir documentada aquí.
+
+**Conexión con la iniciativa data-dashboards**: tras esta corrección
++ auditoría log/CMS del resto de módulos pendientes (`photo_gallery`,
+`menu_restaurant`, `custom_page`, `links`, `testimonials`, `video`,
+`hero_profile`, `pdf_reader`, `user_profile`), se concluye que todos
+los módulos que justifican panel admin (log/moderación) ya están
+hechos en Fases 1, 2 y M2 de Fase 3. La iniciativa data-dashboards
+queda cerrada de facto. Detalle de la auditoría y el criterio
+destilado: ver memoria `project_data_dashboards_phase3_done.md`.
+
+**No bloquea**: nada.
+
 
