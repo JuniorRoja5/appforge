@@ -12,13 +12,16 @@ async function bootstrap() {
   //     encrypt/decrypt — broken keys crash at runtime (first SMTP send /
   //     first APK build), not at deploy time.
   //   - For SMTP_ENCRYPTION_KEY / KEYSTORE_ENCRYPTION_KEY the regex enforces
-  //     32 ASCII printable chars in a SINGLE expression. This is load-bearing:
-  //     value.length === 32 is NOT enough — a 32-char string with multibyte
-  //     (e.g. "ñ".repeat(32)) has Buffer.from(utf8).length === 64 and would
-  //     crash createCipheriv. The regex makes that class of bug unrepresentable.
+  //     64 hex chars (= 32 random bytes when decoded) in a SINGLE expression.
+  //     This is load-bearing: Buffer.from(key, 'hex') SILENTLY drops non-hex
+  //     characters and returns a shorter buffer — a string like "abZdef…"
+  //     would pass naive length checks and crash createCipheriv with a
+  //     cryptic OpenSSL error. The strict regex makes that class of bug
+  //     unrepresentable. Generate with: openssl rand -hex 32.
   //   - PLACEHOLDER_PATTERNS uses normalized substring match (lowercase +
   //     strip -_) so a single canonical pattern catches multiple spellings
-  //     ("CHANGE_ME", "change-me", "ChangeMe" all match "changeme").
+  //     ("CHANGE_ME", "change-me", "ChangeMe" all match "changeme"). Hex
+  //     keys ([0-9a-f]) trivially pass — no pattern is composed of hex chars.
   //   - All secrets are validated; we accumulate errors instead of bailing on
   //     the first so a single boot reports every fix needed.
   //
@@ -26,6 +29,12 @@ async function bootstrap() {
   // would write the secret into git history. Rotation already happened; the
   // entropy floor + length minimum + placeholder list cover the failure modes
   // that matter without storing past compromised values.
+  //
+  // Pre-#7 the encryption key regex was /^[\x21-\x7E]{32}$/ (32 ASCII chars
+  // used as 32 UTF-8 bytes). Migrated to hex64 in #7 to guarantee 256 bits
+  // of real entropy regardless of human passphrase quality. crypto.ts changed
+  // in lockstep — this regex and Buffer.from(key, 'hex') there MUST agree,
+  // or boot would pass and runtime would crash.
 
   // 'test' and 'todo' deliberately excluded: their false-positive surface
   // exceeds their signal. A 32-char high-entropy key embedding "latest" or a
@@ -39,19 +48,23 @@ async function bootstrap() {
     'placeholder', 'fixme', 'dummy',
   ];
 
-  // 32 ASCII printable chars, no spaces. Guarantees length=32, bytes=32, and
-  // no whitespace footgun (env files commonly leak leading/trailing spaces).
-  const KEY_32_REGEX = /^[\x21-\x7E]{32}$/;
+  // 64 hex chars = 32 bytes when decoded via Buffer.from(key, 'hex'). The
+  // case-insensitive flag accepts both 'a3b1…' and 'A3B1…' (openssl outputs
+  // lowercase; some KMS systems use uppercase — neither is fighty). Anchors
+  // are strict: leading/trailing whitespace from env files silently produces
+  // a wrong-length decoded buffer and we want a clear boot-time rejection.
+  // The literal 'key32' in SecretSpec refers to 32 BYTES, not 32 chars.
+  const KEY_HEX64_REGEX = /^[0-9a-f]{64}$/i;
 
   type SecretSpec =
-    | { name: string; kind: 'key32'; ascii: RegExp }
+    | { name: string; kind: 'key32'; format: RegExp }
     | { name: string; kind: 'minLength'; min: number };
 
   const REQUIRED_SECRETS: SecretSpec[] = [
     { name: 'JWT_SECRET',              kind: 'minLength', min: 32 },
     { name: 'APP_USER_JWT_SECRET',     kind: 'minLength', min: 32 },
-    { name: 'SMTP_ENCRYPTION_KEY',     kind: 'key32',     ascii: KEY_32_REGEX },
-    { name: 'KEYSTORE_ENCRYPTION_KEY', kind: 'key32',     ascii: KEY_32_REGEX },
+    { name: 'SMTP_ENCRYPTION_KEY',     kind: 'key32',     format: KEY_HEX64_REGEX },
+    { name: 'KEYSTORE_ENCRYPTION_KEY', kind: 'key32',     format: KEY_HEX64_REGEX },
   ];
 
   const normalizeForPlaceholderMatch = (value: string): string =>
@@ -64,11 +77,15 @@ async function bootstrap() {
     if (!value) return 'is missing or empty';
 
     if (spec.kind === 'key32') {
-      // Single regex covers: length=32, byte count=32 (ASCII-only), no whitespace.
-      if (!spec.ascii.test(value)) {
+      // Single regex covers: 64 hex chars (= 32 bytes when decoded), no spaces,
+      // no non-hex char that would silently shorten the Buffer.from(...,'hex')
+      // result and crash createCipheriv. Generate with: openssl rand -hex 32.
+      if (!spec.format.test(value)) {
+        const decodedBytes = Buffer.from(value, 'hex').length;
         return (
-          'must be exactly 32 ASCII printable chars (no spaces, no multibyte). ' +
-          `Got length=${value.length}, byte length=${Buffer.from(value, 'utf8').length}.`
+          'must be exactly 64 hex chars encoding 32 bytes. ' +
+          'Generate with: openssl rand -hex 32. ' +
+          `Got length=${value.length}, decoded bytes=${decodedBytes}.`
         );
       }
     } else if (value.length < spec.min) {

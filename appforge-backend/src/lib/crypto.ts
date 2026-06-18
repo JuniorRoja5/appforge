@@ -5,16 +5,21 @@ const ALGORITHM = 'aes-256-gcm';
 // Defense-in-depth: the canonical secret validation lives in main.ts boot
 // (fail-fast, structured, validates ALL secrets). These checks repeat the
 // byte-count guarantee here because crypto.ts can be loaded via paths that
-// bypass boot (CLI scripts, e2e tests). Byte-based — not key.length — because
-// a 32-char string with multibyte chars produces >32 bytes and crashes
-// createCipheriv with a cryptic OpenSSL error instead of a useful message.
+// bypass boot (CLI scripts, e2e tests).
+//
+// Format is hex (post-#7): 64 hex chars in the env var, decoded to 32 random
+// bytes for AES-256-GCM. Buffer.from(s, 'hex') SILENTLY drops non-hex chars
+// and returns a shorter buffer — so the buf.length !== 32 check is the trap
+// that catches malformed hex (e.g. accidental letter beyond a-f). Validation
+// here must agree with main.ts KEY_HEX64_REGEX, or boot would pass and this
+// would throw.
 function getKey(): Buffer {
   const key = process.env.SMTP_ENCRYPTION_KEY;
-  const buf = key ? Buffer.from(key, 'utf8') : null;
+  const buf = key ? Buffer.from(key, 'hex') : null;
   if (!buf || buf.length !== 32) {
     throw new Error(
-      'SMTP_ENCRYPTION_KEY must encode to exactly 32 bytes (use 32 ASCII printable chars). ' +
-        'Set it in your .env file.',
+      'SMTP_ENCRYPTION_KEY must be exactly 64 hex chars encoding 32 bytes. ' +
+        'Generate with: openssl rand -hex 32. Set it in your .env file.',
     );
   }
   return buf;
@@ -22,11 +27,11 @@ function getKey(): Buffer {
 
 function getKeystoreKey(): Buffer {
   const key = process.env.KEYSTORE_ENCRYPTION_KEY;
-  const buf = key ? Buffer.from(key, 'utf8') : null;
+  const buf = key ? Buffer.from(key, 'hex') : null;
   if (!buf || buf.length !== 32) {
     throw new Error(
-      'KEYSTORE_ENCRYPTION_KEY must encode to exactly 32 bytes (use 32 ASCII printable chars). ' +
-        'Set it in your .env file.',
+      'KEYSTORE_ENCRYPTION_KEY must be exactly 64 hex chars encoding 32 bytes. ' +
+        'Generate with: openssl rand -hex 32. Set it in your .env file.',
     );
   }
   return buf;
