@@ -5,8 +5,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
-import type { UpdatePlatformSmtpDto } from './dto/update-platform-smtp.dto';
-import type { UpdatePlatformFcmDto } from './dto/update-platform-fcm.dto';
+import { UpdatePlatformSmtpDto } from './dto/update-platform-smtp.dto';
+import { UpdatePlatformFcmDto } from './dto/update-platform-fcm.dto';
 
 @Controller('platform')
 @UseGuards(JwtAuthGuard, RolesGuard)
