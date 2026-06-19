@@ -3474,51 +3474,164 @@ las que [[#7]] rotó (`SMTP_ENCRYPTION_KEY`, `KEYSTORE_ENCRYPTION_KEY`)
 [[#79]] dice que recuperar la BD sin los secretos del `.env` no es
 recuperar el sistema.
 
-### #80 — `/opt/backup-db.sh` desplegado ≠ `backup-db.sh` del repo
+### #80 — `/opt/backup-db.sh` desplegado ≠ `backup-db.sh` del repo (el desplegado es SUPERIOR)
 
-**Estado**: OPEN, LOW PRIORITY (disciplina, no funcional).
+**Estado**: OPEN, LOW PRIORITY (disciplina commit ≠ desplegado).
 **Origen**: detectado 2026-06-19 al medir el script de backup durante
-el cierre de [[#78]]. El script que el cron ejecuta vive en
-`/opt/backup-db.sh` (1320 bytes, mod 9 may). El script en el repo
-en `backup-db.sh` tiene otro contenido (verificación con `gzip -t`,
-log con `✓ Backup completado`, retención explícita).
+el cierre de [[#78]]. Lectura inicial del registro: "el desplegado y
+el del repo son distintos, hay que decidir cuál gana". Tras leer
+ambos completos al cerrar [[#78]], **la lectura era equivocada**: el
+desplegado (`/opt/backup-db.sh`, 1320 bytes) **es superior** al del
+repo, no inferior. La acción correcta es alinear el repo al
+desplegado, no al revés.
 
-Los logs del VPS contienen líneas con formato `OK -- backup ...
-(N bytes)`, que **no aparecen** en el script del repo. Confirma que
-son scripts distintos, no la misma cosa cargada por dos rutas.
+**Lo que el `/opt/backup-db.sh` REAL ya hace**:
+1. `set -euo pipefail` — corta a la primera.
+2. Tamaño mínimo: `ACTUAL_SIZE < 1024` → `rm -f` + `exit 1`. No deja
+   ficheros degenerados en disco.
+3. `gzip -t` real sobre el dump → `rm -f` + `exit 1` si corrupto.
+4. **Cabecera `PostgreSQL database dump` verificada por `zcat | head -5 | grep`**.
+   Esto es más fuerte que `gzip -t`: prueba que el contenido es un
+   dump auténtico, no solo que el gzip esté bien formado.
+5. Limpieza con `find -mtime +30 -delete`.
+6. Log `OK -- backup $OUT (N bytes)` solo se emite si pasó las 4
+   validaciones anteriores. **El log no miente** — al menos no este
+   script.
 
-**Modelo de amenaza**: no funcional — el backup desplegado funciona
-y produce dumps restaurables (probado en [[#78]]). Pero:
+Esto invalida la premisa que motivó parte del diseño de INFRA-3
+("el log puede mentir"): aquí no miente. Los presuntos "14 días de
+éxito falso" debieron ser de una versión anterior del script o de
+otra cosa.
+
+**Lo que el `backup-db.sh` del repo NO tiene** (y por eso es el
+obsoleto):
+- No verifica cabecera `PostgreSQL database dump` — solo `gzip -t`
+  cosmético.
+- Tiene un extractor de password con `grep -oP` sobre `DATABASE_URL`
+  que rompe si la password lleva símbolos no-`\w`.
+- Asume `pg_dump -h localhost -p 5432` sin pasar por `docker exec`,
+  fallaría si el puerto Postgres no está publicado al host.
+
+**Modelo de amenaza**: no funcional — el backup que CORRE produce
+dumps restaurables (probado en [[#78]] + monitor activo en [[#81]]). Pero:
 - "Source of truth" del operacional es ambiguo. Si alguien revisa el
   repo y modifica `backup-db.sh` esperando que sea lo que corre, no lo
-  es. Cambio silenciosamente ineficaz.
-- Las dos mejoras de seguridad del script del repo (`set -e`,
-  `gzip -t`, retención explícita con `find -mtime`) no están corriendo
-  en producción.
+  es. Cambio silenciosamente ineficaz, en el sentido OPUESTO al que
+  intuye el desarrollador (cree que mejora el desplegado y el
+  desplegado ya era mejor).
 - Si el script del VPS se pierde (rotación de disco, `rm` accidental),
-  no hay un copy authoritativo de qué hay que restaurar como cron.
+  el repo NO tiene una copia autoritativa de qué hay que restaurar
+  como cron. Recuperación a ciegas.
 
-**Acción cuando se aborde**:
-1. `cat /opt/backup-db.sh` del VPS y compararlo con `backup-db.sh`
-   del repo.
-2. Decidir: el del VPS gana (más simple, funciona) o el del repo gana
-   (más mejoras, tracked en git).
-3. Sincronizar: el ganador se commitea/despliega, el otro se borra.
-4. Documentar en el README cómo se despliega el cron de backup (path,
-   permisos, schedule del cron) para que la siguiente persona que
-   toque esto no tenga que arqueología.
+**Acción cuando se aborde** (corregida tras la lectura de los dos):
+1. Copiar el contenido íntegro de `/opt/backup-db.sh` del VPS al
+   `backup-db.sh` del repo (alineación repo → desplegado, no al
+   revés).
+2. Borrar las suposiciones falsas del script viejo del repo del
+   mensaje del commit, no del código.
+3. Documentar en `README.md` (o un `docs/runbook.md` nuevo) cómo se
+   despliega el cron de backup: path absoluto, permisos, schedule,
+   path del log, path del dir de dumps, y la presencia del monitor
+   `/usr/local/bin/backup-alert.sh` ([[#81]]) que vigila este cron.
 
-**Esfuerzo**: 30 minutos.
+**Esfuerzo**: 20 minutos.
 
 **Prioridad**: baja, pero entra en el barrido de "disciplina commit
 ≠ desplegado" al que [[#11]] ya nos obligó. No es urgente pero es de
 las cosas que joden el día que toca debugging.
 
-**Conexión con [[#11]]** y la lección de "`grep -qF` sin filtrar
-comentarios" ([[#75]]): mismo patrón metodológico — lo que crees que
-corre no es lo que corre. La cura es la misma: medir contra la
-realidad, no contra la suposición.
+**Conexión con [[#11]]/[[#75]]/[[#67]]**: mismo patrón metodológico
+recurrente — lo que crees que corre no es lo que corre. Y en esta
+instancia, el modo de fallo viene con un giro nuevo: el desplegado
+era MEJOR que el repo, no peor. La cura sigue siendo la misma:
+medir contra la realidad antes de proponer un cambio.
 
 **No bloquea**: nada.
+
+### #81 — INFRA-3 — Monitoreo del cron de backup (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. INFRA-3 (de la checklist
+operacional pre-go-live: "monitoreo del backup; ya tuviste 14+ días
+de logs falsos de éxito") queda cerrado por evidencia objetiva del
+canal Telegram.
+
+**Origen y reorientación**: el agujero inicial era "¿el log miente?".
+Tras leer el `/opt/backup-db.sh` real al cerrar [[#80]], la pregunta
+cambió: ese script valida tamaño + `gzip -t` + cabecera pg_dump
+antes de declarar OK, y borra el fichero si falla. El log de ese
+script NO miente. Lo único que ese script no puede comprobar sobre
+sí mismo es **que CORRA**: si el cron se borra, el contenedor está
+caído a las 03:00, o el disco se llena, hay silencio total. Ese es
+el único agujero que cubre INFRA-3, no la verificación de los dumps
+(que el productor ya hace bien).
+
+**Diseño implementado** (vive solo en el VPS, operacional puro):
+
+- `/usr/local/bin/backup-alert.sh` (700 root:root, 73 líneas).
+  Una invariante única: el `appforge_*.sql.gz` más nuevo de
+  `/backups/db/` tiene `mtime < 25h`. TZ-agnóstico (no asume formato
+  de fecha, no compara contra "ayer" por nombre — usa
+  `find -printf '%T@' | sort -rn | head -n1`).
+- Heartbeat semanal (lunes UTC por defecto, parametrizable via
+  `HEARTBEAT_DOW`): si todo está sano, manda `✅` con dump + edad +
+  tamaño humano. **Vigila al vigilante**: si este script muere, la
+  ausencia del ✅ semanal lo destapa en ≤7 días.
+- Stateless por diseño — sin cursor. La invariante es diaria sobre
+  un fichero, no un stream que crece.
+- Reusa credenciales de `/etc/uu-alert.env` (mismo bot que [[#11]],
+  cero duplicación de infra). Cero código nuevo en el repo backend.
+- `set -euo pipefail` + `|| true` en los puntos de fallo benigno
+  (find sin matches, telegram con error transitorio).
+- `/etc/cron.d/backup-alert`: `30 4 * * * root` (04:30 UTC, 1.5h
+  después del cron de backup de las 03:00 UTC).
+
+**Smoke verificado 2026-06-19, los 4 caminos**:
+
+| Smoke | Setup | Esperado | Recibido en Telegram |
+|---|---|---|---|
+| 1 — dir vacío | `BACKUP_DIR=/tmp/empty` | 🚨 no hay dumps | `🚨 backup en srv1616198: no hay ningún appforge_*.sql.gz en /tmp/backup-test-empty` |
+| 2 — dump rancio | dump con `mtime -2 days` | 🚨 con la edad | `🚨 ... el dump más reciente appforge_20260617.sql.gz tiene 48h` |
+| 3 — fresco, no heartbeat | dump nuevo + `HEARTBEAT_DOW=99` | silencio | (nada — exit 0 sin mensaje) |
+| 4 — fresco, heartbeat hoy | `/backups/db/` real + `HEARTBEAT_DOW=$(date -u +%u)` | ✅ con tamaño real | `✅ backup en srv1616198 sano: appforge_20260619.sql.gz, hace 8h, 348KB.` |
+
+**El detalle que sella el cierre**: smoke 4 reportó **348KB** (no 0B
+como en mis pruebas locales con ficheros vacíos) y **"hace 8h"** —
+dump de las 03:00 UTC, smoke a las ~11:49 UTC = 8h. Los números son
+coherentes de punta a punta. El monitor lee el fichero real, mide
+su frescura real, y emite un mensaje real.
+
+**Acoplamiento implícito a documentar en el runbook**: el monitor
+asume el cron de backup a las 03:00 UTC + tolerancia de hasta 25h.
+Si algún día se mueve la hora del backup (a `0 5 * * *`, por
+ejemplo), hay que mover también el `30 4 * * *` del monitor y
+revisar `MAX_AGE_HOURS`. Las dos piezas viven independientes pero
+están acopladas en su contrato temporal.
+
+**Decisión consciente sobre `MAX_AGE_HOURS=25`**: defendible. Si un
+día el backup se retrasa por carga/lock, podría dar 25-26h al borde
+y disparar un falso 🚨 una vez al año. Un cron muerto da 48h+, muy
+por encima. Subir a 26 si la disciplina del operador prefiere cero
+falsos positivos a costa de detección 1h más tardía. Hoy no se
+sube, se anota.
+
+**El agujero que vino a tapar**: si mañana el cron de backup muere,
+el dump del 19 envejecerá y a las 04:30 UTC del día que cruce las
+25h saltará el 🚨. Y el heartbeat de los lunes vigila al propio
+vigilante. **Modo de fallo "silencio durante semanas" cerrado**.
+
+**No bloquea**: nada.
+
+**Conexión con [[#11]]**: comparte la misma estructura de canal
+(`/etc/uu-alert.env` → bot único → chat único en Telegram). Si en
+el futuro el chat se sustituye, los dos crones leen del mismo env
+file — un solo cambio.
+
+**Conexión con [[#78]]**: [[#78]] probó que los dumps son
+restaurables; [[#81]] vigila que los dumps SIGAN APARECIENDO. La
+pareja [[#78]]+[[#81]]+[[#80]] (cuando se cierre) cubre la
+robustez del backup de extremo a extremo: producción correcta
+(#80), aparición diaria (#81), restauración verificada (#78). Solo
+queda [[#79]] (custodia OFF-VPS de los secretos del `.env`) para
+que la recuperación sea posible sin el VPS.
 
 
