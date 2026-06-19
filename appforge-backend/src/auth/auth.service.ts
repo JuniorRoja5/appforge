@@ -3,6 +3,7 @@ import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformEmailService } from '../platform/platform-email.service';
+import { TelegramService } from '../notifications/telegram.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
@@ -15,7 +16,33 @@ export class AuthService {
     private jwtService: JwtService,
     private prisma: PrismaService,
     private emailService: PlatformEmailService,
+    private telegram: TelegramService,
   ) {}
+
+  /**
+   * Fires a Telegram alert for new-user registration. Called from both
+   * registration paths (email/password via `register`, Google via the
+   * "new user" branch of `googleLogin`). NOT called from the "existing
+   * user" branch of `googleLogin` — that path is a login, not a registration.
+   *
+   * Fire-and-forget by design: `void` discards the Promise so the caller
+   * doesn't block on Telegram's network round-trip, and TelegramService
+   * never rethrows so there's no unhandled rejection. A failing Telegram
+   * MUST NOT break the registration.
+   */
+  private notifyNewRegistration(
+    user: { email: string; firstName?: string | null; lastName?: string | null },
+    via: 'email' | 'Google',
+  ): void {
+    const name =
+      [user.firstName, user.lastName].filter(Boolean).join(' ') || '—';
+    void this.telegram.sendMessage(
+      `🆕 Nuevo registro en Creatu.app\n` +
+        `Email: ${user.email}\n` +
+        `Nombre: ${name}\n` +
+        `Vía: ${via}`,
+    );
+  }
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
@@ -109,6 +136,7 @@ export class AuthService {
       tenant: { connect: { id: tenant.id } },
     });
 
+    this.notifyNewRegistration(user, 'email');
     return this.login(user);
   }
 
@@ -197,6 +225,7 @@ export class AuthService {
       tenant: { connect: { id: tenant.id } },
     });
 
+    this.notifyNewRegistration(user, 'Google');
     return this.login(user);
   }
 
