@@ -3112,7 +3112,59 @@ destilado: ver memoria `project_data_dashboards_phase3_done.md`.
 
 ### #74 — SMTP saliente del VPS sin SPF/DKIM — entrega a Gmail rebota (bloquea reset password de clientes)
 
-**Estado**: OPEN, HIGH PRIORITY para go-live serio con clientes reales.
+**Estado**: ✅ **RESUELTO 2026-06-19**. La premisa inicial era
+incorrecta: SPF y DKIM ya estaban publicados para `creatu.app`
+(SPF: `v=spf1 +a +mx +ip4:31.200.246.46 +ip4:37.153.91.80 ~all`;
+DKIM selector `default` con clave RSA pública). Lo que estaba mal era
+el **camino de envío**: el backend usaba el postfix local del VPS
+(IP `76.13.60.85`, sin estar en el SPF, sin firmar con DKIM), no el
+SMTP autenticado de lanubevirtual (`mail.creatu.app`, IP `31.200.246.46`,
+sí en el SPF y firmador del DKIM publicado).
+
+**Diagnóstico real**: el correo de plataforma (`forgot-password` y
+similares) consume `PlatformSmtpConfig` → `PlatformEmailService` lee
+`encryptedPass` cifrado, descifra y monta el transport de nodemailer
+con `config.host`. La tabla `PlatformSmtpConfig` estaba vacía → el
+fallback efectivo era el postfix local. Poblar la tabla con las
+credenciales de lanubevirtual era todo lo necesario.
+
+**Bug colateral destapado al intentar poblar**: `platform.controller.ts`
+importaba los DTOs con `import type`, lo que erasaba la clase en
+runtime → `ValidationPipe` con `whitelist:true` arrasaba el body →
+`dto.password` undefined → 400 "Debes proporcionar una contraseña…".
+Fix en commit `7541ad9` (quitar `type` de 2 imports).
+
+**Cierre verificado end-to-end 2026-06-19**:
+- `PlatformSmtpConfig` poblada (1 fila, `host=mail.creatu.app`, `port=465`,
+  `secure=t`, `username=noreply@creatu.app`, `encryptedPass` ciphertext
+  de 86 bytes).
+- `POST /platform/test-smtp` → `connectionOk: true, emailSent: true`
+  (autenticación SMTP contra lanubevirtual verificada).
+- `POST /auth/forgot-password` con email Gmail → llega a inbox de Gmail
+  con código de reset.
+- Cabeceras del mail recibido firmadas por `mx.google.com`:
+  - `Received-SPF: pass ... client-ip=31.200.246.46`
+  - `dkim=pass header.i=@creatu.app header.s=default`
+  - `Received: from srv1616198.hstgr.cloud ([76.13.60.85] helo=[127.0.0.1])
+     by server200.lanubevirtual.eu with esmtpsa (Exim 4.99.4)`
+- La línea `esmtpsa` (submission con AUTH) prueba que el VPS no envía
+  directo: autentica contra lanubevirtual y éste relaya desde la IP
+  autorizada por el SPF. La arquitectura recomendada quedó implementada.
+
+**Bonus**: el envío exitoso ejercita el round-trip de descifrado de
+`PlatformEmailService.createTransport(getConfigRaw + decrypt)`, así que
+el ciclo cifrado/descifrado de #7 queda revalidado de paso en
+producción.
+
+**Conexiones derivadas**:
+- [[#76]] (`upsertConfig` devuelve ciphertext en la response — higiene).
+- [[#77]] (DMARC ausente — higiene, no crítico con SPF+DKIM alineados).
+
+---
+
+### #74 — registro histórico original (premisa errónea)
+
+
 **Origen**: detectado 2026-06-18 durante el hardening de #11. Postfix
 local del VPS intenta entregar correo directo desde su IP (sin relay
 autenticado) y Gmail responde con `550-5.7.26 unauthenticated, requires
@@ -3199,6 +3251,89 @@ sintáctica laxa (línea **existe** en el archivo).
 **Acción**: no es fix de un archivo — es checklist de revisión para
 scripts futuros que toquen configs declarativas con comentarios-
 ejemplo.
+
+**No bloquea**: nada.
+
+### #76 — `PUT /platform/smtp` (upsertConfig) devuelve el ciphertext de `encryptedPass` en la response
+
+**Estado**: OPEN, LOW PRIORITY (higiene, no leak crítico).
+**Origen**: detectado 2026-06-19 al cerrar [[#74]]. El `getConfig()`
+del service filtra correctamente — devuelve `hasPassword: boolean` y
+omite `encryptedPass` (`platform-smtp.service.ts` L11-25). Pero
+`upsertConfig` retorna directamente `prisma.platformSmtpConfig.update`
+/ `create`, que incluye **todo el row**, incluido el `encryptedPass`
+(ciphertext en formato `iv:tag:ciphertext`).
+
+**Modelo de amenaza**: no es leak del plaintext de la password — la
+clave AES-256-GCM de descifrado vive en `.env` (rotada en #7 a hex
+de 256 bits, no extraíble del response). Pero:
+- Inconsistente con `getConfig()`: dos rutas que devuelven la misma
+  entidad emiten shapes distintos según si se pasó por el upsert o no.
+- El ciphertext en una response abre superficie a análisis si alguien
+  consigue interceptar el tráfico admin (TLS protege en tránsito,
+  pero el principio de "no devolver más de lo necesario" no se
+  cumple aquí).
+
+**Fix propuesto**: en `upsertConfig`, en lugar de `return prisma.update/create`
+hacer:
+```ts
+await prisma.platformSmtpConfig.update/create({ ... });
+return this.getConfig();
+```
+Una línea de cambio (y un await), reutiliza el filtro ya probado de
+`getConfig`. Mismo patrón aplica al equivalente FCM de `upsertConfig`
+en `platform-fcm.service.ts` (revisar antes del fix).
+
+**Esfuerzo**: 15 minutos. No hay migración, no hay breaking change
+para clientes que ya están consumiendo el endpoint (los campos que
+quitamos son los que no deberían usarse).
+
+**Conexión**: descubierta durante el debug de [[#74]] al revisar la
+cadena de upsert del SMTP de plataforma. La fila se guardó bien — es
+solo el shape de la response lo que se mejora.
+
+**No bloquea**: nada.
+
+### #77 — DMARC ausente para `creatu.app` (higiene de entregabilidad)
+
+**Estado**: OPEN, LOW PRIORITY (higiene; SPF + DKIM ya pasan en Gmail).
+**Origen**: detectado 2026-06-19 al cerrar [[#74]]. `_dmarc.creatu.app`
+devuelve NXDOMAIN. Las cabeceras del mail recibido en Gmail muestran
+`dmarc=none` (por ausencia de política, no por fallo).
+
+**Estado actual sin DMARC**:
+- SPF: pass (publicado, IP de envío autorizada).
+- DKIM: pass (firma con selector `default`, alineado con `From`).
+- Entrega Gmail: inbox, verificado.
+
+**Por qué publicar DMARC mejora la situación**:
+- Política explícita sobre cómo tratar mails que NO alineen — hoy
+  Gmail decide heurísticamente; con DMARC el dominio firma su intención.
+- Reportes agregados (`rua=mailto:...`) revelan envíos no autorizados
+  desde IPs ajenas, lo que valida que ningún tercero está spoofeando.
+- Mejor reputación a medio plazo en buzones que ponderan DMARC alto.
+
+**Política recomendada inicial** (no estricta, observatoria):
+```
+_dmarc.creatu.app    TXT    "v=DMARC1; p=none; rua=mailto:abuse@creatu.app; aspf=r; adkim=r"
+```
+- `p=none`: no rechazar nada — solo reportar. Permite ver tráfico real
+  durante semanas antes de endurecer.
+- `rua=`: dirección que recibe los XML diarios de Gmail/Microsoft con
+  el resumen de envíos.
+- `aspf=r adkim=r`: alineación relajada (subdominio del From basta).
+
+Cuando los reportes muestren que el 100% del tráfico alinea correctamente
+durante 2-4 semanas, endurecer a `p=quarantine` y luego `p=reject`.
+
+**Esfuerzo**: 5 minutos para publicar el TXT en el DNS de lanubevirtual.
+2-4 semanas de observación antes de endurecer la política.
+
+**Conexión con [[#74]]**: [[#74]] cerró con SPF+DKIM funcionando. Este
+es el escalón siguiente del mismo proyecto de entregabilidad, no una
+deuda nueva — pero es propio porque el escalón ya tiene "valor sin
+necesidad de SPF/DKIM funcionando" como precondición (esa precondición
+existe).
 
 **No bloquea**: nada.
 
