@@ -3907,4 +3907,102 @@ a custodiar (15, incluyendo las dos del `.env` raíz que faltaban en
 el inventario inicial) y limpia la superficie antes de empezar a
 custodiar. Prerrequisito de [[#79]].
 
+### #84 — Replicación off-VPS del dump de BD (el espejo de #79)
+
+**Estado**: OPEN, HIGH PRIORITY operacional. Es el riesgo más caro
+abierto tras esta sesión. No bloquea operar, pero su no-cierre
+expone a pérdida total de datos ante muerte del VPS.
+
+**Origen**: detectado 2026-06-19 al cerrar [[#79]] y escribir el
+runbook `docs/runbook/RECOVERY.md`. El Paso 2 del runbook ("obtener
+el último dump") destapó la pregunta: ¿el dump tiene copia fuera
+del VPS? La medición devolvió **Resultado B — cero replicación**.
+
+**Medición ejecutada 2026-06-19 (las 4 vías de salida descartadas)**:
+
+| Vía | Comando | Resultado |
+|---|---|---|
+| Push dentro del script de backup | `grep -iE "rsync\|scp\|sftp\|s3\|b2\|rclone\|curl\|wget\|tar.*ssh" /opt/backup-db.sh` | vacío |
+| Otros crons que muevan `/backups/` | `grep -rE "rsync\|scp\|s3\|/backups" /etc/cron.d/ /etc/crontab /var/spool/cron/` | vacío |
+| Logs de tráfico saliente de backup | `journalctl -u cron --since "24h ago" \| grep backup` | sin envío off |
+| Pull externo por SSH | `ls -la /root/.ssh/authorized_keys` | `0 bytes` — sin claves |
+
+La presencia del binario `rsync` instalado por dependencias del
+sistema NO cuenta como replicación. Lo medido es **uso real**, no
+disponibilidad. Y `authorized_keys` con 0 bytes confirma que ninguna
+máquina externa puede hacer pull SSH de los dumps.
+
+**Conclusión**: el `/opt/backup-db.sh` desplegado hace `pg_dump |
+gzip > /backups/db/local` y **nada más**. Si el VPS muere, el último
+dump muere con él, **aunque las claves de [[#79]] estén perfectamente
+custodiadas off-VPS**. Tienes la llave a salvo y la caja fuerte
+dentro del edificio que se quema.
+
+**Modelo de amenaza honesto**: hoy, ante pérdida total del VPS,
+recuperación de datos = imposible. Las claves de [[#79]] descifrarían
+el ciphertext si existiera, pero el ciphertext no existe en ninguna
+otra parte. [[#79]] + [[#84]] juntas son la recuperación; por
+separado, ninguna salva sola.
+
+**Scope al abrir** (no diseñar aquí — sesión propia):
+1. **Decisión de destino**, mismo eje "local manual vs SaaS" que
+   navegamos en [[#79]] — pero aquí, a diferencia de las claves
+   (15 strings), son GB que crecen, así que "acordarme de copiar a
+   mano" escala peor:
+   - **Bucket barato** (Backblaze B2 / AWS S3 / Wasabi):
+     automatizable, ~céntimos/mes para los tamaños actuales,
+     storage redundante por construcción, lifecycle rules para
+     retención. El default recomendado para este caso.
+   - **Otra máquina del operador** (NAS doméstico / otro VPS /
+     Raspberry Pi en casa): cero coste recurrente pero coste
+     operacional (mantener la máquina viva, monitorizar su
+     espacio).
+   - **Disco cifrado personal** (manual): solo si el volumen es
+     trivial y el operador tiene disciplina alta. Escala mal con
+     crecimiento de BD.
+2. **Cifrado en tránsito y en reposo** (capa adicional, no
+   sustituye la del backend): la copia remota debe llegar cifrada
+   por TLS y reposar cifrada en el destino. Sobre todo si el
+   destino es un SaaS — el ciphertext de [[#7]] no es suficiente
+   protección si el SaaS tiene un breach al stack subyacente.
+3. **Retención**: cuántos dumps mantener off-VPS. Recomendación
+   inicial: 7 diarios + 4 semanales + 6 mensuales (regla 7-4-6,
+   estándar). Ajustar al coste real medido.
+4. **Cableado**: añadir el `aws s3 cp` / `rclone sync` / `rsync` al
+   final del `/opt/backup-db.sh` desplegado (relacionado con [[#80]]:
+   si se alinea repo↔desplegado, hacerlo en el mismo gesto).
+5. **El árbitro de cierre**: mismo principio de [[#78]] (INFRA-2) —
+   restaurar desde la copia remota, no solo confirmar que llegó. Un
+   backup remoto no probado es un backup no probado.
+
+**Acoplamiento con el runbook**: el `docs/runbook/RECOVERY.md`
+documenta este gap honestamente en su Paso 2 con un ⚠️ TBD y
+referencia explícita a [[#84]]. Cuando [[#84]] cierre, sustituir el
+Paso 2 del runbook por el comando real de fetch off-VPS y eliminar
+la advertencia.
+
+**Prioridad relativa frente al resto de pendientes operacionales**:
+- ALTA, por encima de Cache-Control nginx y reboot test. Estos dos
+  son comodidad/disciplina; [[#84]] es la diferencia entre "tengo
+  backups" y "puedo recuperarme de un desastre".
+- A nivel de calendario: antes de cualquier go-live con clientes
+  reales pagando. Un cliente con noción de continuidad operacional
+  preguntará "si pierdes el VPS, ¿recuperáis los datos?" — la
+  respuesta hoy es "no", y con [[#84]] cerrada pasa a ser "sí, con
+  un runbook ensayado".
+
+**No bloquea**: la operación diaria del backend hoy. Bloquea: una
+recuperación creíble ante el modo de fallo "VPS perdido".
+
+**Conexión con [[#78]]**: [[#78]] probó que el dump es restaurable;
+[[#84]] dice que el dump tiene que existir en otra parte para que
+[[#78]] sirva el día del desastre.
+**Conexión con [[#79]]**: el espejo exacto del agujero que [[#79]]
+cerró del otro lado. [[#79]] sin [[#84]] = claves sin datos;
+[[#84]] sin [[#79]] = datos sin claves. Las dos son una sola
+recuperación.
+**Conexión con [[#80]]**: cuando se alinee repo↔desplegado del
+`backup-db.sh`, hacerlo en el mismo gesto que añadir el cableado de
+replicación. Evita dos rondas de revisión del mismo script.
+**Conexión con `docs/runbook/RECOVERY.md`**: bloqueante del Paso 2.
 

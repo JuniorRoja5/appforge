@@ -1,0 +1,315 @@
+# Runbook — Recuperación de AppForge desde cero
+
+**Para el caso**: el VPS de producción está caído o perdido y hay
+que levantar el backend en una máquina nueva con los datos del
+último backup.
+
+**Tiempo objetivo**: 60-90 min con todo a mano. Si pasa de 90 min,
+algún paso necesita automatización (anota dónde se atascó la
+recuperación para iterar el runbook después).
+
+**Práctica recomendada**: ensayar este runbook 1 vez al año en una
+VM efímera, sin avisar al operador. El runbook que no se ensaya
+envejece silenciosamente.
+
+---
+
+## Pre-requisitos en la máquina nueva
+
+- Docker + docker compose
+- Node 20+
+- Git
+- Acceso al disco/gestor donde está custodiado el set de 15 claves
+  de [[TECH_DEBT #79]]
+- El dump más reciente de la BD. **Ver Paso 2** — sin este artefacto
+  no hay recovery.
+
+---
+
+## Paso 1 — Clonar el código
+
+```bash
+git clone https://github.com/JuniorRoja5/appforge.git
+cd appforge
+```
+
+---
+
+## Paso 2 — Obtener el último dump de `/backups/db/`
+
+**Ubicación off-VPS del dump**: ⚠️ **TBD — depende de TECH_DEBT #84
+(replicación off-VPS de los dumps).**
+
+Mientras `#84` no esté cerrada, este paso depende de que el VPS
+original siga accesible para sacar el último
+`/backups/db/appforge_YYYYMMDD.sql.gz` por SSH/SCP.
+
+```bash
+# Mientras #84 esté abierta (VPS aún accesible):
+scp root@srv1616198:/backups/db/appforge_$(date +%Y%m%d).sql.gz ./backup.sql.gz
+
+# Cuando #84 cierre, sustituir este paso por el comando de fetch
+# desde la ubicación remota acordada (S3/B2/rsync target/etc).
+```
+
+**Esta es una limitación CONOCIDA del runbook actual.** Documentada
+honestamente en lugar de oculta. El día del desastre lees esto, y si
+el VPS ya no responde y `#84` sigue abierta, sabes que no hay
+recuperación posible — y eso te ahorra horas de improvisación inútil.
+
+---
+
+## Paso 3 — Reconstruir el `.env` desde la custodia
+
+Abre el disco/gestor con el item de 15 claves custodiado en [[#79]].
+Copia los valores a un nuevo `appforge-backend/.env` siguiendo el
+template de `env.production.example`.
+
+**Las dos intocables** (Clase A — si pierdes alguna = catástrofe):
+- `SMTP_ENCRYPTION_KEY` (debe tener exactamente 64 chars hex)
+- `KEYSTORE_ENCRYPTION_KEY` (debe tener exactamente 64 chars hex)
+
+**Las otras 13** (Clase B — re-emisibles): `JWT_SECRET`,
+`APP_USER_JWT_SECRET`, `DATABASE_URL`, `MINIO_ACCESS_KEY`,
+`MINIO_SECRET_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, y del `.env` raíz:
+`DB_PASSWORD`, `MINIO_PASSWORD`. Y de `/etc/uu-alert.env`: `BOT_TOKEN`,
+`CHAT_ID`.
+
+Resto de variables (`PUBLIC_*`, `STRIPE_PRICE_*`, `APP_URL`,
+`NODE_ENV`, `PORT`) NO están en custodia porque son públicas o
+configuración — cópialas de `env.production.example` y ajusta a la
+URL nueva si cambia el dominio.
+
+**Verificación post-edición** (sin descifrar todavía):
+
+```bash
+grep -E "^(SMTP|KEYSTORE)_ENCRYPTION_KEY=" appforge-backend/.env \
+  | awk -F= '{print $1"=<"(length($0)-length($1)-1)" chars>"}'
+# Esperado:
+# SMTP_ENCRYPTION_KEY=<64 chars>
+# KEYSTORE_ENCRYPTION_KEY=<64 chars>
+```
+
+---
+
+## Paso 4 — Levantar infraestructura
+
+```bash
+cd appforge-backend
+docker compose up -d   # Postgres + Redis + MinIO
+sleep 5
+docker ps              # debe mostrar los 3 contenedores Up
+```
+
+---
+
+## Paso 5 — Restaurar el dump
+
+El procedimiento es el mismo que se verificó en [[#78]] (INFRA-2):
+
+```bash
+gunzip -c ../backup.sql.gz | docker exec -i appforge-postgres \
+  psql -U appforge -d appforge
+
+# Smoke rápido — la BD tiene tablas y filas
+docker exec -i appforge-postgres psql -U appforge -d appforge \
+  -c 'SELECT COUNT(*) FROM "App";'
+docker exec -i appforge-postgres psql -U appforge -d appforge \
+  -c 'SELECT COUNT(*) FROM "User";'
+```
+
+---
+
+## Paso 6 — Arrancar el backend
+
+```bash
+cd appforge-backend
+npm ci
+npm run build
+pm2 start dist/main.js --name appforge-api
+sleep 3
+pm2 logs appforge-api --lines 20 --nostream | grep -E "successfully started|ERROR|FATAL"
+# Esperado: "Nest application successfully started", sin ERROR/FATAL.
+```
+
+---
+
+## Paso 7 — Smoke crítico (el árbitro)
+
+Estos 5 chequeos son el árbitro. Si los 5 pasan → recuperación
+funcional. Si el **7.3** o el **7.4** fallan con error de descifrado
+→ catástrofe identificada (la clave del `.env` no es la que cifró
+el dump; verificar fechas de rotación contra fecha del dump).
+
+### 7.1 — Health endpoint
+
+```bash
+curl -s http://localhost:3000/health
+# Esperado: {"ok":true,"deps":{"db":{"up":true,...},"redis":{"up":true,...}},...}
+```
+
+### 7.2 — Login admin (token JWT)
+
+```bash
+# Credenciales del super-admin: del disco custodiado.
+curl -s -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<admin-email>","password":"<admin-pass>"}'
+# Esperado: { "access_token": "...", ... } — confirma que JWT_SECRET
+# del .env es coherente con los hashes de password de la BD restaurada.
+```
+
+### 7.3 — Descifrado de `PlatformSmtpConfig` (el flujo del reset de cliente — [[#74]])
+
+`PlatformSmtpConfig.encryptedPass` es la fila que se pobló en [[#74]]
+para que el backend pueda mandar emails de reset de password a los
+clientes finales. Es la columna que MÁS duele perder — si no descifra,
+los clientes no pueden recuperar sus cuentas.
+
+```bash
+# Lee el SMTP_ENCRYPTION_KEY desde stdin (no del argv ni del entorno
+# global — defensa contra que quede en logs/history).
+read -rsp "SMTP_ENCRYPTION_KEY (hex64, no se mostrará): " SMTP_ENCRYPTION_KEY
+echo
+
+# Extrae el payload cifrado de la fila singleton de PlatformSmtpConfig.
+PAYLOAD=$(docker exec appforge-postgres psql -U appforge -d appforge \
+  -t -A -c 'SELECT "encryptedPass" FROM "PlatformSmtpConfig" LIMIT 1;')
+
+# Descifra con node nativo (sin dependencias externas, sin scripts
+# auxiliares que puedan no existir el día del desastre).
+SMTP_ENCRYPTION_KEY="$SMTP_ENCRYPTION_KEY" PAYLOAD="$PAYLOAD" node -e '
+const crypto = require("crypto");
+const [ivH, tagH, dataH] = process.env.PAYLOAD.split(":");
+if (!ivH || !tagH || !dataH) {
+  console.error("ERROR: payload mal formado (esperado iv:tag:ciphertext en hex)");
+  process.exit(1);
+}
+const decipher = crypto.createDecipheriv(
+  "aes-256-gcm",
+  Buffer.from(process.env.SMTP_ENCRYPTION_KEY, "hex"),
+  Buffer.from(ivH, "hex"),
+);
+decipher.setAuthTag(Buffer.from(tagH, "hex"));
+try {
+  const plain = Buffer.concat([
+    decipher.update(Buffer.from(dataH, "hex")),
+    decipher.final(),
+  ]).toString("utf8");
+  console.log("Decrypt OK, length:", plain.length);
+} catch (e) {
+  console.error("ERROR de descifrado:", e.message);
+  console.error("Probable causa: SMTP_ENCRYPTION_KEY de .env NO es la que cifró este dump.");
+  console.error("Verificar: fecha del dump vs fechas de rotación de claves (#7 y posteriores).");
+  process.exit(1);
+}
+unset SMTP_ENCRYPTION_KEY
+'
+```
+
+**Esperado**: `Decrypt OK, length: <N>` con N coherente (≥ 8 chars
+para una password SMTP real). Match con el baseline de [[#7]]
+(`length: 9` en el plaintext de la rotación verificada).
+
+### 7.4 — Descifrado de `AppSmtpConfig` (el SMTP por app del cliente)
+
+Mismo procedimiento, otra tabla. Si un cliente configuró su propio
+SMTP para emails personalizados de su app, su fila vive aquí. Sin este
+test, no sabemos si los SMTPs por-app sobreviven a la recuperación.
+
+```bash
+read -rsp "SMTP_ENCRYPTION_KEY (hex64, no se mostrará): " SMTP_ENCRYPTION_KEY
+echo
+
+# Misma clave (SMTP_ENCRYPTION_KEY cifra ambas tablas), distinta query.
+PAYLOAD=$(docker exec appforge-postgres psql -U appforge -d appforge \
+  -t -A -c 'SELECT "encryptedPass" FROM "AppSmtpConfig" LIMIT 1;')
+
+# Si la tabla está vacía (ningún cliente configuró SMTP por app),
+# este test no aplica. Lo registras y sigues.
+if [ -z "$PAYLOAD" ]; then
+  echo "AppSmtpConfig vacía — ningún cliente configuró SMTP por app. Test no aplica."
+else
+  SMTP_ENCRYPTION_KEY="$SMTP_ENCRYPTION_KEY" PAYLOAD="$PAYLOAD" node -e '
+  const crypto = require("crypto");
+  const [ivH, tagH, dataH] = process.env.PAYLOAD.split(":");
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    Buffer.from(process.env.SMTP_ENCRYPTION_KEY, "hex"),
+    Buffer.from(ivH, "hex"),
+  );
+  decipher.setAuthTag(Buffer.from(tagH, "hex"));
+  const plain = Buffer.concat([
+    decipher.update(Buffer.from(dataH, "hex")),
+    decipher.final(),
+  ]).toString("utf8");
+  console.log("Decrypt OK, length:", plain.length);
+  '
+fi
+unset SMTP_ENCRYPTION_KEY
+```
+
+### 7.5 — Listar apps
+
+```bash
+TOKEN="<el access_token del Paso 7.2>"
+curl -s http://localhost:3000/apps -H "Authorization: Bearer $TOKEN" | head -100
+# Esperado: lista no vacía, los slugs/nombres reconocibles.
+```
+
+---
+
+## Paso 8 — Cableado operacional
+
+Reconstruir las piezas de monitorización y backup que viven en el VPS,
+no en el repo:
+
+1. **`/usr/local/bin/health-alert.sh`** + `/etc/cron.d/health-alert`
+   (ver [[TECH_DEBT #82]] para el script completo).
+2. **`/usr/local/bin/backup-alert.sh`** + `/etc/cron.d/backup-alert`
+   (ver [[TECH_DEBT #81]]).
+3. **`/etc/uu-alert.env`** con `BOT_TOKEN`/`CHAT_ID` (del disco
+   custodiado).
+4. **`/opt/backup-db.sh`** + cron `0 3 * * *` (ver [[TECH_DEBT #80]]).
+5. **`/root/.ssh/authorized_keys`** y `/etc/ssh/sshd_config` — solo
+   si hubo accesos SSH específicos del operador (no había puller
+   remoto cuando se redactó este runbook).
+6. (Cuando [[TECH_DEBT #84]] cierre) Cableado de replicación off-VPS
+   del dump.
+
+---
+
+## Notas para mantener este runbook vivo
+
+- Cada vez que se rote una clave en `.env` (como en [[#7]]),
+  actualizar el item del disco custodiado en el mismo gesto. Sin
+  esta disciplina, la custodia queda desfasada silenciosamente y al
+  día del desastre **este runbook falla en Paso 7.3 con error de
+  descifrado**.
+- Cada vez que cambie el contrato de `/health` (body shape), también
+  cambia el monitor de [[#82]] (depende de `"ok":true`). Verifica
+  ambas piezas.
+- Cuando [[#84]] cierre, sustituir el Paso 2 por el comando real de
+  fetch off-VPS y borrar la advertencia ⚠️ del encabezado.
+- Cuando cambie de máquina el destino de la custodia (gestor nuevo,
+  nuevo formato de disco cifrado), actualizar Paso 3 con la nueva
+  ubicación.
+
+---
+
+## Anexo — Referencias cruzadas a `TECH_DEBT.md`
+
+- [[#7]] — rotación de claves AES hex64 (baseline del descifrado).
+- [[#74]] — SMTP de plataforma (origen del flujo del Paso 7.3).
+- [[#78]] — INFRA-2, restore probado (origen del procedimiento del
+  Paso 5).
+- [[#79]] — custodia off-VPS de las 15 claves (origen del Paso 3).
+- [[#80]] — `backup-db.sh` desplegado superior al del repo (origen
+  del Paso 8.4).
+- [[#81]] — monitor del cron de backup (origen del Paso 8.2).
+- [[#82]] — monitor `/health` (origen del Paso 8.1).
+- [[#83]] — limpieza de `.env` históricos (relevante: rotaciones
+  futuras deben purgar copias).
+- [[#84]] — replicación off-VPS del dump (bloquea recuperación
+  completa hasta que cierre).
