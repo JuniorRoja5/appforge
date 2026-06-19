@@ -3337,4 +3337,188 @@ existe).
 
 **No bloquea**: nada.
 
+### #78 — INFRA-2 — Restauración de backup de BD verificada (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. INFRA-2 (de la checklist de
+robustez operacional pre-go-live: "el backup nunca se ha restaurado")
+queda cerrado por evidencia objetiva. Lo registro como deuda formal
+para que el cierre tenga el mismo peso documental que las piezas de
+hardening — un "lo probé" sin registro se olvida.
+
+**Origen**: durante 14+ días el cron diario emitía logs de éxito
+pero nadie había probado la otra mitad del ciclo (que un dump
+restaure realmente). La preocupación inicial era que los dumps
+fueran humo (verificación con `gzip -t` solo prueba integridad del
+archivo gzip, no que el SQL de dentro sea un dump completo).
+
+**Premisa inicial descartada**: el script desplegado emite logs
+honestos. Los 10 últimos dumps crecen monótonamente
+(319K → 348K), y el más reciente trae 4482 líneas con ~38 tablas
+y ~38 bloques `COPY` con filas reales. No es humo.
+
+**Restauración verificada end-to-end 2026-06-19** sobre el dump real
+del cron (`appforge_20260619.sql.gz`):
+
+| Evidencia | Resultado |
+|---|---|
+| `psql exit code` tras `gunzip \| psql -v ON_ERROR_STOP=1` | `0` |
+| `grep -cE '^(ERROR\|FATAL\|PANIC):' /tmp/restore.log` | `0` |
+| Counts estables (`App`, `SubscriptionPlan`, `AppSmtpConfig`) | prod = restore (7/5/1) |
+| Count derivado predicho (`PlatformSmtpConfig`) | prod = 1, restore = 0 — la fila se pobló a las ~10:40 del 19, posterior al dump de las 03:00 |
+| md5 de `AppSmtpConfig.encryptedPass` en ambas DB | **idénticos** (`a1792ce3...847bb`) |
+
+El md5 idéntico cierra dos preguntas a la vez:
+- `pg_dump` preservó el ciphertext byte a byte.
+- Como prod ya sabemos que descifra (`length: 9` baseline de [[#7]]),
+  el restaurado descifra con la misma clave actual del `.env`.
+
+Round-trip de descifrado probado sin manejar ni una clave en chat.
+
+**Detalle del runbook capturado**: el dump es estilo `pg_dump --clean`
+(emite `DROP ... IF EXISTS` antes de cada `CREATE`). Restaura sobre
+una BD que ya exista — no necesita una vacía. Útil para el día del
+desastre cuando haya que recuperar sobre una BD parcial.
+
+**Lo que NO cierra este test** y queda como deuda con su propia
+entrada:
+- Custodia de los secretos del `.env` fuera del VPS (ver [[#79]]).
+  El md5 casó porque la clave de hoy abre el ciphertext de hoy. Sin
+  la clave, el dump es ciphertext inabrible.
+- Reconciliación del script de backup (ver [[#80]]). El script en
+  `/opt/backup-db.sh` (el que el cron ejecuta) no es el mismo que
+  `backup-db.sh` del repo.
+
+**Conexión con INFRA-3**: la siguiente pieza de la checklist es
+monitoreo activo del dump diario (tamaño + presencia, alerta por
+Telegram al canal de [[#11]]). Mata el modo de fallo "cron silenciosa-
+mente roto durante semanas" — el árbitro hoy fue manual, INFRA-3 lo
+automatiza.
+
+**No bloquea**: nada (INFRA-2 cerrado).
+
+### #79 — Recovery completo requiere custodia de los secretos del `.env` fuera del VPS
+
+**Estado**: OPEN, HIGH PRIORITY operacional (no funcional). Es la
+deuda más grave que destapó [[#78]], y la más fácil de pasar por alto
+porque no rompe nada hoy.
+
+**Origen**: detectado 2026-06-19 al cerrar [[#78]]. El restore test
+demostró que `pg_dump | gzip` recupera la BD entera con sus columnas
+cifradas byte-fielmente. Pero el ciphertext **solo es abrible si
+existe la clave AES-256 que vive en `.env` del backend** (rotada en
+[[#7]] a hex 256-bit).
+
+**Modelo de amenaza**: backup de BD + pérdida del VPS = ciphertext
+inabrible. Concretamente:
+- Pérdida del VPS por desastre (proveedor de hosting, ataque, fuego):
+  el `pg_dump` que se restauró desde otra máquina trae las 4 columnas
+  protegidas por `SMTP_ENCRYPTION_KEY` y las 2 protegidas por
+  `KEYSTORE_ENCRYPTION_KEY` ([[#78]]), pero sin las claves del `.env`
+  son blobs binarios opacos. La BD restaurada arranca, pero el
+  backend no puede operar SMTP de plataforma ni firmar APKs.
+- Caso peor con keystores poblados (hoy 0, en el futuro pueden ser N):
+  perder `KEYSTORE_ENCRYPTION_KEY` = perder la capacidad de re-firmar
+  APKs. Eso es **catastrófico** porque Android exige la misma firma
+  para actualizar una app instalada. Sin la clave del keystore (que
+  está cifrada con `KEYSTORE_ENCRYPTION_KEY`), todas las apps de los
+  clientes quedan huérfanas de updates.
+
+**Matiz histórico (no bloqueante, importante para runbook)**:
+los dumps con fecha previa a la rotación de [[#7]] traen ciphertext
+cifrado con la clave **vieja** (utf8-32). La clave actual del `.env`
+no los abre. Solo dumps post-rotación (2026-06-18 en adelante para
+las 6 columnas de [[#7]]) son recovery-viables. Si en futuras
+rotaciones se hace lo mismo, lo mismo aplica.
+
+**Acción cuando se aborde**:
+1. Identificar qué secretos del `.env` son load-bearing para recovery:
+   `SMTP_ENCRYPTION_KEY`, `KEYSTORE_ENCRYPTION_KEY`, `JWT_SECRET`,
+   `APP_USER_JWT_SECRET`, `DATABASE_URL`, y los de Stripe/Google/etc.
+2. Definir custodia OFF-VPS:
+   - **Opción A — Password manager (1Password / Bitwarden Business)**:
+     campo "AppForge — Production .env (hex secrets)" con los valores
+     y notas de rotación. Mínima fricción, fuerte para 1 operador en
+     solitario.
+   - **Opción B — Cifrado simétrico de un dump del `.env` con una
+     passphrase memorizada**: el cifrado va al backup del VPS, la
+     passphrase no. Más complejo, más control.
+   - **Opción C — KMS (AWS KMS, Hashicorp Vault, Bitwarden Secrets
+     Manager)**: overhead injustificado a esta escala, pero la opción
+     a la que se converge cuando haya 3+ entornos o un equipo.
+3. **Documentar el runbook de recovery** (que hoy NO existe): "perdí
+   el VPS, ¿cómo levanto el backend con la última snapshot?". Pasos
+   ordenados: restaurar la BD desde el dump más reciente → instalar
+   los secretos del `.env` desde la custodia → arrancar el backend
+   → smoke crítico (login, decrypt de fila SMTP, firma de keystore
+   si hay alguno).
+4. **Rotación periódica de la custodia**: cada vez que se rote una
+   clave en `.env` (como en [[#7]]), actualizar la custodia OFF-VPS
+   en el mismo gesto. Si no, la custodia queda desfasada
+   silenciosamente y al día del desastre no funciona.
+
+**Esfuerzo estimado**: 1-2h para A o B + 1h para el runbook + 30 min
+para la disciplina de rotación.
+
+**Prioridad**: **alta — bloqueante de un go-live serio**. Vendr
+clientes pagando significa "si pierdo el VPS, ¿recuperamos sus datos?".
+La respuesta hoy es "los datos sí, lo que protegen no". Cualquier
+cliente con noción de continuidad operacional preguntará.
+
+**No bloquea**: el hardening de seguridad cerrado en esta sesión sigue
+firme. Esto es operacional, no de seguridad.
+
+**Conexión con [[#7]]**: las claves cuya custodia hace falta son
+las que [[#7]] rotó (`SMTP_ENCRYPTION_KEY`, `KEYSTORE_ENCRYPTION_KEY`)
++ las de JWT que [[#6]] valida + las de servicios externos.
+**Conexión con [[#78]]**: [[#78]] demostró que la BD es recuperable;
+[[#79]] dice que recuperar la BD sin los secretos del `.env` no es
+recuperar el sistema.
+
+### #80 — `/opt/backup-db.sh` desplegado ≠ `backup-db.sh` del repo
+
+**Estado**: OPEN, LOW PRIORITY (disciplina, no funcional).
+**Origen**: detectado 2026-06-19 al medir el script de backup durante
+el cierre de [[#78]]. El script que el cron ejecuta vive en
+`/opt/backup-db.sh` (1320 bytes, mod 9 may). El script en el repo
+en `backup-db.sh` tiene otro contenido (verificación con `gzip -t`,
+log con `✓ Backup completado`, retención explícita).
+
+Los logs del VPS contienen líneas con formato `OK -- backup ...
+(N bytes)`, que **no aparecen** en el script del repo. Confirma que
+son scripts distintos, no la misma cosa cargada por dos rutas.
+
+**Modelo de amenaza**: no funcional — el backup desplegado funciona
+y produce dumps restaurables (probado en [[#78]]). Pero:
+- "Source of truth" del operacional es ambiguo. Si alguien revisa el
+  repo y modifica `backup-db.sh` esperando que sea lo que corre, no lo
+  es. Cambio silenciosamente ineficaz.
+- Las dos mejoras de seguridad del script del repo (`set -e`,
+  `gzip -t`, retención explícita con `find -mtime`) no están corriendo
+  en producción.
+- Si el script del VPS se pierde (rotación de disco, `rm` accidental),
+  no hay un copy authoritativo de qué hay que restaurar como cron.
+
+**Acción cuando se aborde**:
+1. `cat /opt/backup-db.sh` del VPS y compararlo con `backup-db.sh`
+   del repo.
+2. Decidir: el del VPS gana (más simple, funciona) o el del repo gana
+   (más mejoras, tracked en git).
+3. Sincronizar: el ganador se commitea/despliega, el otro se borra.
+4. Documentar en el README cómo se despliega el cron de backup (path,
+   permisos, schedule del cron) para que la siguiente persona que
+   toque esto no tenga que arqueología.
+
+**Esfuerzo**: 30 minutos.
+
+**Prioridad**: baja, pero entra en el barrido de "disciplina commit
+≠ desplegado" al que [[#11]] ya nos obligó. No es urgente pero es de
+las cosas que joden el día que toca debugging.
+
+**Conexión con [[#11]]** y la lección de "`grep -qF` sin filtrar
+comentarios" ([[#75]]): mismo patrón metodológico — lo que crees que
+corre no es lo que corre. La cura es la misma: medir contra la
+realidad, no contra la suposición.
+
+**No bloquea**: nada.
+
 
