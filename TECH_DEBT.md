@@ -3396,11 +3396,19 @@ automatiza.
 
 **No bloquea**: nada (INFRA-2 cerrado).
 
-### #79 — Recovery completo requiere custodia de los secretos del `.env` fuera del VPS
+### #79 — Recovery completo requiere custodia de los secretos del `.env` fuera del VPS (cerrada)
 
-**Estado**: OPEN, HIGH PRIORITY operacional (no funcional). Es la
+**Estado**: ✅ **RESUELTO 2026-06-19**. Las 15 claves load-bearing
+del set de recovery están en custodia off-VPS (disco cifrado del
+operador). La custodia está **probada por descifrado independiente**
+de una fila SMTP real de producción usando la clave custodiada (no
+la del VPS): plaintext de 9 chars, coincide con el baseline de
+[[#7]]. Ver "**Cierre 2026-06-19**" al final de esta entrada.
+
+**Estado original** (mantenido como contexto histórico del diseño):
+OPEN, HIGH PRIORITY operacional (no funcional). Era la
 deuda más grave que destapó [[#78]], y la más fácil de pasar por alto
-porque no rompe nada hoy.
+porque no rompía nada hoy.
 
 **Origen**: detectado 2026-06-19 al cerrar [[#78]]. El restore test
 demostró que `pg_dump | gzip` recupera la BD entera con sus columnas
@@ -3473,6 +3481,74 @@ las que [[#7]] rotó (`SMTP_ENCRYPTION_KEY`, `KEYSTORE_ENCRYPTION_KEY`)
 **Conexión con [[#78]]**: [[#78]] demostró que la BD es recuperable;
 [[#79]] dice que recuperar la BD sin los secretos del `.env` no es
 recuperar el sistema.
+
+---
+
+**Cierre 2026-06-19**:
+
+**Inventario medido (las 15 claves load-bearing)**:
+- Del backend `.env` (11): `SMTP_ENCRYPTION_KEY` (hex64),
+  `KEYSTORE_ENCRYPTION_KEY` (hex64), `JWT_SECRET`, `APP_USER_JWT_SECRET`,
+  `DATABASE_URL`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`,
+  `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_CHAT_ID`.
+- Del `.env` raíz (2): `DB_PASSWORD`, `MINIO_PASSWORD` — descubiertos
+  por el inventario completo del Paso 4 de [[#83]]; alimentan el
+  `docker compose` de Postgres/MinIO. Faltaban en el inventario inicial.
+- De `/etc/uu-alert.env` (2): `BOT_TOKEN`, `CHAT_ID` — sin ellos los
+  monitores de [[#11]]/[[#81]]/[[#82]] dejan de alertar.
+
+**Asimetría de impacto** (al runbook):
+- **Clase A — intocables**: `SMTP_ENCRYPTION_KEY`, `KEYSTORE_ENCRYPTION_KEY`.
+  Pérdida = ciphertext irrecuperable (catástrofe).
+- **Clase B — el backend no arranca o no cobra**: las otras 13.
+  Pérdida = inconveniencia operacional pero re-emisibles (rotar JWT
+  invalida sesiones pero no rompe datos; los STRIPE_* se pueden
+  regenerar desde el dashboard de Stripe; MinIO/DB tienen reset
+  desde el operador).
+
+**Custodia elegida**: disco cifrado personal del operador (gestor
+genérico, no especificado en el repo por privacidad operacional —
+el detalle vive en el runbook). Bitwarden/1Password/equivalente
+recomendado pero la elección concreta queda fuera de TECH_DEBT.
+
+**Verificación crítica — el árbitro estructural**: descifrado offline
+independiente del VPS. Procedimiento ejecutado:
+1. Copiar `SMTP_ENCRYPTION_KEY` desde el disco cifrado custodiado
+   (NO desde el `.env` del VPS — eso probaría el VPS, no la custodia).
+2. Aplicar contra una fila SMTP cifrada real, leída del dump más
+   reciente de `/backups/db/`.
+3. Resultado: descifrado OK, plaintext de **9 chars**, idéntico al
+   baseline de [[#7]] (`decrypt OK, length: 9`).
+
+Esa coincidencia byte-fiel cierra el círculo: la custodia
+NO es "tengo las claves apuntadas" — es "las claves apuntadas abren
+los datos". El día del desastre, ese mismo disco + un dump =
+recuperación real.
+
+**Hallazgo lateral cerrado en paralelo**: [[#83]] eliminó 4 `.env`
+históricos con 3 generaciones de claves AES viejas que destapó el
+inventario. Superficie de ataque innecesaria, limpiada.
+
+**Limitación honesta del cierre**: la custodia cubre las claves.
+**NO cubre la replicación off-VPS del dump cifrado**. Si el VPS
+muere y el último `/backups/db/appforge_YYYYMMDD.sql.gz` solo vive
+ahí, las claves custodiadas no abren nada porque no hay ciphertext
+que descifrar. Pendiente: medir si el `/opt/backup-db.sh` desplegado
+ya replica off-VPS (rsync/s3/scp) — si no, deuda nueva (`#84`).
+Mientras tanto el runbook [[#79]] documenta esa dependencia con TBD
+en el paso "obtener dump".
+
+**Pendiente complementario (no bloqueante del cierre)**:
+- `docs/runbook/RECOVERY.md` — runbook de 1 página con los 8 pasos
+  para reconstruir el backend en una máquina nueva (clonar, dump,
+  `.env` desde custodia, docker compose, restore, build, smoke).
+- Disciplina de rotación: cada vez que se rote una clave en `.env`,
+  actualizar el item del disco cifrado en el mismo gesto. Sin esto la
+  custodia queda desfasada silenciosamente.
+- Destrucción de `/root/secrets-archive/env-snapshot-20260619.tar.gz.gpg`
+  (red de seguridad de [[#83]]): ejecutada con `shred -u` el mismo día
+  tras probar la custodia. Directorio vacío.
 
 ### #80 — `/opt/backup-db.sh` desplegado ≠ `backup-db.sh` del repo (el desplegado es SUPERIOR)
 
