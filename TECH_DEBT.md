@@ -3135,8 +3135,8 @@ runtime → `ValidationPipe` con `whitelist:true` arrasaba el body →
 Fix en commit `7541ad9` (quitar `type` de 2 imports).
 
 **Cierre verificado end-to-end 2026-06-19**:
-- `PlatformSmtpConfig` poblada (1 fila, `host=mail.creatu.app`, `port=465`,
-  `secure=t`, `username=noreply@creatu.app`, `encryptedPass` ciphertext
+- `PlatformSmtpConfig` poblada (1 fila, `host=SERVIDOREMAIL`, `port=465`,
+  `secure=t`, `username=USUARIOCORREO`, `encryptedPass` ciphertext
   de 86 bytes).
 - `POST /platform/test-smtp` → `connectionOk: true, emailSent: true`
   (autenticación SMTP contra lanubevirtual verificada).
