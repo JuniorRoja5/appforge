@@ -3634,4 +3634,115 @@ robustez del backup de extremo a extremo: producción correcta
 queda [[#79]] (custodia OFF-VPS de los secretos del `.env`) para
 que la recuperación sea posible sin el VPS.
 
+### #82 — INFRA-4 — Monitor activo de `/health` con alertas en transición (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. Cierra el último agujero
+operacional del bloque pre-go-live: ¿cómo me entero de que la API se
+cayó si no hay nadie mirando el dashboard a las 3 de la mañana?
+
+**Origen y reorientación**: el endpoint `/health` (commit `633c251`,
+mismo día) deja la API legible para cualquier monitor externo, pero
+sin un monitor enchufado, son metadatos inertes. La opción de menor
+fricción aparente era UptimeRobot (registro web + webhook a Telegram).
+La descartamos por dos motivos: (a) añade una dependencia externa
+con login propio para un caso que la cañería de [[#11]]/[[#81]] ya
+cubre estructuralmente, y (b) la muerte del VPS entero —el único modo
+de fallo que un monitor externo cubriría y uno local no— se acepta con
+los ojos abiertos como mejora futura opcional, no como bloqueante.
+
+**Diseño implementado** (vive solo en el VPS, operacional puro, no
+toca el repo del backend):
+
+- `/usr/local/bin/health-alert.sh` (755 root:root, 160 líneas,
+  sha256 `07a18cddee9b19433a641d2cfa2c8ad2c0c70be9f98d7c2d32fbf302c7e39931`).
+  Cada corrida hace un curl a `https://api.creatu.app/health` con
+  `--max-time 8`. "UP" = HTTP 200 + body contiene `"ok":true`.
+  Cualquier otra cosa = "DOWN: <razón>". Las tres razones accionables:
+  `no conecta` (TCP no establecido, curl 000),
+  `HTTP <code> (<dep que cayó>)` (típicamente 503 con body útil),
+  `HTTP 200 pero ok:false`.
+- **Máquina de estados** en `/var/lib/health-alert-state` (literal
+  `UP` o `DOWN`). Alerta SOLO en transiciones — el ciclo continuo
+  cada 5 min no genera spam si la API lleva 2 horas caída.
+- **Debounce contra parpadeos** dentro del propio script: si el
+  primer curl falla, `sleep 5` y reintenta una vez. Solo declara
+  DOWN si ambos fallan. Mata GC pauses / reloads de medio segundo
+  / hipos de red sin esperar dos ciclos de cron.
+- **Disciplina send-antes-de-write**: si el envío a Telegram falla,
+  NO escribe el estado nuevo → próximo ciclo reintenta. Auto-sanante.
+  Si escribiera el estado con el send fallido, perdería la alerta
+  para siempre. Verificado por ejecución (sandbox: send roto + endpoint
+  caído → state file NO existe → próxima corrida reintenta).
+- **Heartbeat semanal** 💚 los lunes 09:00 UTC (parametrizable via
+  `HEARTBEAT_DAY`/`HEARTBEAT_HOUR`). Vigila al vigilante: si este
+  script muere (cron borrado, error de sintaxis), la ausencia del
+  💚 lo destapa en ≤7 días.
+- Reusa `/etc/uu-alert.env` (mismo bot `@AppForge_Monitoring_bot`
+  que [[#11]]/[[#81]], cero duplicación de canal).
+- `set -euo pipefail` + `|| true` quirúrgico en curl/grep que pueden
+  no casar — el footgun de exit-0 que ya pillamos en sesiones
+  previas queda blindado.
+- `/etc/cron.d/health-alert` (644 root:root): `*/5 * * * * root` con
+  `MAILTO=""` (cron no manda mail si algo escribe a stderr) y
+  `>> /var/log/health-alert.log 2>&1` para forensia.
+
+**Footgun documentado en el header del script**: `HEARTBEAT_HOUR`
+debe usarse SIN cero a la izquierda (`9`, no `09`). Bash interpreta
+`08`/`09` como octal y peta como "invalid number" en `printf '%02d'`,
+lo que con `set -e` mata el script silencioso. Default (9) está a
+salvo; blindaje opcional para cualquier valor: `printf '%02d' "$((10#$HEARTBEAT_HOUR))"`.
+
+**Smoke verificado 2026-06-19, los 7 caminos** (sandbox local con
+servidores fake, no de cabeza):
+
+| # | Escenario | Resultado real |
+|---|---|---|
+| 1 | 1ª corrida, UP, sin state file | silencio, no escribe state ✅ |
+| 2 | UP → DOWN (503) | 🚨 con detalle de dep caída + state DOWN ✅ |
+| 3 | DOWN → DOWN (sigue 503) | silencio — no spam ✅ |
+| 4 | DOWN → UP | ✅ recuperación + state UP ✅ |
+| 5 | 200 con `ok:false` | DOWN → 🚨 ✅ |
+| 6 | Parpadeo (1er curl falla, 2º acierta) | UP, sin alerta ✅ |
+| 7 | Send falla + endpoint caído | state NO avanza → reintenta ✅✅ |
+| 8 | Heartbeat (minute=00 match) | 💚 enviado ✅ |
+
+**Smoke real en VPS (post-deploy)**: forzado `ENDPOINT=http://127.0.0.1:9/health`
+→ 🚨 a Telegram con "Razón: no conecta" + state DOWN. Recuperación
+apuntando al endpoint real → ✅ + state UP. Cron activo en
+`/etc/cron.d/health-alert`.
+
+**Acoplamiento implícito a documentar en el runbook**: el script
+asume `https://api.creatu.app/health`. Si cambia el dominio o el path,
+hay que tocar `ENDPOINT` en `/usr/local/bin/health-alert.sh` (línea
+~12) — y nada más. La firma "UP" (HTTP 200 + body con `"ok":true`)
+es la misma firma del `HealthController` del backend; si en el futuro
+se cambia el shape del body, el monitor lo detectará como DOWN
+(`"ok":true` no aparecerá). Esa coupling es buscada: el monitor pierde
+su firma si el backend cambia su contrato, y eso lo notas.
+
+**Limitación honesta**: cubre API/deps caídas (proceso PM2 caído,
+Redis/BD caídos, deploy roto, 503s), que es ≥80% del modo de fallo
+real. **NO cubre la muerte del VPS entero** — el cron muere con la
+máquina y los Telegrams se cortan en silencio. Backstop parcial: la
+ausencia del 💚 semanal destapa el silencio en ≤7 días, pero eso es
+"dentro de una semana", no "en 5 minutos". Cubrir la muerte del VPS
+en minutos exigiría un vigilante externo (Healthchecks.io con
+heartbeat invertido, UptimeRobot, o un segundo cron en otra máquina).
+Decidido NO añadirlo hoy con los ojos abiertos: la fricción de
+añadir SaaS externo no justifica el valor marginal para 1 operador
+en solitario. Mejora futura opcional.
+
+**No bloquea**: nada del bloque operacional pre-go-live restante.
+
+**Conexión con [[#11]]**: comparte canal Telegram, env file, bot.
+Patrón replicable para futuras alertas operacionales (pago Stripe
+fallido, build APK terminado, cert SSL caducando, disco lleno).
+**Conexión con [[#81]]**: misma disciplina (heartbeat semanal,
+`set -euo pipefail`, reuso de credenciales). [[#82]] es el primer
+monitor "frecuente" (cada 5 min) que justifica máquina de estados;
+[[#81]] es diario y stateless.
+**Conexión con `/health` endpoint** (commit `633c251`, no es deuda):
+el contrato HTTP 200/503 + body `{ok, deps, ts}` es el que este
+monitor consume.
+
 
