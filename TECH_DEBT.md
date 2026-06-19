@@ -4006,3 +4006,70 @@ recuperación.
 replicación. Evita dos rondas de revisión del mismo script.
 **Conexión con `docs/runbook/RECOVERY.md`**: bloqueante del Paso 2.
 
+---
+
+**Ampliación de medición 2026-06-19** (tamaño real + MinIO):
+
+El scope original ("GB que crecen, decisiones de bandwidth/retención")
+era una suposición no medida. La medición lo refuta y simplifica el
+diseño.
+
+| Medición | Valor | Lectura |
+|---|---|---|
+| `du -sh /backups/db/` | **9.4M** total (30 días) | no son GB, son MB |
+| Tamaño por dump | ~350 KB (creciendo ~2-3 KB/día) | trivial replicar |
+| Diff últimos 5 dumps | 338K → 355K en 4 días | crecimiento muy lento |
+| `du -sh /var/lib/postgresql/data` | 66.9M | BD viva, NO el dump |
+| `du -sh /var/lib/docker/volumes/minio` | 68M ← engañoso | mayoría metadata interna, no objetos |
+| Objetos reales en MinIO (find dentro del contenedor) | **136K** de andamiaje (`.bkp`, `.meta`, `sys/tmp/`, `.json`) | ZERO objetos de cliente subidos |
+| `which rclone restic` | vacío | ninguna herramienta de sync instalada |
+
+**Recalibración del scope**:
+
+1. **Alcance reducido a solo BD por ahora**. MinIO sale del scope
+   de [[#84]] mientras no tenga objetos de cliente reales. Hoy son
+   136K de andamiaje que MinIO regenera al levantarse — perder eso
+   no duele. Cuando el primer cliente real suba un logo de marca o
+   fotos de catálogo, MinIO pasa de "andamiaje regenerable" a
+   "datos irreemplazables" y [[#84]] debe ampliarse a cubrirlo.
+2. **Disparador documentado** (vigilar — el día que cruce, ampliar):
+   - Umbral pragmático: `du -sh /var/lib/docker/volumes/*minio* > 500M`
+     OR cuando una `find` dentro del contenedor de MinIO devuelva
+     >0 ficheros `.png`/`.jpg`/`.webp`/`.pdf`/`.zip` con `mtime`
+     reciente.
+   - Hilo de monitoreo: añadir un cron semanal que mida ambos y
+     alerte al `@AppForge_Monitoring_bot` si cruza. ~15 líneas de
+     bash, reutiliza la cañería de [[#11]]/[[#81]]/[[#82]]. No
+     bloquea cerrar [[#84]] hoy.
+3. **El tamaño cambia el diseño**: <10 MB en total y kilobytes
+   por día. Esto NO es "decidir storage redundante con lifecycle
+   rules" — es "elegir un destino y un cron". Las opciones gratis
+   sobran:
+   - **Backblaze B2 / AWS S3 free-tier** (10 GB gratis en B2):
+     automatizable con `rclone` (a instalar — no está en el VPS
+     hoy), retención fácil, restore desde cualquier máquina con
+     internet. Default razonable.
+   - **Otra máquina del operador con SSH** (otro VPS, NAS, Pi en
+     casa): `rsync` por cron, gratis, depende de que la otra
+     máquina viva. Hoy NO existe esa máquina (el repo está limpio
+     de configuración SSH outbound; ver medición en la sección
+     "Medición ejecutada 2026-06-19" arriba).
+   - **Repo privado de Git** con cifrado por commit: hack que
+     funciona para datos pequeños no-confidenciales pero el
+     ciphertext del dump no es confidencial-en-tránsito (ya está
+     cifrado a nivel app por [[#7]]), así que técnicamente
+     viable; sin embargo, ensucia el repo y no es lo idiomático.
+     NO recomendado salvo como último recurso.
+4. **Retención**: ya no aplica la regla 7-4-6 inicial — el coste
+   es tan bajo que "guardar TODO desde el inicio" es defendible
+   los primeros 12 meses, luego revisar si crece. Quitar
+   complejidad de lifecycle.
+5. **El árbitro de cierre sigue siendo el mismo**: restaurar
+   desde la copia remota, no solo confirmar que el fichero llegó.
+
+**Conclusión de la ampliación**: [[#84]] es una pieza pequeña y
+automatizable, no un proyecto de infra. Una sesión de diseño + 1h
+de cableado + 1h de smoke. La decisión sigue siendo del operador
+(destino), pero el coste-beneficio se desplazó a "casi gratis,
+casi sin friction" en todas las opciones razonables.
+
