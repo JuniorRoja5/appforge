@@ -4073,3 +4073,89 @@ de cableado + 1h de smoke. La decisión sigue siendo del operador
 (destino), pero el coste-beneficio se desplazó a "casi gratis,
 casi sin friction" en todas las opciones razonables.
 
+### #85 — Drift entre nginx repo y nginx desplegado — recuperado en mismo commit (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. Drift detectado al ir a
+desplegar el Cache-Control de `index.html` para builder/admin
+(corrección del bug "bundle viejo"). El gate `diff vivo↔repo`
+previo al `cp` destapó 55 líneas más en el desplegado que en el
+repo: un server block entero de `apps.creatu.app` (PWAs estáticas)
+añadido en caliente sin commitear. Cerrado por reconciliación en
+el mismo commit que aplicó el Cache-Control: el repo absorbe el
+contenido del desplegado y añade encima los dos `location =
+/index.html` nuevos.
+
+**Modelo de amenaza evitado**: si el `cp repo → VPS` se hubiera
+ejecutado a ciegas (mismo footgun de [[#80]] en `backup-db.sh`),
+habría borrado el server block vivo de `apps.creatu.app` en el
+siguiente reload. Consecuencia: las PWAs de los clientes
+(`https://apps.creatu.app/<slug>/`) habrían dejado de servirse —
+sites caídos sin error explícito, los clientes verían 404 de
+`/etc/nginx/html` default. Daño silencioso, no detectable por
+`nginx -t` (la config seguiría siendo válida, solo le faltaría el
+server block).
+
+**Lectura del bloque vivo**: bien hecho — `sw.js` y `.html`/`.webmanifest`
+con `no-cache`, assets (`js`/`css`/`webp`/etc) con `public,
+max-age=31536000, immutable`. Las PWAs runtime ya tenían el cache
+bien resuelto, por una razón distinta a la asumida: NO es que
+estuvieran "fuera del scope de nginx" (las sirve nginx, no NestJS),
+sino que su bloque ya tenía el cache resuelto. Esto refina la
+clasificación: el bug "bundle viejo" vivía SOLO en builder + admin,
+no en runtime PWAs.
+
+**Acción ejecutada**:
+1. Toma del fichero `/etc/nginx/sites-available/appforge.conf` vivo
+   del VPS como fuente de verdad (lectura completa via `sudo cat`).
+2. Reconstrucción del `infra/nginx/sites-available/appforge.conf`
+   del repo a partir del vivo + dos inserciones idénticas del
+   bloque `location = /index.html` en `app.creatu.app:443` y
+   `admin.creatu.app:443` (justo después de su `location /assets/`
+   respectivo, antes del cierre del server block).
+3. Verificación visual con `Read` de las 3 zonas críticas (builder
+   block, admin block, apps block) antes del commit.
+
+**Smoke gate post-deploy** (verificación de la reconciliación):
+- `diff /etc/nginx/sites-available/appforge.conf /opt/appforge/infra/nginx/sites-available/appforge.conf`
+  → debe mostrar SOLO las dos inserciones de `location = /index.html`.
+  Cualquier otra diferencia = drift residual no capturado, no hacer
+  `cp` hasta depurar.
+- `curl -sI https://apps.creatu.app/ -o /dev/null -w "%{http_code}\n"`
+  → debe devolver `404` (intencional, raíz no sirve nada — las PWAs
+  viven en `/<slug>/`). Cualquier otra respuesta = el reload rompió
+  el bloque de PWAs.
+
+**Lección al runbook** (`docs/runbook/RECOVERY.md`): el patrón
+"medir el desplegado antes del `cp`" no es paranoia, es la
+disciplina que captura este modo de fallo. Aplicar este mismo gate
+al resto de ficheros de configuración que viven solo en VPS:
+`/opt/backup-db.sh` (origen de [[#80]], aún OPEN), `/etc/nginx/nginx.conf`
+(no medido aún), crones de `/etc/cron.d/`, scripts custom de
+`/usr/local/bin/*` (los de [[#81]] y [[#82]] sí están commiteados
+en `TECH_DEBT.md` como contenido, no en el repo como ficheros —
+matiz importante para el Paso 8 del runbook).
+
+**Hallazgo cosmético no bloqueante** (registrado para futura
+limpieza): los `location /assets/` de builder y admin emiten DOS
+`Cache-Control` distintos — uno del `expires 1y;` (que implica
+`max-age=31536000`) y otro del `add_header Cache-Control "public,
+immutable"`. Los navegadores los mergean sin problema, pero son dos
+headers donde debería haber uno. Cuando alguien toque ese bloque
+por otra razón, simplificar a un solo `add_header Cache-Control
+"public, max-age=31536000, immutable"` y quitar el `expires`.
+También: el `/assets/` pierde `Strict-Transport-Security` por la
+no-herencia de `add_header` cuando una location define los suyos —
+mismo patrón que se atendió en el nuevo `location = /index.html`
+re-poniendo HSTS explícitamente. Cosméticos, no bloquean nada.
+
+**No bloquea**: nada.
+
+**Conexión con [[#80]]**: mismo patrón estructural (deploy
+desactualizado respecto al repo). Mientras estos drifts no se
+cierren, cualquier `cp repo → VPS` ciego es una bomba. [[#80]]
+sigue OPEN para `backup-db.sh`; [[#85]] cierra la cara de nginx.
+**Conexión con `docs/runbook/RECOVERY.md`** (Paso 8.1/8.2/8.5):
+el runbook asume que reconstruir desde el repo es fiel a producción.
+[[#85]] cierra ese supuesto para `nginx`; pendiente cerrarlo para
+`backup-db.sh` ([[#80]]).
+
