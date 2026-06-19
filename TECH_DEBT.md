@@ -4232,3 +4232,163 @@ el runbook asume que reconstruir desde el repo es fiel a producción.
 [[#85]] cierra ese supuesto para `nginx`; pendiente cerrarlo para
 `backup-db.sh` ([[#80]]).
 
+### #86 — INFRA-5 — Reboot test del VPS con dos bugs encontrados y cerrados (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. Cierra la última pieza
+operacional pre-go-live: ¿el VPS levanta todo solo tras un reboot
+sin intervención manual? El test reveló dos bugs reales en frío,
+ambos resueltos y validados por un segundo reboot.
+
+**Origen**: pieza ganó doble propósito tras rebajar [[#84]] —
+además de validar el reboot manual, valida por construcción la
+ruta de boot post-restore de Hostinger snapshots (mismo camino:
+boot OS → systemd → docker → contenedores → pm2 → ecosystem →
+procesos node). Un reboot test verde es prueba de que un restore
+de Hostinger recuperaría un VPS operativo, no solo "encendido".
+
+**Mediciones pre-reboot** (las 6 vías de auto-arranque, todas
+declaradas):
+
+| Capa | Verificación | Estado |
+|---|---|---|
+| Docker daemon | `systemctl is-enabled docker` | enabled + active ✅ |
+| Contenedores de datos | `docker inspect --format` restart policy | `unless-stopped` los tres (postgres/redis/minio) ✅ |
+| PM2 startup | `/etc/systemd/system/pm2-root.service` enabled | sí ✅ |
+| Dump PM2 | `/root/.pm2/dump.pm2` existe | sí ✅ (pero ver bug 1 abajo) |
+| nginx/postfix/cron | `systemctl is-enabled` | enabled los tres ✅ |
+| Procesos sospechosos | `ps -ef \| grep node` fuera de PM2 | ninguno ✅ |
+
+**Reboot 1 — el test cumplió su propósito encontrando bugs**:
+
+post-reboot mostró que solo `appforge-worker` se resucitó, `appforge-api`
+nunca arrancó:
+- `pm2 list` → solo worker (id 0 renumerado), ningún registro de api
+- `/var/log/.../appforge-api-error.log` → vacío (api nunca intentó arrancar)
+- `https://api.creatu.app/health` → 502 (nginx proxy a localhost:3000, nadie escuchando)
+- `apps.creatu.app`, `app.creatu.app`, `admin.creatu.app` → 200 (resto del stack OK)
+
+**Bug 1 — `dump.pm2` puede serializar estado incompleto post-reload**:
+- Antes del reboot 1, el operador ejecutó `pm2 save` con `pm2 list`
+  mostrando AMBOS procesos online (incluyendo api con ↺=3 reloads
+  recientes para [[#82]]).
+- `pm2 save` reportó `Successfully saved in /root/.pm2/dump.pm2`,
+  fichero de 16038 bytes (no vacío).
+- Sin embargo `grep -oE 'appforge-(api|worker)' /root/.pm2/dump.pm2`
+  post-reboot mostró solo `appforge-worker`.
+- Hipótesis honesta (no garantizada por documentación de PM2):
+  cuando `pm2 save` se ejecuta poco después de un `pm2 reload` que
+  acaba de terminar, el daemon PM2 puede tener una ventana donde
+  el proceso reload-eado está "vivo en `list` pero no consolidado
+  en el modelo interno que `dump.pm2` serializa". Bug silencioso
+  sin error explícito. Solo se materializa al reboot.
+- **Mitigación**: gate de verificación obligatorio tras cada
+  `pm2 save`:
+  ```bash
+  sudo grep -oE 'appforge-(api|worker)' /root/.pm2/dump.pm2 | sort -u
+  # Debe mostrar EXACTAMENTE las dos líneas: appforge-api Y appforge-worker.
+  # Falta alguna → repetir desde sleep 5 + retry save.
+  ```
+- Documentado en `docs/runbook/RECOVERY.md` Paso 6 y Paso 8.
+- Lección secundaria: la versión inicial del gate
+  (`grep -oE '"name":"[^"]*"'`) era estricta — exigía sin espacio
+  tras `:` — y `cluster_mode` serializa con espacio: `"name":
+  "appforge-api"`. Falso negativo del gate. Versión robusta:
+  `grep -oE 'appforge-(api|worker)'`, independiente del formato JSON.
+
+**Bug 2 — arrancar PM2 a pelo (sin ecosystem) pierde
+`WORKER_MODE=separate` → procesadores BullMQ duplicados**:
+- Al recuperar la api manualmente con `pm2 start
+  /opt/appforge/appforge-backend/dist/main.js --name appforge-api`,
+  el proceso heredó el `env` del shell pero NO recogió
+  `WORKER_MODE: 'separate'` del ecosystem.
+- Código relevante (`src/build/build.module.ts:17` y
+  `src/booking/booking.module.ts:9`):
+  ```ts
+  const isWorkerSeparate = process.env.WORKER_MODE === 'separate';
+  // ...
+  providers: [..., ...(isWorkerSeparate ? [] : [BookingRemindersProcessor])],
+  ```
+- Resultado del bug latente: la api registró `BookingRemindersProcessor`
+  y `BuildProcessor` in-process, mientras el worker separado los
+  corría también → **dos consumidores sobre la misma cola BullMQ
+  → cada job ejecutado dos veces**. Cada booking reminder se enviaba
+  dos pushes; cada build de APK arrancaba dos gradle builds paralelos
+  sobre los mismos artefactos.
+- El bug estuvo activo durante los minutos entre el "fix
+  improvisado" del reboot 1 y la detección del ecosystem.
+- **Mitigación**: invariante operacional registrada — **el único
+  arranque legítimo de los procesos de AppForge es
+  `pm2 start /opt/appforge/appforge-backend/ecosystem.config.js`**.
+  Cualquier otra forma introduce bugs silenciosos. Documentado en
+  Paso 6 del runbook.
+
+**Reboot 2 — validación tras los dos fixes**:
+
+Procedimiento ejecutado:
+1. `pm2 delete all` (slate limpio — sin parámetros residuales del
+   arranque anterior).
+2. `pm2 start /opt/appforge/appforge-backend/ecosystem.config.js`
+   (fuente única de verdad).
+3. Verificación: `pm2 describe appforge-api | grep WORKER_MODE` →
+   `WORKER_MODE: separate` literal ✅.
+4. Verificación dump: `grep -oE 'appforge-(api|worker)' dump.pm2`
+   → ambas líneas ✅. Fichero 12978 bytes, fecha actual.
+5. `sudo reboot`.
+6. Post-reboot ~90s smoke:
+
+| Árbitro | Resultado |
+|---|---|
+| `uptime -p` | `up 0 minutes` (confirma reinicio real) ✅ |
+| `pm2 list` | ambos online, cluster, ↺=0 ✅ (dump fix probado) |
+| `pm2 describe appforge-api \| grep WORKER_MODE` | `WORKER_MODE: separate` ✅ (env del ecosystem sobrevive al boot) |
+| `https://api.creatu.app/health` | 200 en frío (sin intervención manual) ✅ |
+
+Los dos bugs cerrados con árbitro objetivo. El `WORKER_MODE` cuadra
+significa que `pm2 resurrect` aplicó el `env` del ecosystem, no
+solo arrancó el script.
+
+**Una nota cosmética sobre el modo de ejecución**: `pm2 list`
+muestra `mode: cluster` para ambos procesos. Esto es consecuencia
+del `instances: 1` declarado en el ecosystem — PM2 documentado:
+`instances` presente → `cluster_mode` por defecto. NO es bug ni
+estado residual. Con `instances: 1`, cluster es funcionalmente
+casi idéntico a fork (una sola instancia, sin balanceo). Único
+matiz a vigilar si en el futuro se añade código: cluster mode
+corre tras el cluster module de Node, y locks/schedulers in-memory
+asumirían ahí un único proceso (que sigue siendo cierto con 1
+instancia). No cambia nada en el estado actual.
+
+**Mejora futura no bloqueante** (anotada, no abierta como entrada
+nueva): migrar de `dump.pm2` (estado mutable en VPS, sujeto a los
+bugs descritos arriba) a un drop-in del `pm2-root.service` que
+arranque directamente desde el ecosystem:
+```ini
+# /etc/systemd/system/pm2-root.service.d/use-ecosystem.conf
+[Service]
+ExecStart=
+ExecStart=/usr/bin/env pm2 start /opt/appforge/appforge-backend/ecosystem.config.js
+```
+Eso convertiría el ecosystem (versionado en repo) en la fuente
+única de verdad de qué arranca al boot, eliminando el `dump.pm2`
+mutable. La mitigación actual (gate post-save + invariante
+operacional) cubre el riesgo inmediato; este refactor lo cubre
+estructuralmente. NO se hace ahora porque introducir cambios en el
+systemd unit justo después de validar el actual sería pedir bug
+nuevo en caliente. Cuando alguien toque deploy por otra razón,
+hacerlo en el mismo gesto.
+
+**No bloquea**: nada del bloque operacional pre-go-live. Lo cierra.
+
+**Conexión con [[#82]]**: el `↺=3` que tenía api antes del reboot
+1 venía de los `pm2 reload --update-env` ejecutados al cerrar [[#82]].
+Sin ese contexto temporal, el bug del dump no se habría
+materializado en esta sesión.
+**Conexión con [[#84]]** (rebajada): este test valida también la
+ruta de boot post-restore Hostinger por construcción — el camino
+es idéntico hasta el `pm2 resurrect`. Reboot 2 verde = restore
+Hostinger funcionaría.
+**Conexión con `docs/runbook/RECOVERY.md`**: Paso 6 corregido en
+el mismo commit que esta entrada — el comando que el runbook
+mostraba (`pm2 start dist/main.js --name appforge-api`) era
+exactamente el bug 2 que esta entrada cierra. Documentado en línea.
+

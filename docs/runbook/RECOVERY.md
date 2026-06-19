@@ -187,14 +187,37 @@ docker exec -i appforge-postgres psql -U appforge -d appforge \
 
 ## Paso 6 — Arrancar el backend
 
+⚠️ **CRÍTICO — invariante operacional de [[TECH_DEBT #86]]**: el
+único arranque legítimo de los procesos PM2 de AppForge es vía
+`ecosystem.config.js`. **NUNCA arranques a pelo con
+`pm2 start dist/main.js --name appforge-api`** — perderías
+`WORKER_MODE=separate` y la API registraría procesadores BullMQ
+in-process en paralelo con el worker → cada job ejecutado dos
+veces (push duplicadas, builds APK doble-arrancados).
+
 ```bash
 cd appforge-backend
 npm ci
 npm run build
-pm2 start dist/main.js --name appforge-api
-sleep 3
-pm2 logs appforge-api --lines 20 --nostream | grep -E "successfully started|ERROR|FATAL"
+pm2 start /opt/appforge/appforge-backend/ecosystem.config.js
+sleep 5
+pm2 list   # ambos online: appforge-api Y appforge-worker
+pm2 logs --lines 20 --nostream | grep -E "successfully started|ERROR|FATAL"
 # Esperado: "Nest application successfully started", sin ERROR/FATAL.
+
+# Verificar que WORKER_MODE=separate se aplicó (el árbitro de [[#86]] bug 2)
+pm2 describe appforge-api | grep -i WORKER_MODE
+# Esperado: WORKER_MODE: separate
+
+# Persistir estado + gate de verificación (lección de [[#86]] bug 1)
+pm2 save
+sudo grep -oE 'appforge-(api|worker)' /root/.pm2/dump.pm2 | sort -u
+# 🚨 GATE OBLIGATORIO: debe mostrar EXACTAMENTE dos líneas:
+#   appforge-api
+#   appforge-worker
+# Si falta alguna → sleep 5 más + repetir pm2 save. NO continuar
+# sin esto verde — el dump incompleto haría que el próximo reboot
+# resucite solo lo que el dump contenga.
 ```
 
 ---
@@ -339,8 +362,13 @@ no en el repo:
 5. **`/root/.ssh/authorized_keys`** y `/etc/ssh/sshd_config` — solo
    si hubo accesos SSH específicos del operador (no había puller
    remoto cuando se redactó este runbook).
-6. (Cuando [[TECH_DEBT #84]] cierre) Cableado de replicación off-VPS
-   del dump.
+6. **PM2 startup**: `pm2 startup systemd` + `pm2 save` (con el gate
+   robusto `grep -oE 'appforge-(api|worker)' /root/.pm2/dump.pm2`
+   tras el save — lección de [[TECH_DEBT #86]] bug 1). Verificar que
+   `pm2 list` post-reboot resucita ambos procesos antes de declarar
+   el VPS recuperado.
+7. **NO arrancar procesos PM2 sin `ecosystem.config.js`**: ver Paso
+   6 + [[TECH_DEBT #86]] bug 2.
 
 ---
 
