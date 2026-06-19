@@ -1,15 +1,76 @@
 # Runbook — Recuperación de AppForge desde cero
 
 **Para el caso**: el VPS de producción está caído o perdido y hay
-que levantar el backend en una máquina nueva con los datos del
-último backup.
+que recuperar el servicio.
 
-**Tiempo objetivo**: 60-90 min con todo a mano. Si pasa de 90 min,
-algún paso necesita automatización (anota dónde se atascó la
-recuperación para iterar el runbook después).
+## Árbol de decisión — qué ruta seguir
 
-**Práctica recomendada**: ensayar este runbook 1 vez al año en una
-VM efímera, sin avisar al operador. El runbook que no se ensaya
+Antes de empezar, responde estas preguntas en orden:
+
+1. **¿Tienes acceso al panel de Hostinger?** Sí → **Ruta A
+   (snapshot)**. No → **Ruta B (desde cero)**.
+2. **¿Es una recuperación granular (una tabla, un dato concreto)
+   sin necesidad de reconstruir el VPS?** Sí → **Ruta C (restore
+   quirúrgico del dump local)**. No → la ruta de la pregunta 1.
+
+---
+
+## Ruta A — Restore de snapshot Hostinger (ruta primaria, ~30 min)
+
+**Cuándo**: Hostinger disponible + caída total del VPS.
+
+1. Panel Hostinger → VPS Manager → Backup & Snapshot.
+2. Selecciona el snapshot más reciente (frecuencia diaria) y
+   restaura sobre el VPS existente o sobre uno nuevo.
+3. Tiempo estimado: ~30 min según tamaño y carga de la cola
+   del proveedor.
+4. **Smoke post-restore**: salta directo al **Paso 7** del runbook
+   desde-cero (smoke crítico). El VPS vuelve completo — `.env`,
+   docker, pm2, nginx, monitores — y debes confirmar que los 5
+   chequeos pasan. Si fallan, considera el snapshot corrupto y
+   pide el anterior.
+
+**Ventana de pérdida aceptada**: ≤24h (frecuencia diaria de
+snapshots).
+
+**Hueco conocido cubierto por Ruta B**: si pierdes el acceso a
+Hostinger (cuenta comprometida, proveedor caído, billing
+suspendido), Ruta A no aplica.
+
+---
+
+## Ruta B — Desde cero (escenario pesimista)
+
+**Cuándo**: Hostinger no disponible (caso b de [[TECH_DEBT #84]]).
+
+Continúa con los pasos 1-8 abajo. **Tiempo objetivo**: 60-90 min
+con todo a mano. Si pasa de 90 min, algún paso necesita
+automatización (anota dónde se atascó la recuperación para iterar
+el runbook después).
+
+---
+
+## Ruta C — Restore quirúrgico (tabla concreta del dump local)
+
+**Cuándo**: alguien borró una tabla / corrupción de filas
+identificadas / rollback de una migración fallida, pero el VPS
+sigue vivo.
+
+1. Identifica el dump más reciente en `/backups/db/appforge_YYYYMMDD.sql.gz`
+   que sea anterior al daño.
+2. `gunzip -c <dump>.sql.gz | grep -A <N> 'COPY "TablaAfectada"'`
+   para extraer la tabla concreta.
+3. Aplica el restore quirúrgico con `psql` directo a la BD viva,
+   en una transacción que puedas rollback.
+4. NO uses este flujo para "restaurar todo" — usa Ruta A o B
+   para eso.
+
+---
+
+## Pasos detallados — Ruta B (desde cero)
+
+**Práctica recomendada**: ensayar Ruta B 1 vez al año en una VM
+efímera, sin avisar al operador. El runbook que no se ensaya
 envejece silenciosamente.
 
 ---
@@ -37,25 +98,28 @@ cd appforge
 
 ## Paso 2 — Obtener el último dump de `/backups/db/`
 
-**Ubicación off-VPS del dump**: ⚠️ **TBD — depende de TECH_DEBT #84
-(replicación off-VPS de los dumps).**
+**Si llegaste aquí siguiendo Ruta B**, significa que Hostinger no
+está disponible. El dump más reciente vive en el VPS, y el VPS no
+responde. Las opciones, en orden de viabilidad:
 
-Mientras `#84` no esté cerrada, este paso depende de que el VPS
-original siga accesible para sacar el último
-`/backups/db/appforge_YYYYMMDD.sql.gz` por SSH/SCP.
+1. **VPS aún accesible por SSH aunque la API esté caída**: copia
+   el dump más reciente.
+   ```bash
+   scp root@srv1616198:/backups/db/appforge_$(date +%Y%m%d).sql.gz ./backup.sql.gz
+   ```
+2. **VPS completamente perdido**: no hay dump recuperable por la
+   ruta B. La ruta A (Hostinger) era la única protección contra
+   este escenario y por hipótesis tampoco está. Es el "caso peor"
+   de [[TECH_DEBT #84]] (rebajada): hueco residual asumido. No
+   hay recovery posible de los datos hasta el último snapshot, y
+   ya no existe.
 
-```bash
-# Mientras #84 esté abierta (VPS aún accesible):
-scp root@srv1616198:/backups/db/appforge_$(date +%Y%m%d).sql.gz ./backup.sql.gz
-
-# Cuando #84 cierre, sustituir este paso por el comando de fetch
-# desde la ubicación remota acordada (S3/B2/rsync target/etc).
-```
-
-**Esta es una limitación CONOCIDA del runbook actual.** Documentada
-honestamente en lugar de oculta. El día del desastre lees esto, y si
-el VPS ya no responde y `#84` sigue abierta, sabes que no hay
-recuperación posible — y eso te ahorra horas de improvisación inútil.
+**Esto es por construcción la limitación del modelo de backup
+actual.** Documentada en [[#84]]. Si este escenario se materializa,
+la única acción es comunicar la pérdida a los clientes
+afectados y restaurar la última copia disponible (snapshot de
+Hostinger más antiguo si lo hay, o reconstrucción desde cero del
+servicio sin datos históricos).
 
 ---
 
@@ -311,5 +375,7 @@ no en el repo:
 - [[#82]] — monitor `/health` (origen del Paso 8.1).
 - [[#83]] — limpieza de `.env` históricos (relevante: rotaciones
   futuras deben purgar copias).
-- [[#84]] — replicación off-VPS del dump (bloquea recuperación
-  completa hasta que cierre).
+- [[#84]] — replicación off-VPS del dump **REBAJADA**: cubierta
+  por snapshots de Hostinger. Ruta A del árbol de decisión es la
+  primaria; Ruta B (este runbook desde-cero) queda para el
+  escenario pesimista de proveedor no disponible.

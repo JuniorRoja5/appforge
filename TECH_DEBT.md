@@ -3907,11 +3907,18 @@ a custodiar (15, incluyendo las dos del `.env` raíz que faltaban en
 el inventario inicial) y limpia la superficie antes de empezar a
 custodiar. Prerrequisito de [[#79]].
 
-### #84 — Replicación off-VPS del dump de BD (el espejo de #79)
+### #84 — Replicación off-VPS del dump de BD — REBAJADA (no se implementa)
 
-**Estado**: OPEN, HIGH PRIORITY operacional. Es el riesgo más caro
-abierto tras esta sesión. No bloquea operar, pero su no-cierre
-expone a pérdida total de datos ante muerte del VPS.
+**Estado**: 🟡 **REBAJADA 2026-06-19** a "mejora opcional /
+probablemente innecesaria". El escenario que motivó esta pieza
+queda cubierto por los snapshots de Hostinger — ver "**Cierre
+2026-06-19**" al final. El diseño original se preserva como
+contexto histórico de por qué se planteó.
+
+**Estado original** (mantenido como contexto histórico): OPEN,
+HIGH PRIORITY operacional. Era el riesgo más caro abierto tras
+esta sesión. No bloqueaba operar, pero su no-cierre exponía a
+pérdida total de datos ante muerte del VPS.
 
 **Origen**: detectado 2026-06-19 al cerrar [[#79]] y escribir el
 runbook `docs/runbook/RECOVERY.md`. El Paso 2 del runbook ("obtener
@@ -4072,6 +4079,72 @@ automatizable, no un proyecto de infra. Una sesión de diseño + 1h
 de cableado + 1h de smoke. La decisión sigue siendo del operador
 (destino), pero el coste-beneficio se desplazó a "casi gratis,
 casi sin friction" en todas las opciones razonables.
+
+---
+
+**Cierre 2026-06-19 — REBAJADA, no se implementa**:
+
+El escenario que motivó esta pieza (muerte del VPS → pérdida total
+de datos pese a custodia de claves de [[#79]]) queda cubierto por
+los **backups automáticos de Hostinger**: snapshots completos del
+servidor, almacenados fuera del VPS (Países Bajos), restauración
+~30 min. Con el plan de backups diarios contratado, la frecuencia
+iguala al dump local (ventana de pérdida ~24h).
+
+**Huecos residuales aceptados conscientemente**:
+- (a) **Granularidad todo-o-nada del snapshot** vs recuperación
+  quirúrgica de una tabla — mitigable con el dump diario local
+  que ya existe en `/backups/db/` (producido por `/opt/backup-db.sh`,
+  probado restaurable en [[#78]]).
+- (b) **Dependencia de un único proveedor** — Hostinger podría
+  fallar, perder el acceso, o el operador podría perder la
+  cuenta. Mitigación: el dump local diario es la copia "vivo en
+  mi VPS" y el snapshot Hostinger es la "fuera de mi VPS". Si
+  ambas fallan a la vez, hay un problema más grande que el de
+  backup.
+
+**Por qué NO se monta rclone/B2**: sería infraestructura redundante
+sobre una red de backups que el proveedor ya da. Pagar tooling +
+mantener tooling + custodiar otra clave (la del `rclone crypt`) +
+disciplina de rotación, todo para replicar una garantía que ya
+existe estructuralmente. Cumple el principio de "menor superficie
+operacional para igual cobertura".
+
+**Lo que queda firme y vigente**:
+- El dump local diario (`backup-db.sh`, probado restaurable en
+  [[#78]], monitor activo en [[#81]]) sigue siendo el complemento
+  para recuperación granular.
+- La custodia de claves de [[#79]] sigue siendo necesaria — los
+  snapshots de Hostinger devuelven el VPS como estaba, **incluyendo
+  el `.env`**, pero la custodia OFF-VPS protege contra el caso de
+  perder el acceso a Hostinger (caso b) cuando el último snapshot
+  contiene los secretos.
+- El runbook `docs/runbook/RECOVERY.md` se actualiza: el Paso 2
+  ya no tiene ⚠️ TBD bloqueante. La ruta primaria de recovery es
+  Hostinger snapshot; el runbook desde-cero queda para el escenario
+  pesimista (hueco residual b).
+
+**Gana relevancia operacional**: el **reboot test** (próxima pieza)
+ahora vale doble — valida tanto el reboot manual como, por
+construcción, la ruta de boot post-restore de Hostinger (mismo
+camino: snapshot → boot OS → systemd/docker/pm2 arrancan). Un
+reboot test verde es prueba de que el restore de Hostinger
+recuperaría un VPS funcional, no solo "encendido".
+
+**Conexión con [[#79]]**: [[#79]] sigue cubriendo el caso "Hostinger
+no disponible" (hueco residual b). Las claves custodiadas siguen
+siendo el único camino de recovery sin proveedor.
+**Conexión con [[#78]]**: [[#78]] sigue cubriendo recuperación
+granular (caso a). El dump local probado restaurable es el bisturí
+del backup; Hostinger es la mantequilla.
+**Conexión con [[#80]]**: pierde su acoplamiento con [[#84]]
+("hacer junto con la replicación"). [[#80]] queda solo como
+disciplina de sincronía repo↔desplegado, sin pareja natural —
+abordar cuando se toque `backup-db.sh` por otra razón, o como
+limpieza intencional.
+**Conexión con `docs/runbook/RECOVERY.md`**: actualizado en el
+mismo commit que esta rebajada — Paso 2 deja de bloquear, gana
+una rama "Hostinger snapshot" como ruta primaria.
 
 ### #85 — Drift entre nginx repo y nginx desplegado — recuperado en mismo commit (cerrada)
 
