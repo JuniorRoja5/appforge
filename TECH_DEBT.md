@@ -3745,4 +3745,90 @@ monitor "frecuente" (cada 5 min) que justifica máquina de estados;
 el contrato HTTP 200/503 + body `{ok, deps, ts}` es el que este
 monitor consume.
 
+### #83 — Limpieza de `.env` históricos con claves AES viejas en disco (cerrada)
+
+**Estado**: ✅ **RESUELTO 2026-06-19**. Cuatro `.env` históricos con
+claves AES de generaciones ya rotadas eliminados con red de seguridad
+cifrada. Cierra superficie de ataque que el inventario de [[#79]]
+destapó como hallazgo lateral.
+
+**Origen**: el Paso 4 del inventario de [[#79]] (`find /opt/appforge
+-name "*.env*"`) encontró 4 backups del `.env` del backend, fechas
+29-30 abril:
+- `.env.backup-20260430-142323`
+- `.env.backup-pre-jwt-rotation-20260430-143051`
+- `.env.bak-20260429-155231`
+- `.env.bak-20260429-155942`
+
+Los 4 con `grep -c "(SMTP|KEYSTORE)_ENCRYPTION_KEY=" == 2` → cada
+uno contenía ambas claves AES de su época. Por las fechas, anteriores
+a la rotación de [[#7]] (2026-06-18) → claves AES viejas en texto
+plano en disco.
+
+**Modelo de amenaza**: con `600 root`, no eran legibles por usuarios
+no-root — el riesgo no era "fuga activa de aplicación". El riesgo
+era:
+- Un atacante con escalada a root, o un snapshot/dump del disco del
+  VPS filtrado, expone esas claves viejas.
+- Cada generación de claves AES descifra los dumps de su época. Tres
+  generaciones medidas por hash md5 de los valores (sin exponerlos):
+  - `e8da/3480` (29-30 abr): apertura de dumps de finales abr
+  - `2854/653c` (30-abr pre-jwt-rotation): apertura de dumps de may
+  - `b9d3/18fc` ([[#7]], actual): apertura de dumps post-#7
+- Mientras esos ficheros existieran, había una clave en texto plano
+  para cada ventana histórica de backups. Munición innecesaria.
+
+**Verificación crítica antes de borrar** (la rotación de [[#7]] sí
+cubrió ambas AES): ningún hash de las claves vivas (`b9d3`/`18fc`)
+coincidió con ningún hash de los backups. Confirmado por medición:
+[[#7]] no dejó claves vivas quemadas en copias históricas.
+
+**Acción ejecutada 2026-06-19**:
+
+1. **Empaquetado cifrado como red de seguridad** — los 4 históricos
+   + el `.env` vivo + `/opt/appforge/.env` (raíz, contiene
+   `DB_PASSWORD`/`MINIO_PASSWORD`) + `/etc/uu-alert.env`, en un
+   único `tar.gz` cifrado con GPG simétrico AES256 (passphrase
+   fuera del VPS, en memoria del operador):
+   - Path: `/root/secrets-archive/env-snapshot-20260619.tar.gz.gpg`
+   - Permisos: `600 root:root`
+   - sha256: `5233797c0a34dfb274deb42688fd2021677ec249f0eff775c8cd8813e54d28f5`
+   - Test de descifrado offline: OK (los 7 ficheros listados en
+     el `tar -tzf`).
+2. **Borrado seguro** de los 4 históricos con `shred -u -n 3`
+   (3 pasadas de sobreescritura antes de unlink). Sobre SSD el
+   beneficio es marginal por wear leveling, pero no es negativo.
+3. **Verificación de limpieza**: `find /opt/appforge -name
+   ".env.bak*" -o -name ".env.backup*"` → vacío.
+4. **Smoke post-limpieza**: `GET /health` → 200 (backend intacto,
+   no rozamos el `.env` vivo).
+
+**Destino del archivo `.gpg`**: red de seguridad PURA — vive en el
+VPS y muere con él. Se destruye con `shred -u` al cerrar [[#79]],
+cuando las claves vivas estén en custodia off-VPS y verificadas por
+test de descifrado independiente.
+
+**Hallazgos secundarios del inventario** (no son deuda, son contexto
+para [[#79]]):
+- `/opt/appforge/.env` (raíz) contiene `DB_PASSWORD` y `MINIO_PASSWORD`
+  — alimenta el `docker compose` de Postgres/MinIO. Entra a custodia.
+  Faltaba en el inventario inicial.
+- `/opt/appforge/appforge-builder/.env` solo tiene `VITE_API_URL`
+  (`644`, world-readable) — esperado y correcto: `VITE_*` se embebe
+  en el bundle del navegador, es público por definición. NO entra a
+  custodia.
+
+**No bloquea**: nada.
+
+**Conexión con [[#7]]**: la rotación de [[#7]] hizo nuevas las AES
+en el `.env` vivo pero NO purgó las copias antiguas en disco.
+[[#83]] cierra esa omisión. **Lección al runbook**: toda rotación
+de claves en `.env` debe incluir paso explícito de purga de copias
+históricas en disco (`shred -u .env.bak* .env.backup*`), no solo del
+fichero canónico.
+**Conexión con [[#79]]**: [[#83]] destapó el set completo de claves
+a custodiar (15, incluyendo las dos del `.env` raíz que faltaban en
+el inventario inicial) y limpia la superficie antes de empezar a
+custodiar. Prerrequisito de [[#79]].
+
 
