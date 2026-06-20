@@ -24,6 +24,7 @@ import { PwaPage } from './pages/PwaPage';
 import { BillingPage } from './pages/BillingPage';
 import { BuilderLayout } from './features/builder/BuilderLayout';
 import { AccountPage } from './pages/AccountPage';
+import { BrandingPage } from './pages/BrandingPage';
 import { PricingPage } from './pages/PricingPage';
 import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
 import { PaymentCancelPage } from './pages/PaymentCancelPage';
@@ -71,6 +72,7 @@ const router = createBrowserRouter([
       { path: '/apps/:appId/pwa', element: <PwaPage /> },
       { path: '/account', element: <AccountPage /> },
       { path: '/billing', element: <BillingPage /> },
+      { path: '/branding', element: <BrandingPage /> },
       { path: '/pricing', element: <PricingPage /> },
       { path: '/payment/success', element: <PaymentSuccessPage /> },
       { path: '/payment/cancel', element: <PaymentCancelPage /> },
