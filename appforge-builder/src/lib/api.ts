@@ -2189,3 +2189,57 @@ export const getAppSmtpConfig = async (
     return { configured: false };
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenants — white-label branding del reseller (G1).
+// El flag isWhiteLabel se computa server-side desde subscription.plan.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TenantBrandColors {
+  primary?: string;
+}
+
+export interface TenantBranding {
+  brandName: string | null;
+  brandLogoUrl: string | null;
+  brandColors: TenantBrandColors | null;
+  isWhiteLabel: boolean;
+}
+
+export interface UpdateTenantBrandingPayload {
+  brandName?: string;
+  brandLogoUrl?: string;
+  brandColors?: TenantBrandColors;
+}
+
+export const getMyBranding = async (
+  token: string,
+): Promise<TenantBranding> => {
+  const response = await fetch(`${API_URL}/tenants/me/branding`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al obtener la marca del tenant');
+  }
+  return response.json();
+};
+
+export const updateMyBranding = async (
+  payload: UpdateTenantBrandingPayload,
+  token: string,
+): Promise<TenantBranding> => {
+  const response = await fetch(`${API_URL}/tenants/me/branding`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al actualizar la marca');
+  }
+  return response.json();
+};
