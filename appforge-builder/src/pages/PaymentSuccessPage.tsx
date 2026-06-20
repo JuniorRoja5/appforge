@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { useTenantStore } from '../store/useTenantStore';
 import { getSubscription } from '../lib/api';
 
 export const PaymentSuccessPage: React.FC = () => {
@@ -23,6 +24,23 @@ export const PaymentSuccessPage: React.FC = () => {
         if (plan.planType !== 'FREE') {
           setPlanName(plan.name);
           setChecking(false);
+          // Refresca el tenant store de branding para que isWhiteLabel refleje
+          // el plan nuevo. Sin esto, /payment/success y /dashboard son hermanos
+          // bajo el mismo PlatformLayout — la navegación entre ambos es
+          // client-side, PlatformLayout no remonta, y el effect keyed por
+          // user.id de Phase 2 NO re-dispara → un reseller recién pagado
+          // no vería las opciones de Marca hasta F5.
+          //
+          // Cabo conocido NO cubierto por este refresh: la rama del poll
+          // gatea por `planType !== 'FREE'`. Un upgrade STARTER → RESELLER
+          // sale del poll en el primer chequeo (STARTER ya es ≠ FREE) sin
+          // esperar al webhook del cambio de plan a reseller; el refresh
+          // correría con el plan viejo. Camino raro de un borde — F5
+          // normaliza, backend protege con 403 si intenta editar. No vale
+          // arreglar bien aquí (exigiría que el poll sepa el plan objetivo);
+          // pertenece al flujo de billing, no a G1 white-label.
+          useTenantStore.getState().reset();
+          await useTenantStore.getState().loadBranding(token);
           return;
         }
         // Still FREE — webhook hasn't arrived yet
