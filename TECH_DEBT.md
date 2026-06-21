@@ -14,38 +14,74 @@ which made it impossible to deploy correctly via `cp` to either location.
 
 ---
 
-## 2. Image upload field — duplicated UX across modules
+## 2. Image upload field — duplicated UX across modules — PARCIAL
 
-**Problem:** At least 4 modules implement "image with upload + URL fallback" with slightly different markup, styles, and bugs:
+**Estado**: 🟡 **PARCIAL 2026-06-21**. El componente compartido SE
+EXTRAJO (como `ImageInputField.tsx`, no `ImageUploadField` del
+propósito original) y se reusa en 9 sitios. Quedan **2 módulos sin
+migrar** (catalog y photo_gallery). No bloquea nada, pero la pieza
+no está cerrada hasta migrar los 2 residuales — abordar cuando se
+toque cualquiera de ellos por otra razón.
+
+**Problema original** (mantenido como contexto histórico): al menos
+4 módulos implementaban "image with upload + URL fallback" con
+markup, estilos y bugs ligeramente distintos:
 - `events.module.tsx` — was missing the URL input until 2026-04-29
 - `news_feed.module.tsx`
 - `hero_profile.module.tsx`
 - `custom_page/image.module.tsx`
 
-Other modules will need it: `menu_restaurant` (per-item image), `catalog` (per-product), `photo_gallery`, `discount_coupon`, `loyalty_card`...
+Other modules eventually needed it: `menu_restaurant`, `catalog`,
+`photo_gallery`, `discount_coupon`, `loyalty_card`...
 
-Each implementation is ~40 duplicated lines with subtle inconsistencies (different button colors, different aspect ratios, different "Subiendo..." copy).
+Each implementation was ~40 duplicated lines with subtle
+inconsistencies (different button colors, different aspect ratios,
+different "Subiendo..." copy).
 
-**Fix:** Extract a shared component:
+**Fix propuesto originalmente**: extraer un shared component
+`appforge-builder/src/components/shared/ImageUploadField.tsx` y
+migrar los 4 módulos uno por uno.
 
-```
-appforge-builder/src/components/shared/ImageUploadField.tsx
+**Ejecución real (medida 2026-06-21 al cerrar G1 white-label)**:
 
-interface Props {
-  value: string;                   // current imageUrl
-  onChange: (url: string) => void;
-  accentColor?: string;            // Tailwind color name, e.g. 'teal' | 'indigo'
-  aspectRatio?: 'video' | 'square' | 'auto';
-  label?: string;                  // default: "Imagen (opcional)"
-  placeholder?: string;            // URL input placeholder
-}
-```
+Componente compartido EXISTE como `ImageInputField.tsx` en
+`appforge-builder/src/components/shared/` (nombre distinto del
+propuesto pero misma intención). Props relevantes: `value, onChange,
+accentColor, shape (circle|square|video|cover), previewSize, label,
+maxSizeMB, accept, onError, disabled`.
 
-Internally encapsulates: preview with X button, URL input, file upload via `uploadImage()` from api.ts, "Subiendo..." state.
+**9 consumidores migrados** (medido por grep):
+- `pages/AccountPage.tsx` (avatar, pre-G1)
+- `modules/custom_page/image.module.tsx`
+- `modules/events/events.module.tsx`
+- `modules/hero-profile/hero-profile.module.tsx`
+- `modules/loyalty-card/loyalty-card.module.tsx`
+- `modules/menu-restaurant/menu-restaurant.module.tsx`
+- `modules/news-feed/news-feed.module.tsx`
+- `modules/push-notification/push-notification.module.tsx`
+- `modules/testimonials/testimonials.module.tsx`
+- `pages/BrandingPage.tsx` (G1, recién)
 
-Migrate the 4 existing modules one by one. Reduces ~160 lines of duplication and prevents inconsistencies like the events bug.
+**2 módulos pendientes**:
+- `modules/catalog/catalog.module.tsx` — aún llama `uploadFile`
+  directamente sin pasar por `ImageInputField`.
+- `modules/photo_gallery/photo-gallery.module.tsx` — idem.
 
-**When to do this:** After current QA round is done, before adding new modules that need image upload.
+**Por qué no se resolvió de un golpe**: la migración se hizo
+oportunista (cada vez que se tocaba un módulo, se migraba), no
+batch. Catalog y photo_gallery no se tocaron por razones que
+requirieran integrar el upload, y el componente compartido funcionó
+sin forzarlo. Disciplina aceptable: no romper lo que funciona solo
+por uniformidad de patrón.
+
+**Cuándo cerrar definitivamente**: al tocar `catalog` o
+`photo_gallery` por otra razón (bug, feature nueva, etc.), aprovechar
+para migrar el upload del módulo en el mismo gesto. ~30 min cada uno
+basado en el patrón de los 8 ya migrados.
+
+**No bloquea**: el componente compartido cubre los nuevos consumidores
+(BrandingPage lo demostró durante G1 con cero fricción) — la deuda
+es de uniformidad histórica, no de capability nueva.
 
 ---
 
@@ -4391,4 +4427,78 @@ Hostinger funcionaría.
 el mismo commit que esta entrada — el comando que el runbook
 mostraba (`pm2 start dist/main.js --name appforge-api`) era
 exactamente el bug 2 que esta entrada cierra. Documentado en línea.
+
+### #87 — Chrome del builder hardcodea `text-white` en lugar de consumir `--primary-foreground`
+
+**Estado**: OPEN, no bloqueante para G1 white-label (lo destapó pero
+G1 cerró sin tocarlo). Limitación conocida y aceptada.
+
+**Origen**: medición durante el diseño del aviso de luminancia de
+[[#G1-Phase-3]] (BrandingPage). Inicialmente propuse calcular
+`--primary-foreground` dinámicamente para que el texto sobre el
+color del reseller se ajustara (blanco u negro según contraste con
+el primary). Al medir el chrome, el operador encontró que el token
+`--primary-foreground` NO tiene consumidores reales:
+
+- **48 sitios** en el builder emparejan `bg-primary` con `text-white`
+  hardcoded.
+- **0 consumidores** de `text-primary-foreground`.
+
+Recalcular el token sería teatro: setearía una variable CSS que
+nadie lee, los 48 sitios seguirían mostrando `text-white` aunque el
+reseller eligiera amarillo (texto blanco sobre amarillo = ilegible).
+
+**Mitigación aplicada en G1 (no resuelve la deuda, la evita)**:
+guard de luminancia en BrandingPage (`contrastRatio(primary, '#fff') < 3`
+muestra aviso amber: "Este color es muy claro..."). Umbral 3:1
+defendido por evidencia — el indigo default (#5048E5) mide 6.18:1
+y un umbral 4.5 daría falsos positivos sobre indigos/esmeraldas que
+se leen perfectamente. Ver `appforge-builder/src/lib/color.ts`
+contrastRatio doc.
+
+**Trabajo real cuando se aborde**:
+
+1. Grep exhaustivo del codebase para enumerar TODOS los sitios
+   `bg-primary` + `text-white` (el operador midió 48 al diseñar G1;
+   confirmar al ejecutar). No solo el chrome (TopBar, SideNav,
+   botones globales) — también dentro de módulos (BookingsPage,
+   OrdersAdminPage, ContactInboxPage, etc.) y settings panels.
+2. Migrar cada `text-white` → `text-primary-foreground` en posiciones
+   donde el background es `bg-primary`. NO cambiar texto blanco sobre
+   fondos que NO son `bg-primary` (banners de éxito sobre
+   `bg-green-500`, etc.).
+3. Activar el cálculo dinámico de `--primary-foreground` en el hook
+   `useResellerBranding` (`appforge-builder/src/hooks/useResellerBranding.ts`):
+   tras calcular `--primary`, también setear `--primary-foreground`
+   a `0 0% 100%` (blanco) o `0 0% 10%` (negro) según contrastRatio
+   del primary vs cada uno.
+4. Subir el umbral del aviso de luminancia en BrandingPage de 3:1
+   a 4.5:1 (AA estricto) — solo después de la migración, sino se
+   marca el indigo de marca como falso positivo.
+5. Smoke visual: reseller elige amarillo → texto del chrome se ve en
+   negro automáticamente, sin acción manual.
+
+**Esfuerzo estimado**: 2-3h para la migración (48 sitios + verificar
+visualmente cada uno + verificar que no se rompan los `bg-green/red/etc`
+que usan `text-white` legítimamente) + 1h para el cálculo dinámico +
+30 min smoke.
+
+**No bloquea**: nada. El guard de luminancia en BrandingPage cubre
+el modo de fallo de UX (reseller elige color ilegible) sin necesidad
+de tokenizar.
+
+**Cuándo abordarlo**: cuando se quiera ampliar el alcance de
+white-label más allá de "1 color primario" (p.ej. dark mode opcional,
+o accesibilidad WCAG AA estricta documentada para clientes
+empresariales que la pidan). Hasta entonces, el guard del editor +
+el umbral 3:1 son suficientes para el MVP.
+
+**Conexión con [[G1 white-label]]**: G1 cerró sin migrar los 48
+sitios. La regla sin-leak del TopBar (badge swatch gris + sin título
+cuando reseller sin configurar) evita filtrar marca Creatu; el guard
+del editor evita que el reseller elija un primary ilegible. Las dos
+mitigaciones son suficientes para validar el MVP de white-label,
+pero la deuda estructural del token sin consumidores sigue ahí —
+y cuando se quiera abrir variaciones de chrome (dark mode, alto
+contraste, etc.), esta migración es prerrequisito.
 
