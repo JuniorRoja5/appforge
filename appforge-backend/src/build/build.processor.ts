@@ -149,6 +149,11 @@ export class BuildProcessor extends WorkerHost {
           splash: appConfig.splash ?? null,
           onboarding: appConfig.onboarding ?? null,
           terms: appConfig.terms ?? null,
+          // G2 Pieza 1: URL de política de privacidad horneada al manifest.
+          // Declarable en Play Console + accesible vía PWA si el runtime
+          // quiere exponerla in-app. Null si el reseller no la configuró
+          // (la página generada de fallback es G2 Pieza 4, pendiente).
+          privacyPolicyUrl: appConfig.privacyPolicyUrl ?? null,
           pushEnabled: Array.isArray(app.schema)
             ? (app.schema as any[]).some((el: any) => el.moduleId === 'push_notification')
             : false,

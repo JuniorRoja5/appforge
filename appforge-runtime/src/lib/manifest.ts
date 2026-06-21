@@ -83,6 +83,11 @@ export interface AppManifest {
       }>;
     };
     terms?: { content: string };
+    // URL externa a la política de privacidad. Horneada al manifest
+    // por build.processor.ts; el runtime puede enlazarla desde la
+    // pantalla de "Acerca de" o ajustes del end-user si quisiera
+    // exponerla in-app (no requerido por G2 Pieza 1).
+    privacyPolicyUrl?: string;
     pushEnabled?: boolean;
   };
 }

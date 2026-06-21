@@ -3,12 +3,13 @@ import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useAppConfigStore } from '../../../store/useAppConfigStore';
 import {
-  X, Image, Smartphone, SlidersHorizontal, FileText, Mail, Shield, TabletSmartphone, Globe,
+  X, Image, Smartphone, SlidersHorizontal, FileText, Lock, Mail, Shield, TabletSmartphone, Globe,
 } from 'lucide-react';
 import { AppIconTab } from './tabs/AppIconTab';
 import { SplashScreenTab } from './tabs/SplashScreenTab';
 import { OnboardingTab } from './tabs/OnboardingTab';
 import { TermsTab } from './tabs/TermsTab';
+import { PrivacyTab } from './tabs/PrivacyTab';
 import { SmtpTab } from './tabs/SmtpTab';
 import { IosPermissionsTab } from './tabs/IosPermissionsTab';
 import { AndroidConfigTab } from './tabs/AndroidConfigTab';
@@ -23,7 +24,13 @@ const TABS = [
   { id: 'icon', label: 'Identidad', icon: Image },
   { id: 'splash', label: 'Splash Screen', icon: Smartphone },
   { id: 'onboarding', label: 'Bienvenida', icon: SlidersHorizontal },
-  { id: 'terms', label: 'Legal', icon: FileText },
+  // "Términos" (era "Legal") = contenido rich-HTML inline (ReactQuill).
+  // "Privacidad" = URLs externas legales (privacyPolicyUrl + futuras URLs
+  // de borrado y página generada). Tabs separados porque los shapes son
+  // incompatibles (rich HTML vs URL string) y "Legal" ambiguo solapaba
+  // con privacidad. Ver G2 Pieza 1.
+  { id: 'terms', label: 'Términos', icon: FileText },
+  { id: 'privacy', label: 'Privacidad', icon: Lock },
   { id: 'smtp', label: 'Email (SMTP)', icon: Mail },
   { id: 'android', label: 'Android', icon: TabletSmartphone },
   { id: 'ios', label: 'Permisos iOS', icon: Shield },
@@ -92,6 +99,7 @@ export const AppConfigModal: React.FC<Props> = ({ isOpen, onClose }) => {
       case 'splash': return <SplashScreenTab />;
       case 'onboarding': return <OnboardingTab />;
       case 'terms': return <TermsTab />;
+      case 'privacy': return <PrivacyTab />;
       case 'smtp': return <SmtpTab />;
       case 'android': return <AndroidConfigTab />;
       case 'ios': return <IosPermissionsTab />;

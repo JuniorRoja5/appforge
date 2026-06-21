@@ -1,6 +1,6 @@
 import {
   Matches, ValidateNested, IsOptional, IsString, IsNumber, IsObject,
-  IsNotEmpty, IsInt, Min, Max, IsBoolean, IsEmail, MaxLength,
+  IsNotEmpty, IsInt, Min, Max, IsBoolean, IsEmail, IsUrl, MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -55,6 +55,13 @@ export class UpdateAppConfigDto {
 
   @IsOptional() @IsObject()
   terms?: { content: string };
+
+  // URL externa absoluta a la política de privacidad. Requisito de Play
+  // Store. require_protocol: true falla rápido si el cliente pega
+  // "miempresa.com/privacy" sin esquema — mejor 400 en el editor que
+  // rechazo de Play Console. MaxLength 500: tope razonable, evita abuso.
+  @IsOptional() @IsUrl({ require_protocol: true }) @MaxLength(500)
+  privacyPolicyUrl?: string;
 
   @IsOptional() @IsObject()
   iosPermissions?: Record<string, string>;
