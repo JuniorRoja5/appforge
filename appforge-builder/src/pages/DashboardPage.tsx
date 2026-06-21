@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { useTenantStore } from '../store/useTenantStore';
 import { AppCard } from '../components/AppCard';
 import { getApps, deleteApp, getSubscription, type SubscriptionInfo } from '../lib/api';
 
@@ -21,6 +22,13 @@ export const DashboardPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState('');
   const [sub, setSub] = useState<SubscriptionInfo | null>(null);
   const token = useAuthStore((s) => s.token);
+  // Banner de bienvenida del white-label: solo visible para reseller sin
+  // configurar (nombre Y logo vacíos). Cero persistencia, cero flag en BD —
+  // se auto-oculta en cuanto el reseller configura cualquiera de los dos.
+  const isWhiteLabel = useTenantStore((s) => s.isWhiteLabel);
+  const brandName = useTenantStore((s) => s.branding?.brandName);
+  const brandLogoUrl = useTenantStore((s) => s.branding?.brandLogoUrl);
+  const showBrandingWelcome = isWhiteLabel && !brandName && !brandLogoUrl;
   const navigate = useNavigate();
 
   const loadApps = async () => {
@@ -74,6 +82,28 @@ export const DashboardPage: React.FC = () => {
           Nuevo Proyecto
         </button>
       </div>
+
+      {/* Branding welcome banner — reseller con plan activo pero sin
+          configurar marca (ni nombre ni logo). Se auto-oculta al
+          configurar cualquiera de los dos. */}
+      {showBrandingWelcome && (
+        <div className="mb-6 p-4 bg-primary/5 rounded-xl border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-primary">
+              Personaliza tu marca
+            </p>
+            <p className="text-xs text-primary mt-0.5">
+              Tu plan incluye personalización del panel. Sube tu logo, pon tu nombre y elige tu color.
+            </p>
+          </div>
+          <Link
+            to="/branding"
+            className="inline-flex items-center px-4 py-2 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-lg transition-colors shrink-0"
+          >
+            Configurar marca
+          </Link>
+        </div>
+      )}
 
       {/* Upgrade banner for FREE plan */}
       {sub && sub.subscription.plan.planType === 'FREE' && (

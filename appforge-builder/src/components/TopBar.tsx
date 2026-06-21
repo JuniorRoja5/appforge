@@ -1,10 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { useTenantStore } from '../store/useTenantStore';
 import { resolveAssetUrl } from '../lib/resolve-asset-url';
 
 export const TopBar: React.FC = () => {
   const { user, logout } = useAuthStore();
+  // Selectores escalares del tenant store. La regla sin-leak (abajo) usa
+  // estos tres valores para decidir badge + título. NO renderizar "AF" ni
+  // "AppForge Builder" nunca cuando isWhiteLabel — incluso si los campos
+  // del reseller están vacíos (swatch neutro / sin título), nunca caer
+  // al branding default que filtraría la marca de AppForge a sus clientes.
+  const isWhiteLabel = useTenantStore((s) => s.isWhiteLabel);
+  const brandName = useTenantStore((s) => s.branding?.brandName);
+  const brandLogoUrl = useTenantStore((s) => s.branding?.brandLogoUrl);
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -36,12 +45,46 @@ export const TopBar: React.FC = () => {
         className="flex items-center space-x-3 cursor-pointer"
         onClick={() => navigate('/dashboard')}
       >
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-primary/20">
-          AF
-        </div>
-        <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">
-          AppForge <span className="text-gray-400 font-normal">Builder</span>
-        </h1>
+        {/* Badge — regla sin-leak:
+            isWhiteLabel false  → "AF" + bg-primary (intacto, como hoy).
+            isWhiteLabel true   → logo si existe → inicial si nombre → swatch neutro.
+            NUNCA "AF" cuando isWhiteLabel, ni siquiera si todo está vacío:
+            un reseller recién upgradeado sin configurar ve un swatch gris,
+            no nuestra marca. */}
+        {!isWhiteLabel ? (
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-primary/20">
+            AF
+          </div>
+        ) : brandLogoUrl ? (
+          <img
+            src={resolveAssetUrl(brandLogoUrl)}
+            alt={brandName ?? 'Marca'}
+            className="h-8 w-auto max-w-[160px] object-contain"
+          />
+        ) : brandName ? (
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-primary/20">
+            {brandName.charAt(0).toUpperCase()}
+          </div>
+        ) : (
+          <div
+            className="w-8 h-8 rounded-lg bg-gray-300 shadow-sm ring-1 ring-gray-300/40"
+            aria-label="Marca sin configurar"
+          />
+        )}
+
+        {/* Título — regla sin-leak:
+            isWhiteLabel false  → "AppForge Builder" (intacto).
+            isWhiteLabel true + brandName → brandName.
+            isWhiteLabel true + sin brandName → sin texto (el badge sostiene). */}
+        {!isWhiteLabel ? (
+          <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">
+            AppForge <span className="text-gray-400 font-normal">Builder</span>
+          </h1>
+        ) : brandName ? (
+          <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">
+            {brandName}
+          </h1>
+        ) : null}
       </div>
 
       <div className="relative" ref={dropdownRef}>

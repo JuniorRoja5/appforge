@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useParams } from 'react-router-dom';
 import { useAppModulesStore } from '../store/useAppModulesStore';
+import { useTenantStore } from '../store/useTenantStore';
 
 const navItems = [
   {
@@ -201,6 +202,10 @@ export const SideNav: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
   // Selector individual → solo re-renderiza si moduleIds cambia.
   const moduleIds = useAppModulesStore((s) => s.moduleIds);
+  // White-label: entrada "Marca" visible solo si el plan lo incluye.
+  // Escondida para no-resellers (no gastar pixel ni cognición en mostrar
+  // opciones que no se pueden usar). Ver feedback_ui_copy_audience.md.
+  const isWhiteLabel = useTenantStore((s) => s.isWhiteLabel);
 
   const dataItems =
     appId && moduleIds
@@ -215,6 +220,15 @@ export const SideNav: React.FC = () => {
           <span>{item.label}</span>
         </NavLink>
       ))}
+
+      {isWhiteLabel && (
+        <NavLink to="/branding" className={linkClass}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          </svg>
+          <span>Marca</span>
+        </NavLink>
+      )}
 
       {appId && (
         <>
