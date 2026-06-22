@@ -112,8 +112,17 @@ export const App: React.FC = () => {
       {phase === 'onboarding' && manifest.appConfig.onboarding && (
         <OnboardingScreen config={manifest.appConfig.onboarding} onFinish={handleOnboardingFinish} />
       )}
-      {phase === 'terms' && manifest.appConfig.terms?.content && (
-        <TermsScreen content={manifest.appConfig.terms.content} onAccept={handleTermsAccept} />
+      {phase === 'terms' && manifest.appConfig.terms
+        && (manifest.appConfig.terms.content || manifest.appConfig.terms.url) && (
+        // Guard amplio (content || url): G2 Commit C — un cliente que solo
+        // configuró terms.url (sin content inline) también debe ver la
+        // pantalla de aceptación. El guard viejo `terms?.content` la dejaba
+        // fuera y el cliente se preguntaba por qué su URL no aparecía.
+        <TermsScreen
+          content={manifest.appConfig.terms.content}
+          url={manifest.appConfig.terms.url}
+          onAccept={handleTermsAccept}
+        />
       )}
       {phase === 'ready' && <AppShell manifest={manifest} />}
     </>
