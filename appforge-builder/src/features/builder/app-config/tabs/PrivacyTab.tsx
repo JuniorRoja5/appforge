@@ -4,17 +4,21 @@ import { useAppConfigStore } from '../../../../store/useAppConfigStore';
 /**
  * Tab "Privacidad" del modal de configuración de app.
  *
- * Hoy solo expone privacyPolicyUrl (G2 Pieza 1). Cuando lleguen las
- * Piezas 3 y 4 (página pública de borrado de cuenta + página generada
- * de privacidad como fallback), las URLs adicionales viven aquí también
- * — el tab está pensado para agrupar TODAS las URLs legales/de privacidad
- * del app, separadas del rich-HTML de Términos que vive en TermsTab.
+ * Commit A (refactor shape): el shape es ahora `privacy: { content?, url? }`,
+ * simétrico con `terms`. Esta versión del tab solo expone `url` para
+ * mantener comportamiento idéntico al de Pieza 1 inicial — la edición
+ * inline de content (ReactQuill + plantilla cargable) llega en Commit B.
+ *
+ * Cuando lleguen las Piezas 3 (borrado público con token), las URLs
+ * adicionales viven aquí también — el tab agrupa TODAS las URLs/contenido
+ * legales/de privacidad del app, separadas del rich-HTML de Términos que
+ * vive en TermsTab.
  */
 export const PrivacyTab: React.FC = () => {
   const config = useAppConfigStore((s) => s.config);
   const updateSection = useAppConfigStore((s) => s.updateSection);
 
-  const url = config?.privacyPolicyUrl ?? '';
+  const url = config?.privacy?.url ?? '';
 
   return (
     <div className="space-y-6">
@@ -29,14 +33,22 @@ export const PrivacyTab: React.FC = () => {
       </div>
 
       <div>
-        <label htmlFor="privacyPolicyUrl" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="privacyUrl" className="block text-sm font-medium text-gray-700 mb-2">
           URL pública
         </label>
         <input
-          id="privacyPolicyUrl"
+          id="privacyUrl"
           type="url"
           value={url}
-          onChange={(e) => updateSection('privacyPolicyUrl', e.target.value || undefined)}
+          onChange={(e) =>
+            // Spread del objeto privacy completo + sobrescribimos solo url.
+            // Preserva el content cuando Commit B lo añada — el spread no
+            // pisa campos que no estamos editando.
+            updateSection('privacy', {
+              ...config?.privacy,
+              url: e.target.value || undefined,
+            })
+          }
           placeholder="https://miempresa.com/privacidad"
           maxLength={500}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm"

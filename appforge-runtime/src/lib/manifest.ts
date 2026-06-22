@@ -82,12 +82,15 @@ export interface AppManifest {
         order: number;
       }>;
     };
-    terms?: { content: string };
-    // URL externa a la política de privacidad. Horneada al manifest
-    // por build.processor.ts; el runtime puede enlazarla desde la
-    // pantalla de "Acerca de" o ajustes del end-user si quisiera
-    // exponerla in-app (no requerido por G2 Pieza 1).
-    privacyPolicyUrl?: string;
+    // Términos y privacidad — shape simétrico { content?, url? }:
+    //   - content: rich-HTML para renderizar inline (TermsScreen lo consume).
+    //   - url: URL externa a documento legal del cliente (Commit C habilita
+    //     que TermsScreen abra esa URL con Browser.open si está presente).
+    // privacy.url se hornea como `privacyUrlResolved` por build.processor:
+    // su valor o, si vacío, la URL de la página generada en el builder SPA.
+    // Esa URL resuelta es la declarable en Play Console.
+    terms?: { content?: string; url?: string };
+    privacy?: { content?: string; url?: string };
     pushEnabled?: boolean;
   };
 }

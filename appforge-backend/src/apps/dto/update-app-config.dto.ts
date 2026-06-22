@@ -22,6 +22,33 @@ class AndroidConfigDto {
   versionCode: number;
 }
 
+// Sub-DTO para documentos legales (terms + privacy). Shape simétrico:
+// el cliente puede pegar una URL externa o editar contenido inline.
+//
+// IMPORTANTE: esta clase se usa anidada via @ValidateNested + @Type.
+// NO importar como `import type` desde ningún consumidor — la clase
+// debe sobrevivir al stripping de TypeScript en runtime para que
+// class-transformer pueda instanciarla. `import type` la borraría
+// y el ValidationPipe (whitelist: true) eliminaría el sub-objeto entero
+// en silencio (el footgun cazado en G1 backend).
+//
+// content: hasta 50KB (HTML enriquecido típico de un doc legal va a
+// ~5-15KB; 50KB es tope generoso que evita abuso sin estorbar).
+// url: require_protocol: true falla rápido si el cliente pega
+// "miempresa.com/x" sin esquema — mejor 400 en el editor que rechazo
+// de Play Console.
+class LegalDocDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  content?: string;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  @MaxLength(500)
+  url?: string;
+}
+
 export class UpdateAppConfigDto {
   // NOTE: nested object shapes are intentionally validated as plain objects (@IsObject)
   // rather than nested DTOs — these fields are persisted as JSON in App.appConfig and
@@ -53,15 +80,22 @@ export class UpdateAppConfigDto {
     }>;
   };
 
-  @IsOptional() @IsObject()
-  terms?: { content: string };
+  // terms y privacy: NESTED DTO con @ValidateNested + @Type, divergiendo
+  // del @IsObject del resto del fichero. Razón: estos dos campos tienen
+  // shape simétrico { content?, url? } con validación distinta por
+  // sub-campo (content como string limitado, url como IsUrl con
+  // require_protocol). @IsObject los aceptaría como cajas opacas y un
+  // cliente podría inyectar URLs mal-formadas que Play Console rechazaría
+  // después. El nested catch el error antes.
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LegalDocDto)
+  terms?: LegalDocDto;
 
-  // URL externa absoluta a la política de privacidad. Requisito de Play
-  // Store. require_protocol: true falla rápido si el cliente pega
-  // "miempresa.com/privacy" sin esquema — mejor 400 en el editor que
-  // rechazo de Play Console. MaxLength 500: tope razonable, evita abuso.
-  @IsOptional() @IsUrl({ require_protocol: true }) @MaxLength(500)
-  privacyPolicyUrl?: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LegalDocDto)
+  privacy?: LegalDocDto;
 
   @IsOptional() @IsObject()
   iosPermissions?: Record<string, string>;

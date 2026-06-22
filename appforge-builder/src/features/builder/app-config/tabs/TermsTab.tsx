@@ -42,7 +42,7 @@ export const TermsTab: React.FC = () => {
         <ReactQuill
           theme="snow"
           value={content}
-          onChange={(value) => updateSection('terms', { content: value })}
+          onChange={(value) => updateSection('terms', { ...config?.terms, content: value })}
           modules={QUILL_MODULES}
           placeholder="Escribe aquí tus términos y condiciones..."
           style={{ minHeight: '300px' }}

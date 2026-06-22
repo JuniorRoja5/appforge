@@ -255,14 +255,15 @@ export interface AppConfig {
       order: number;
     }>;
   };
-  terms?: { content: string };
-  // URL externa absoluta a la política de privacidad del cliente.
-  // Requisito de Google Play Store para publicar cualquier APK. Se hornea
-  // al manifest en build.processor.ts y se declara en Play Console.
-  // El cliente pega su URL (ej: https://miempresa.com/privacy). Para
-  // resellers sin URL propia, una página generada estará en
-  // /app-user/privacy/:appId (G2 Pieza 4 pendiente).
-  privacyPolicyUrl?: string;
+  // Términos y privacidad — shape simétrico { content?, url? }:
+  //   - content: rich-HTML (ReactQuill) editable inline por el cliente.
+  //   - url: URL externa absoluta a un documento legal propio.
+  // Regla de resolución: si hay url, gana — la URL externa se enlaza/declara.
+  // Si no hay url, se usa content (in-app para terms, página pública para
+  // privacy). Permite las dos vías al cliente: pega su URL si ya tiene una,
+  // o usa la plantilla editable que viene pre-cargada (G2 Pieza B).
+  terms?: { content?: string; url?: string };
+  privacy?: { content?: string; url?: string };
   smtp?: {
     host: string;
     port: number;

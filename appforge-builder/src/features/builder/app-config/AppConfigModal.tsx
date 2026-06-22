@@ -24,11 +24,13 @@ const TABS = [
   { id: 'icon', label: 'Identidad', icon: Image },
   { id: 'splash', label: 'Splash Screen', icon: Smartphone },
   { id: 'onboarding', label: 'Bienvenida', icon: SlidersHorizontal },
-  // "Términos" (era "Legal") = contenido rich-HTML inline (ReactQuill).
-  // "Privacidad" = URLs externas legales (privacyPolicyUrl + futuras URLs
-  // de borrado y página generada). Tabs separados porque los shapes son
-  // incompatibles (rich HTML vs URL string) y "Legal" ambiguo solapaba
-  // con privacidad. Ver G2 Pieza 1.
+  // "Términos" y "Privacidad" tabs separados. Shape simétrico
+  // { content?, url? } en cada uno (G2 Commit A) — los dos permiten
+  // contenido inline editable O URL externa. Tab "Privacidad" agrupará
+  // también la URL pública de borrado de cuenta cuando llegue (Pieza 3).
+  // Tabs separados pese a la simetría porque "Términos" (contrato legal
+  // del servicio) y "Privacidad" (cómo se manejan los datos) son
+  // requisitos legales distintos que el cliente distingue.
   { id: 'terms', label: 'Términos', icon: FileText },
   { id: 'privacy', label: 'Privacidad', icon: Lock },
   { id: 'smtp', label: 'Email (SMTP)', icon: Mail },
