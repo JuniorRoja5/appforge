@@ -4502,3 +4502,85 @@ pero la deuda estructural del token sin consumidores sigue ahí —
 y cuando se quiera abrir variaciones de chrome (dark mode, alto
 contraste, etc.), esta migración es prerrequisito.
 
+### #88 — Builder editor de paleta sin FAQ/tooltips de qué controla cada token
+
+**Estado**: OPEN, no bloqueante. UX de aprendizaje.
+
+**Origen**: confusión cazada por el operador en el smoke de G2
+Commit C-fix-2 (2026-06-22). El botón URL del TermsScreen era
+"casi invisible" — no solo por colapso flex (que arregló C-fix-2)
+sino también por chocar con el fondo de la pantalla cuando su
+paleta tenía `--color-primary` con poco contraste contra
+`--color-surface-bg`. Al cambiar colores en el editor, el botón
+"apareció". El operador no sabía a priori que `--color-primary`
+afectaba a ese botón concreto.
+
+**Problema**: el builder permite editar ~10 tokens de color
+(`--color-primary`, `--color-surface-bg`, `--color-surface-card`,
+`--color-secondary`, `--color-accent`, varios de texto, divisores,
+etc.) sin documentar qué controla cada uno. El cliente edita un
+token y no sabe qué cambió ni en qué pantallas. Los errores son
+silenciosos (botones invisibles, texto poco legible) y solo se
+ven al ejecutar la PWA, no en el editor.
+
+**Fix propuesto**: para cada token del editor de paleta, mostrar:
+- Nombre humano legible (no solo `--color-primary`).
+- Descripción de qué controla con 1-2 ejemplos concretos
+  ("botones primarios, acentos del menú").
+- Mini-ilustración o miniatura de un componente afectado.
+
+Vive en el editor de design tokens del builder (ya existe). 1
+sesión aprox.
+
+**Conexión con [[#59]]**: las superficies end-user usan los tokens
+del cliente; documentarlos cierra la mitad "documentación" del
+problema general.
+**Conexión con [[#87]]**: el chrome del builder tiene su propia
+deuda de tokens hardcoded (text-white sin consumir foreground);
+este #88 es complementario, para los tokens del cliente.
+**Conexión con [[#89]]**: la otra mitad ("warning de contraste
+automático") es lo que protege al cliente que sí leyó la documentación
+pero eligió mal. Los dos son complementarios — FAQ educa, warning
+protege.
+
+### #89 — Builder sin warning de contraste WCAG en selección de paleta del cliente
+
+**Estado**: OPEN, no bloqueante. Defensa de UX antes del runtime.
+
+**Origen**: idéntico a [[#88]] — el smoke de G2 C-fix-2 reveló
+que el cliente puede elegir una paleta donde un botón outlined
+con `--color-primary` claro sobre `--color-surface-bg` casi blanco
+es funcionalmente invisible. El runtime es el único árbitro hoy.
+
+**Problema**: el editor de paleta NO valida combinaciones críticas
+de contraste. Tres pares problemáticos detectados:
+- `--color-primary` vs `--color-surface-bg` → botones outlined.
+- `--color-primary` (background) vs blanco hardcoded `text-white`
+  → botones rellenos (ver [[#87]]).
+- `--color-text-primary` vs `--color-surface-card` → texto sobre
+  tarjetas.
+
+**Fix propuesto**: warning visual (banner amber, similar al de
+luminancia que ya construimos en G1 BrandingPage) cuando una
+combinación crítica tiene contraste < 3:1. Reusa la lógica de
+`appforge-builder/src/lib/color.ts` ya construida para G1 (función
+`contrastRatio()`, umbral 3:1 documentado, ITU-R BT.709 luminance).
+
+Cero infra nueva — la utilidad existe. El trabajo es:
+1. Identificar los pares críticos del editor (~3-5).
+2. Calcular `contrastRatio()` en cada cambio del editor.
+3. Renderizar el banner si alguna combo cae bajo 3:1.
+4. Aviso, NO bloqueo (mismo principio que la BrandingPage —
+   respetar agencia del cliente).
+
+**Esfuerzo**: 2-3h (lógica ya existe; integración en el editor).
+
+**Conexión con [[#87]]**: el problema "text-white hardcoded" del
+chrome del builder amplifica este — un primary claro hace botones
+chrome ilegibles porque el text-white no se adapta. #89 protege
+al cliente avisando antes; #87 estructuralmente lo arregla
+migrando los 48 sitios. Los dos juntos cierran el caso.
+**Conexión con [[#88]]**: documentación + warning son las dos caras.
+**Reuso de G1**: cero código nuevo de algoritmo, solo integración
+del color.ts existente al editor del builder.
+
