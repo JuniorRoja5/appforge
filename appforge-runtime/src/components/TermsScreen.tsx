@@ -98,6 +98,17 @@ export const TermsScreen: React.FC<Props> = ({ content, url, onAccept }) => {
             <button
               onClick={handleOpenExternal}
               style={{
+                // C-fix-2: el botón vive en un flex column con
+                // align-items: center. Sin flex-shrink: 0, el flex le
+                // quita ancho hasta colapsarlo a ~1 carácter (vertical
+                // strip invisible). Sin white-space: nowrap, el texto
+                // rompe por carácter dentro del ancho colapsado. Las
+                // dos defensas juntas garantizan que el botón mantenga
+                // su ancho natural (texto + padding) y se vea como botón.
+                // El botón "Acepto" de abajo no tiene este problema
+                // porque tiene width: 100% en un footer no-flex.
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
                 padding: '12px 20px',
                 backgroundColor: 'transparent',
                 color: 'var(--color-primary, #4F46E5)',
