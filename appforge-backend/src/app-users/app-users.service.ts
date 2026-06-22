@@ -13,7 +13,9 @@ import { UpdateAppUserDto } from './dto/update-app-user.dto';
 import { ListAppUsersQueryDto } from './dto/list-app-users-query.dto';
 import { RedeemPasswordResetDto } from './dto/reset-password.dto';
 import { passwordResetUrl } from '../lib/tracking-urls';
+import { uploadUrlToKey } from '../lib/storage-key';
 import { decrypt } from '../lib/crypto';
+import { StorageService } from '../storage/storage.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
@@ -27,7 +29,55 @@ export class AppUsersService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private storage: StorageService,
   ) {}
+
+  // ──────────────── #90.A helpers compartidos ────────────────
+  // Compartidos por deleteUser (admin) y deleteMe (self-service). Mismo
+  // patrón en ambos paths: recolectar URLs antes del delete (la cascade
+  // de Prisma borraría socialPosts/fanPosts en DB y perderíamos sus
+  // imageUrl) → delete cascadea → cleanup best-effort fuera de cualquier
+  // tx. El unlink no debe tumbar el borrado de la fila — si falla,
+  // log + el barrido retroactivo (#90.B) recoge el huérfano eventual.
+
+  private async collectAppUserBlobUrls(appUserId: string): Promise<string[]> {
+    // select anidado pidiendo SOLO imageUrl de cada post — traer filas
+    // completas para extraer una URL cada una es desperdicio en usuarios
+    // con muchos posts.
+    const user = await this.prisma.appUser.findUnique({
+      where: { id: appUserId },
+      select: {
+        avatarUrl: true,
+        socialPosts: { select: { imageUrl: true } },
+        fanPosts: { select: { imageUrl: true } },
+      },
+    });
+    if (!user) return [];
+    return [
+      user.avatarUrl,
+      ...user.socialPosts.map((p) => p.imageUrl),
+      ...user.fanPosts.map((p) => p.imageUrl),
+    ].filter((u): u is string => !!u);
+  }
+
+  private async cleanupBlobs(urls: string[]): Promise<void> {
+    const keys = urls
+      .map(uploadUrlToKey)
+      .filter((k): k is string => k !== null);
+
+    // .catch POR blob individual dentro del map — si envolviéramos el
+    // Promise.all entero, un reject ocultaría info y abortaría el caller.
+    // Por-blob: un fallo no aborta los otros, cada uno logueado individual.
+    await Promise.all(
+      keys.map((key) =>
+        this.storage.delete(key).catch((err: Error) => {
+          this.logger.warn(
+            `[AppUsersService] cleanup blob failed key=${key}: ${err.message}`,
+          );
+        }),
+      ),
+    );
+  }
 
   // ──────────────────── Public (runtime) ────────────────────
 
@@ -198,7 +248,10 @@ export class AppUsersService {
     await this.ensureAppOwnership(appId, tenantId, role);
     await this.ensureAppUserExists(appId, userId);
 
+    // Patrón #90.A: recolectar → delete → cleanup (idéntico a deleteMe).
+    const urls = await this.collectAppUserBlobUrls(userId);
     await this.prisma.appUser.delete({ where: { id: userId } });
+    await this.cleanupBlobs(urls);
   }
 
   /**
@@ -218,15 +271,18 @@ export class AppUsersService {
    *     se conservan ANONIMIZADOS (sin appUserId), por motivos contables/
    *     fiscales/auditoría. Verificado en schema.prisma 2026-06-22.
    *
-   * Cabo conocido NO cubierto aquí (TECH_DEBT #90 al cierre de Pieza 2):
-   * los blobs en /uploads/ (avatar del AppUser, media de SocialPost
-   * cascadeadas) quedan huérfanos en disco. Requiere resolver
-   * traversal-safe sobre URLs controladas por el cliente; trabajo propio.
-   * Para go-live MVP el row delete cubre el requisito de Play Store
-   * (borrado de cuenta in-app); la higiene de blobs es follow-up.
+   * Cleanup de blobs en /uploads/ — cubierto por #90.A (este commit):
+   * recolecta avatarUrl + imageUrl de socialPosts/fanPosts cascadeados
+   * ANTES del delete (la cascade los borraría en DB y perderíamos las
+   * URLs), después storage.delete best-effort por blob individual.
+   * Resolve() endurecido en #90.0 contiene cualquier intento de traversal
+   * vía avatarUrl controlado por cliente. Helpers compartidos con
+   * deleteUser: collectAppUserBlobUrls + cleanupBlobs.
    */
   async deleteMe(appUserId: string): Promise<void> {
+    const urls = await this.collectAppUserBlobUrls(appUserId);
     await this.prisma.appUser.delete({ where: { id: appUserId } });
+    await this.cleanupBlobs(urls);
   }
 
   async getUserDetail(appId: string, userId: string, tenantId?: string, role?: string) {
