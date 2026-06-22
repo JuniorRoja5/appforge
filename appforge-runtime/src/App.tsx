@@ -44,7 +44,16 @@ export const App: React.FC = () => {
           setTimeout(() => Splash.hide().catch(() => {}), 150);
         } else if (m.appConfig.onboarding?.enabled && !localStorage.getItem('appforge_onboarding_seen')) {
           setPhase('onboarding');
-        } else if (m.appConfig.terms?.content && !localStorage.getItem('appforge_terms_accepted')) {
+        } else if (
+          // G2 Commit C-fix: sincroniza el guard de entrada de fase con el
+          // guard del render (línea 115). Sin el `|| terms?.url`, un cliente
+          // con solo URL externa nunca entra en 'terms' y la app salta de
+          // splash a 'ready' sin pasar por TermsScreen. El JSX corregido
+          // quedaba como código muerto para ese caso. Build verde no caza
+          // dos condiciones que deben coincidir pero no lo hacen.
+          (m.appConfig.terms?.content || m.appConfig.terms?.url)
+          && !localStorage.getItem('appforge_terms_accepted')
+        ) {
           setPhase('terms');
         } else {
           setPhase('ready');
@@ -60,7 +69,15 @@ export const App: React.FC = () => {
   }, []);
 
   const needsTerms = useCallback((m: AppManifest | null) => {
-    return m?.appConfig.terms?.content && !localStorage.getItem('appforge_terms_accepted');
+    // G2 Commit C-fix: helper compartido por handleSplashFinish (línea ~70)
+    // y handleOnboardingFinish (línea ~78). Sin el `|| terms?.url`, las dos
+    // transiciones salen de splash/onboarding directo a 'ready' aunque el
+    // cliente tenga URL externa configurada. Fijar este helper cubre los
+    // dos caminos a la vez — sin tocar las transiciones individualmente.
+    return (
+      (m?.appConfig.terms?.content || m?.appConfig.terms?.url)
+      && !localStorage.getItem('appforge_terms_accepted')
+    );
   }, []);
 
   const handleSplashFinish = useCallback(() => {
