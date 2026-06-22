@@ -44,15 +44,25 @@ export class RuntimeConfigController {
 
     // ETag por updatedAt en ISO (precisión ms — evita el wart de
     // Last-Modified, que es segundo). Comilla obligatoria por RFC 7232:
-    // el cliente recibe `ETag: "..."` y debe mandar `If-None-Match: "..."`
-    // exactamente igual. Comparación textual estricta abajo.
+    // el server emite `ETag: "..."` (strong) y el navegador típicamente
+    // reenvía `If-None-Match: W/"..."` (weak — algunos navegadores y
+    // proxies degradan strong→weak al re-enviar). RFC permite ese
+    // downgrade. Comparación literal `===` falla en ese caso, y el
+    // endpoint nunca devolvía 304 en producción real (medido 2026-06-22,
+    // smoke 5 cazó el bug post-deploy de Pieza B).
     const etag = `"${result.version}"`;
     const clientEtag = req.headers['if-none-match'];
 
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
 
-    if (clientEtag === etag) {
+    // Normalizamos quitando el prefijo `W/` del cliente antes de comparar.
+    // Si llega strong, replace no hace nada → comparación idéntica a antes.
+    // Si llega weak, queda comparable al strong que emitimos. `?.` cubre
+    // el primer arranque sin If-None-Match (undefined → undefined → cae a 200).
+    const normalizedClientEtag = clientEtag?.replace(/^W\//, '');
+
+    if (normalizedClientEtag === etag) {
       res.status(304);
       // Body vacío en 304 (RFC 7232 §4.1). passthrough:true + return
       // undefined deja Express terminar la respuesta sin payload.
