@@ -174,6 +174,13 @@ async function bootstrap() {
       callback(null, false);
     },
     credentials: true,
+    // ETag no es safelisted (RFC 6454 + Fetch spec). Sin esto, el JS del
+    // runtime cross-origin no puede leer `response.headers.get('ETag')` y
+    // por tanto no puede mandar `If-None-Match` el próximo arranque,
+    // perdiendo el 304 cuerpo-vacío del endpoint /apps/:appId/runtime-config.
+    // Exponer un header solo permite que JS de otro origen lo lea; no
+    // cambia qué publica el server. Blast radius cero.
+    exposedHeaders: ['ETag'],
   });
   // Security headers for uploaded files (public by design but prevent sniffing/indexing)
   app.use('/uploads', (req: any, res: any, next: any) => {

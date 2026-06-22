@@ -31,6 +31,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
 import { OrdersModule } from './orders/orders.module';
 import { HealthModule } from './health/health.module';
 import { LegalModule } from './legal/legal.module';
+import { RuntimeConfigModule } from './runtime-config/runtime-config.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -74,6 +75,7 @@ import { join } from 'path';
     OrdersModule,
     HealthModule,
     LegalModule,
+    RuntimeConfigModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     ServeStaticModule.forRoot(
       {
