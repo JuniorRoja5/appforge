@@ -163,6 +163,40 @@ export async function logout(): Promise<void> {
   await clearSession();
 }
 
+/**
+ * G2 Pieza 2 — borrado de cuenta iniciado por el end-user.
+ *
+ * Llama DELETE /apps/:appId/users/me autenticado con el token JWT del
+ * AppUser. El backend (deleteMe en app-users.service) hace
+ * prisma.appUser.delete() que cascadea PII+UGC y anonimiza transaccionales.
+ *
+ * Tras éxito (HTTP 204), llamamos logout() para limpiar la sesión local:
+ *   - El POST /logout server-side fallará 401 (cuenta ya borrada) pero
+ *     el .catch() lo absorbe — diseño existente.
+ *   - clearSession() ejecuta igual: detach FCM device + limpia Preferences.
+ * El usuario vuelve a la pantalla de login del runtime sin estado residual.
+ *
+ * No swallow del error del DELETE: si el backend falla (red, 401, 500),
+ * el caller (handler de UserProfileRuntime) muestra el mensaje al usuario
+ * y NO procede a limpiar sesión local — protege contra "borré localmente
+ * pero la cuenta sigue viva en server" si el delete server falla.
+ */
+export async function deleteMyAccount(): Promise<void> {
+  if (!_token) {
+    throw new Error('No hay sesión activa');
+  }
+  const res = await fetch(`${getApiUrl()}/apps/${getAppId()}/users/me`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${_token}` },
+  });
+  if (!res.ok) {
+    throw new Error('No se pudo eliminar la cuenta. Inténtalo más tarde.');
+  }
+  // Reusa logout (POST best-effort + clearSession) — sin reimplementar
+  // detach FCM ni limpieza de Preferences.
+  await logout();
+}
+
 // ──────────── Private helpers ────────────
 
 async function saveSession(token: string, user: AppUserData): Promise<void> {

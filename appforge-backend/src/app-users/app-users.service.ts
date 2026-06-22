@@ -201,6 +201,34 @@ export class AppUsersService {
     await this.prisma.appUser.delete({ where: { id: userId } });
   }
 
+  /**
+   * Borrado de cuenta iniciado por el propio AppUser desde el runtime
+   * (G2 Pieza 2). A diferencia de deleteUser() de arriba (que el admin/cliente
+   * usa con appId + userId externos), este toma solo el appUserId del token
+   * JWT — sin ensure de ownership, porque la "ownership" la verifica el
+   * AppUserAuthGuard arriba en el controller: solo el dueño del token puede
+   * borrar al dueño del token.
+   *
+   * El delete cascadea limpio gracias al schema:
+   *   - 8 relaciones onDelete: Cascade (socialPosts/comments/likes,
+   *     fanPosts/likes, contentReports, loyaltyStamps/redemptions) →
+   *     PII + UGC del usuario se borran con él.
+   *   - 4 relaciones onDelete: SetNull (orders, bookings, couponRedemptions,
+   *     pushDevices con FK AppUser? nullable) → registros transaccionales
+   *     se conservan ANONIMIZADOS (sin appUserId), por motivos contables/
+   *     fiscales/auditoría. Verificado en schema.prisma 2026-06-22.
+   *
+   * Cabo conocido NO cubierto aquí (TECH_DEBT #90 al cierre de Pieza 2):
+   * los blobs en /uploads/ (avatar del AppUser, media de SocialPost
+   * cascadeadas) quedan huérfanos en disco. Requiere resolver
+   * traversal-safe sobre URLs controladas por el cliente; trabajo propio.
+   * Para go-live MVP el row delete cubre el requisito de Play Store
+   * (borrado de cuenta in-app); la higiene de blobs es follow-up.
+   */
+  async deleteMe(appUserId: string): Promise<void> {
+    await this.prisma.appUser.delete({ where: { id: appUserId } });
+  }
+
   async getUserDetail(appId: string, userId: string, tenantId?: string, role?: string) {
     await this.ensureAppOwnership(appId, tenantId, role);
     const user = await this.ensureAppUserExists(appId, userId);

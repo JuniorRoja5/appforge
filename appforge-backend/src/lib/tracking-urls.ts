@@ -52,3 +52,39 @@ export function passwordResetUrl(
   const params = new URLSearchParams({ email, t: token });
   return `${builderUrl()}/app-user/reset-password/${appId}?${params}`;
 }
+
+// Public privacy page (G2 Pieza 4 — server-rendered fallback). URL pattern
+// idéntica al de reset-password: vive en el builder SPA. Esta es la URL
+// que el reseller declara en Play Console si NO pegó una URL externa
+// propia, y la que el runtime abre desde el link "Política de privacidad"
+// de UserProfileRuntime.
+export function privacyPageUrl(appId: string): string {
+  return `${builderUrl()}/app-user/privacy/${appId}`;
+}
+
+// Regla de resolución compartida del privacyUrlResolved horneado en el
+// manifest. Centralizada aquí para que los DOS sitios de manifest del
+// build.processor (curado #1, PWA dist #2) deriven el mismo string —
+// si divergieran, el link in-app funcionaría en una superficie y no en
+// otra (Capacitor sí / PWA no, por ejemplo). Reglas:
+//   - privacy.url presente  → esa URL externa del cliente.
+//   - solo privacy.content  → la URL de la página pública generada.
+//   - nada                  → null (el runtime esconde el link).
+//
+// Tipo del primer parámetro a propósito laxo (Record<string, unknown>) —
+// los callers en build.processor reciben app.appConfig como JSON crudo de
+// Prisma, tipado como Record<string, unknown> tras el cast inicial. El
+// narrowing al shape esperado (privacy: {url?, content?}) vive aquí, en
+// un solo sitio. Aceptar un tipo más estricto obligaría a cada caller a
+// añadir su propio cast, multiplicando el footgun de asimetría.
+export function resolvePrivacyUrl(
+  appConfig: Record<string, unknown> | null | undefined,
+  appId: string,
+): string | null {
+  const privacy = appConfig?.privacy as
+    | { url?: string; content?: string }
+    | undefined;
+  if (privacy?.url) return privacy.url;
+  if (privacy?.content) return privacyPageUrl(appId);
+  return null;
+}

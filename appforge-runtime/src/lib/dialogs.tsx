@@ -18,6 +18,14 @@ interface ConfirmOptions {
   title?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * Si true, el botón confirm usa buttonStyle('danger') con
+   * var(--color-feedback-error) — token semántico, NO --color-primary.
+   * Convención mobile (iOS HIG, Material Design) para acciones
+   * destructivas/irreversibles: rojo visual contra el clic accidental
+   * por inercia. Default false (primary).
+   */
+  destructive?: boolean;
 }
 
 interface PromptOptions {
@@ -130,7 +138,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ message, options, onResol
         <button
           onClick={() => settle(true)}
           className="flex-1 py-2.5 text-sm font-semibold"
-          style={buttonStyle('primary')}
+          style={buttonStyle(options.destructive ? 'danger' : 'primary')}
         >
           {options.confirmLabel ?? 'OK'}
         </button>

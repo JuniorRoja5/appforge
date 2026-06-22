@@ -3,7 +3,9 @@ import { Camera } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { compressImage } from '../../lib/image-utils';
 import { uploadAppUserImage, requestPasswordReset } from '../../lib/api';
-import { showPrompt, showAlert } from '../../lib/dialogs';
+import { showPrompt, showAlert, showConfirm } from '../../lib/dialogs';
+import { BrowserShim as Browser } from '../../lib/platform';
+import { loadManifest } from '../../lib/manifest';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import {
@@ -13,6 +15,7 @@ import {
   register,
   updateProfile,
   logout,
+  deleteMyAccount,
   onAuthChange,
   type AppUserData,
 } from '../../lib/auth';
@@ -249,7 +252,20 @@ const ProfileView: React.FC<{ user: AppUserData }> = ({ user }) => {
   const [lastName, setLastName] = useState(user.lastName ?? '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // G2 Pieza 2: URL de política de privacidad para el link in-app. Viene
+  // del manifest horneado server-side por build.processor.resolvePrivacyUrl.
+  // El runtime NO re-implementa la regla — solo lee el string final
+  // (privacy.url externa del cliente, o página pública generada, o null).
+  // Si null, escondemos el link entero.
+  const [privacyUrl, setPrivacyUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadManifest()
+      .then((m) => setPrivacyUrl(m.appConfig.privacyUrlResolved ?? null))
+      .catch(() => setPrivacyUrl(null));
+  }, []);
 
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
 
@@ -282,6 +298,51 @@ const ProfileView: React.FC<{ user: AppUserData }> = ({ user }) => {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  // G2 Pieza 2: abre la URL de privacidad con BrowserShim (Capacitor-safe).
+  // Nunca window.open crudo, nunca target="_blank" en <a> — el shim hace
+  // el routing PWA/native internamente.
+  const handleOpenPrivacy = async () => {
+    if (!privacyUrl) return;
+    try {
+      await Browser.open({ url: privacyUrl });
+    } catch {
+      // BrowserShim tiene su propio fallback interno (Capacitor → window.open).
+      // Si incluso ese falla, swallow — el usuario puede volver a intentar.
+    }
+  };
+
+  // G2 Pieza 2: borrado de cuenta iniciado por el end-user.
+  // Confirmación destructiva (rojo) + DELETE /apps/:appId/users/me + logout local.
+  // showConfirm({ destructive: true }) usa --color-feedback-error en el botón
+  // confirm — convención mobile contra clic accidental por inercia.
+  const handleDeleteAccount = async () => {
+    const confirmed = await showConfirm(
+      'Esta acción no se puede deshacer. Se eliminarán tus datos personales (nombre, email, teléfono, fotos) y tu contenido publicado en la app. Los pedidos y reservas pasados se conservan anonimizados por motivos contables.',
+      {
+        title: 'Eliminar mi cuenta',
+        confirmLabel: 'Sí, eliminar',
+        cancelLabel: 'Cancelar',
+        destructive: true,
+      },
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      // deleteMyAccount llama logout() internamente tras éxito — la sesión
+      // local queda limpia (Preferences + state + detach FCM). El AppUser
+      // será expulsado a la pantalla de login del runtime por el cambio de
+      // estado auth, sin necesidad de redirect manual.
+    } catch (err) {
+      setDeleting(false);
+      await showAlert(
+        err instanceof Error ? err.message : 'No se pudo eliminar la cuenta. Inténtalo más tarde.',
+        { title: 'Error' },
+      );
+    }
   };
 
   return (
@@ -419,6 +480,39 @@ const ProfileView: React.FC<{ user: AppUserData }> = ({ user }) => {
         }}
       >
         Cerrar sesión
+      </button>
+
+      {/* G2 Pieza 2: link a política de privacidad (si está configurada).
+          Solo aparece si manifest.privacyUrlResolved no es null (el resolver
+          de tracking-urls.ts decide). Usa BrowserShim, NO <a target="_blank">
+          ni window.open crudos — Capacitor-safe. */}
+      {privacyUrl && (
+        <button
+          onClick={handleOpenPrivacy}
+          className="w-full mt-3 py-2 text-xs underline"
+          style={{ color: 'var(--color-text-secondary, #6b7280)' }}
+        >
+          Política de privacidad
+        </button>
+      )}
+
+      {/* G2 Pieza 2: Eliminar cuenta. Estilo destructivo más prominente
+          que el logout (texto rojo + borde rojo) para señalar irreversibilidad.
+          La confirmación pasa por showConfirm({ destructive: true }) → botón
+          confirm en rojo del dialog (var --color-feedback-error). */}
+      <button
+        onClick={handleDeleteAccount}
+        disabled={deleting}
+        className="w-full mt-6 py-2 rounded-lg text-sm font-medium"
+        style={{
+          backgroundColor: 'transparent',
+          color: 'var(--color-feedback-error, #ef4444)',
+          border: '1px solid var(--color-feedback-error, #ef4444)',
+          opacity: deleting ? 0.5 : 1,
+          cursor: deleting ? 'wait' : 'pointer',
+        }}
+      >
+        {deleting ? 'Eliminando…' : 'Eliminar mi cuenta'}
       </button>
     </div>
   );

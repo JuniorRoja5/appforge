@@ -91,6 +91,14 @@ export interface AppManifest {
     // Esa URL resuelta es la declarable en Play Console.
     terms?: { content?: string; url?: string };
     privacy?: { content?: string; url?: string };
+    // G2 Pieza 2: URL resuelta y horneada por build.processor para el link
+    // "Política de privacidad" del UserProfileRuntime. Es privacy.url si el
+    // cliente la configuró, si no la página pública generada
+    // (<builder-host>/app-user/privacy/<appId>), si no null. El runtime no
+    // re-implementa la regla — lee el string final. Resolver compartido en
+    // tracking-urls.resolvePrivacyUrl() para garantizar paridad entre los
+    // dos manifest sites (Capacitor + PWA dist).
+    privacyUrlResolved?: string | null;
     pushEnabled?: boolean;
   };
 }

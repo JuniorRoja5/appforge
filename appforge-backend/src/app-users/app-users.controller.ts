@@ -93,6 +93,25 @@ export class AppUsersController {
     return this.appUsersService.updateMe(req.user.appUserId, dto);
   }
 
+  /**
+   * G2 Pieza 2 — borrado de cuenta iniciado por el propio AppUser desde
+   * runtime. CRÍTICO el orden: este @Delete('me') va ANTES del @Delete(':id')
+   * admin de la zona protegida (línea ~204), porque Express matchea por
+   * orden de declaración. Si fuera al revés, DELETE /apps/:appId/users/me
+   * caería en :id='me' con guard de admin → 401 con token de app-user.
+   * Mismo patrón que el repo ya aplica para @Get('me') / @Get(':id').
+   *
+   * 204 No Content es la semántica correcta para un delete exitoso sin
+   * payload de respuesta. El frontend recibe el código y procede a logout
+   * local sin parsear body.
+   */
+  @Delete('me')
+  @HttpCode(204)
+  @UseGuards(AppUserAuthGuard)
+  async deleteMe(@Req() req: any): Promise<void> {
+    await this.appUsersService.deleteMe(req.user.appUserId);
+  }
+
   @Post('logout')
   @HttpCode(200)
   @UseGuards(AppUserAuthGuard)

@@ -6,6 +6,7 @@ import { KeystoreService } from './keystore.service';
 import { StorageService } from '../storage/storage.service';
 import { PlatformEmailService } from '../platform/platform-email.service';
 import { decryptKeystore } from '../lib/crypto';
+import { resolvePrivacyUrl } from '../lib/tracking-urls';
 import { BuildType } from '@prisma/client';
 import { requiresFcmIfPushModulePresent } from './lib/build-type-traits';
 import * as path from 'path';
@@ -150,12 +151,17 @@ export class BuildProcessor extends WorkerHost {
           onboarding: appConfig.onboarding ?? null,
           terms: appConfig.terms ?? null,
           // G2 Commit A: shape simétrico privacy: { content?, url? } horneado
-          // como objeto. Si el reseller pegó url → declarable en Play Console
-          // tal cual. Si solo content → la URL declarable la genera Commit B
-          // como `<host>/app-user/privacy/<appId>`. Si nada → null y la PWA
-          // no puede declarar privacy en Play (bloqueo conocido hasta que
-          // el reseller configure).
+          // como objeto crudo. La RESOLUCIÓN a URL final (url externa del
+          // cliente o página pública generada) vive en privacyUrlResolved
+          // abajo — el runtime lee ese campo único en vez de re-implementar
+          // la lógica.
           privacy: appConfig.privacy ?? null,
+          // G2 Pieza 2: URL ya resuelta para el link in-app de UserProfileRuntime
+          // (BrowserShim.open). El resolver vive en lib/tracking-urls.ts y se
+          // usa idéntico en el sitio #2 (PWA dist manifest) para que el link
+          // funcione en TODAS las superficies (Capacitor + PWA). Si null,
+          // el runtime esconde el link.
+          privacyUrlResolved: resolvePrivacyUrl(appConfig, app.id),
           pushEnabled: Array.isArray(app.schema)
             ? (app.schema as any[]).some((el: any) => el.moduleId === 'push_notification')
             : false,
@@ -979,13 +985,21 @@ export default config;
     // 3. Generate app-manifest.json (runtime needs this for schema + tokens + apiUrl)
     log('Generating app-manifest.json...');
     const apiUrl = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+    // G2 Pieza 2: spread del appConfig crudo + privacyUrlResolved añadido
+    // con el resolver compartido. Mismo valor que el sitio #1 (Capacitor)
+    // garantizado por usar la misma función → el link in-app funciona en
+    // PWA Y APK, no divergen.
+    const rawAppConfig = (app.appConfig ?? {}) as Record<string, unknown>;
     const appManifest = {
       appId: app.id,
       appName: app.name,
       apiUrl,
       schema: app.schema ?? [],
       designTokens: app.designTokens ?? {},
-      appConfig: app.appConfig ?? {},
+      appConfig: {
+        ...rawAppConfig,
+        privacyUrlResolved: resolvePrivacyUrl(rawAppConfig, app.id),
+      },
     };
     await fs.writeFile(path.join(distDir, 'app-manifest.json'), JSON.stringify(appManifest));
     log('app-manifest.json generated');
