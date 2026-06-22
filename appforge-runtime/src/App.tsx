@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Splash } from './lib/platform';
-import { loadManifest, type AppManifest } from './lib/manifest';
+import { loadManifest, getManifest, onManifestUpdate, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
 import { initPush } from './lib/push';
 import { initAuth } from './lib/auth';
@@ -101,6 +101,41 @@ export const App: React.FC = () => {
   const handleTermsAccept = useCallback(() => {
     setPhase('ready');
   }, []);
+
+  // G2 live-config Pieza B — patrón (a): suscribir al refresh live SOLO
+  // cuando phase==='ready'. En splash/onboarding/terms, el live aterriza,
+  // actualiza _manifest module-level + Prefs cache para el próximo arranque,
+  // pero NO toca la sesión viva (no hay listener suscrito = no setManifest).
+  // Eso honra §5 literal: no se le cambia el documento legal a un usuario
+  // que aún no aceptó, no se resetea splash a media animación, etc.
+  //
+  // Al entrar en 'ready' hacemos un SYNC de React state al _manifest más
+  // fresco antes de suscribir: si refresh aterrizó durante splash/onboarding/
+  // terms, _manifest module-level ya está actualizado pero React state quedó
+  // stale; sin este sync el usuario vería el manifest viejo TODA la sesión
+  // (el refresh es uno por arranque, no vuelve a dispararse). Este sync
+  // tampoco viola §5: en 'ready' las fases gateadas ya pasaron y AppShell
+  // no lee appConfig.terms/onboarding/splash — solo schema/designTokens y
+  // appConfig.privacyUrlResolved. Si nada cambió, setManifest con valor
+  // igual no causa re-render (inocuo).
+  //
+  // El listener cubre los refreshes que aterricen DESPUÉS de suscribir —
+  // AppShell reacciona a schema vía useMemo([schema]) y a designTokens vía
+  // las CSS variables reescritas. applyDesignTokens es idempotente — re-
+  // llamar es seguro.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const current = getManifest();
+    if (current) {
+      setManifest(current);
+      if (current.designTokens) applyDesignTokens(current.designTokens);
+    }
+    const unsubscribe = onManifestUpdate((live) => {
+      setManifest(live);
+      if (live.designTokens) applyDesignTokens(live.designTokens);
+    });
+    return unsubscribe;
+  }, [phase]);
 
   if (error) {
     return (
