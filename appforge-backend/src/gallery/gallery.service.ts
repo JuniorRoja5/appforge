@@ -2,10 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGalleryItemDto } from './dto/create-gallery-item.dto';
 import { UpdateGalleryItemDto } from './dto/update-gallery-item.dto';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 @Injectable()
 export class GalleryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   private async ensureAppOwnership(appId: string, tenantId: string) {
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null }, select: { tenantId: true } });
@@ -72,8 +76,12 @@ export class GalleryService {
 
   async remove(appId: string, id: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOne(appId, id);
-    return this.prisma.galleryItem.delete({ where: { id } });
+    // #90.A Fase 2: imageUrl es String obligatorio en GalleryItem
+    // (schema.prisma:221) — paso directo sin filter.
+    const item = await this.findOne(appId, id);
+    const result = await this.prisma.galleryItem.delete({ where: { id } });
+    await this.storageCleanup.deleteBlobs([item.imageUrl]);
+    return result;
   }
 
   async reorder(appId: string, items: { id: string; order: number }[], tenantId: string) {

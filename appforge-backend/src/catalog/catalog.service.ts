@@ -4,10 +4,14 @@ import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 @Injectable()
 export class CatalogService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   private async ensureAppOwnership(appId: string, tenantId: string) {
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null }, select: { tenantId: true } });
@@ -72,8 +76,21 @@ export class CatalogService {
 
   async removeCollection(appId: string, collectionId: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOneCollection(appId, collectionId);
-    return this.prisma.catalogCollection.delete({ where: { id: collectionId } });
+    // #90.A Fase 2 compuesto: CatalogCollection.imageUrl propio + cascade
+    // a CatalogProduct.imageUrls (plural, String[]) de cada producto
+    // (schema:432 onDelete: Cascade). flatMap (no map) sobre products
+    // porque cada product.imageUrls es array — map daría string[][] y
+    // uploadUrlToKey recibiría arrays, devolviendo null silenciosamente
+    // para cada uno (el no-op silencioso que evitamos). Filter al final
+    // limpia el null del collection.imageUrl (String?).
+    const collection = await this.findOneCollection(appId, collectionId);
+    const urls = [
+      collection.imageUrl,
+      ...collection.products.flatMap((p) => p.imageUrls),
+    ].filter((u): u is string => !!u);
+    const result = await this.prisma.catalogCollection.delete({ where: { id: collectionId } });
+    await this.storageCleanup.deleteBlobs(urls);
+    return result;
   }
 
   async reorderCollections(appId: string, items: { id: string; order: number }[], tenantId: string) {
@@ -146,7 +163,11 @@ export class CatalogService {
       where: { id: productId, collectionId },
     });
     if (!product) throw new NotFoundException('Product not found');
-    return this.prisma.catalogProduct.delete({ where: { id: productId } });
+    // #90.A Fase 2: product.imageUrls es String[] (plural) — paso array
+    // directo al helper, NO envuelto.
+    const result = await this.prisma.catalogProduct.delete({ where: { id: productId } });
+    await this.storageCleanup.deleteBlobs(product.imageUrls);
+    return result;
   }
 
   async reorderProducts(appId: string, collectionId: string, items: { id: string; order: number }[], tenantId: string) {

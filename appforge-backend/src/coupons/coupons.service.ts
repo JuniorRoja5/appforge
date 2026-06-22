@@ -8,6 +8,7 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { UpdateCouponDto } from './dto/update-coupon.dto';
 import { RedeemCouponDto } from './dto/redeem-coupon.dto';
@@ -20,7 +21,10 @@ import Redis from 'ioredis';
 export class CouponsService {
   private redis: Redis;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {
     this.redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
@@ -115,8 +119,13 @@ export class CouponsService {
 
   async remove(appId: string, id: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOne(appId, id);
-    return this.prisma.discountCoupon.delete({ where: { id } });
+    // #90.A Fase 2: imageUrl es String? opcional en DiscountCoupon.
+    const coupon = await this.findOne(appId, id);
+    const result = await this.prisma.discountCoupon.delete({ where: { id } });
+    await this.storageCleanup.deleteBlobs(
+      coupon.imageUrl ? [coupon.imageUrl] : [],
+    );
+    return result;
   }
 
   async generateCode(appId: string, tenantId: string): Promise<{ code: string }> {

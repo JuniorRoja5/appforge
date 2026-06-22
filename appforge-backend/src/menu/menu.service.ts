@@ -4,10 +4,14 @@ import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 @Injectable()
 export class MenuService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   private async ensureAppOwnership(appId: string, tenantId: string) {
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null }, select: { tenantId: true } });
@@ -73,8 +77,19 @@ export class MenuService {
 
   async removeCategory(appId: string, categoryId: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOneCategory(appId, categoryId);
-    return this.prisma.menuCategory.delete({ where: { id: categoryId } });
+    // #90.A Fase 2 compuesto: MenuCategory.imageUrl propio + cascade a
+    // MenuItem.imageUrl de cada item (schema:367 onDelete: Cascade).
+    // findOneCategory ya hace include: { items } — los items con sus
+    // imageUrl vienen gratis en el retorno, sin query extra. Filter al
+    // final cubre nulls del propio (String?) y de items (String?).
+    const category = await this.findOneCategory(appId, categoryId);
+    const urls = [
+      category.imageUrl,
+      ...category.items.map((i) => i.imageUrl),
+    ].filter((u): u is string => !!u);
+    const result = await this.prisma.menuCategory.delete({ where: { id: categoryId } });
+    await this.storageCleanup.deleteBlobs(urls);
+    return result;
   }
 
   async reorderCategories(appId: string, items: { id: string; order: number }[], tenantId: string) {
@@ -151,7 +166,12 @@ export class MenuService {
       where: { id: itemId, categoryId },
     });
     if (!item) throw new NotFoundException('Menu item not found');
-    return this.prisma.menuItem.delete({ where: { id: itemId } });
+    // #90.A Fase 2: item ya capturado arriba, imageUrl String? opcional.
+    const result = await this.prisma.menuItem.delete({ where: { id: itemId } });
+    await this.storageCleanup.deleteBlobs(
+      item.imageUrl ? [item.imageUrl] : [],
+    );
+    return result;
   }
 
   async reorderItems(appId: string, categoryId: string, items: { id: string; order: number }[], tenantId: string) {

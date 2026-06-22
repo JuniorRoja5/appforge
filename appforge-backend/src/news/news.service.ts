@@ -3,10 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateNewsArticleDto } from './dto/create-news-article.dto';
 import { UpdateNewsArticleDto } from './dto/update-news-article.dto';
 import { sanitizeHtmlContent } from '../lib/sanitize-html';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 @Injectable()
 export class NewsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   private async ensureAppOwnership(appId: string, tenantId: string) {
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null }, select: { tenantId: true } });
@@ -78,8 +82,13 @@ export class NewsService {
 
   async remove(appId: string, id: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOne(appId, id);
-
-    return this.prisma.newsArticle.delete({ where: { id } });
+    // #90.A Fase 2: captura el retorno del findOne existente (sin select
+    // restrictivo, trae el imageUrl) para limpiar el blob tras el delete.
+    const article = await this.findOne(appId, id);
+    const result = await this.prisma.newsArticle.delete({ where: { id } });
+    await this.storageCleanup.deleteBlobs(
+      article.imageUrl ? [article.imageUrl] : [],
+    );
+    return result;
   }
 }

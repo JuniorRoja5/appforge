@@ -2,10 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 @Injectable()
 export class EventsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   async findAll(appId: string) {
     return this.prisma.event.findMany({
@@ -81,7 +85,13 @@ export class EventsService {
 
   async remove(appId: string, id: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOne(appId, id);
-    return this.prisma.event.delete({ where: { id } });
+    // #90.A Fase 2: imageUrl es String? opcional en Event — filter al null.
+    // ticketUrl queda fuera (URL externa, no nuestro storage).
+    const event = await this.findOne(appId, id);
+    const result = await this.prisma.event.delete({ where: { id } });
+    await this.storageCleanup.deleteBlobs(
+      event.imageUrl ? [event.imageUrl] : [],
+    );
+    return result;
   }
 }

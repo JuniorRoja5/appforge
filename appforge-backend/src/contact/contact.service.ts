@@ -5,6 +5,7 @@ import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmitContactDto } from './dto/submit-contact.dto';
 import { decrypt } from '../lib/crypto';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 
 const CAPTCHA_SECRET = process.env.CAPTCHA_SECRET || 'appforge-captcha-default-secret';
 const CAPTCHA_TTL_MS = 10 * 60 * 1000; // 10 minutos
@@ -13,7 +14,10 @@ const CAPTCHA_TTL_MS = 10 * 60 * 1000; // 10 minutos
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   private async ensureAppOwnership(appId: string, tenantId: string) {
     const app = await this.prisma.app.findFirst({ where: { id: appId, deletedAt: null }, select: { tenantId: true } });
@@ -149,7 +153,12 @@ export class ContactService {
 
   async remove(appId: string, id: string, tenantId: string) {
     await this.ensureAppOwnership(appId, tenantId);
-    await this.findOne(appId, id);
-    return this.prisma.contactSubmission.delete({ where: { id } });
+    // #90.A Fase 2: fileUrls es String[] (plural) — paso el array directo
+    // al helper, NO envuelto en otro array. uploadUrlToKey itera sobre
+    // cada string del array.
+    const submission = await this.findOne(appId, id);
+    const result = await this.prisma.contactSubmission.delete({ where: { id } });
+    await this.storageCleanup.deleteBlobs(submission.fileUrls);
+    return result;
   }
 }
