@@ -30,6 +30,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { OrdersModule } from './orders/orders.module';
 import { HealthModule } from './health/health.module';
+import { LegalModule } from './legal/legal.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -72,6 +73,7 @@ import { join } from 'path';
     LoyaltyModule,
     OrdersModule,
     HealthModule,
+    LegalModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     ServeStaticModule.forRoot(
       {
