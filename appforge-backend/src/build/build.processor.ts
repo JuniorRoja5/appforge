@@ -1084,9 +1084,24 @@ export default config;
 
     // 9. Update database
     const pwaUrl = `${pwaBaseUrl}/${slug}/`;
+    // Bug 4 (2026): además de los campos PWA, marcar el snapshot del
+    // build como completado igual que hacen los paths APK/AAB en la
+    // rama del artifact upload (líneas 487-491). Sin needsRebuild:
+    // false + lastBuiltSchema + lastBuiltAt, el banner "Tienes cambios
+    // sin publicar" del PWA panel queda permanentemente activo después
+    // de cada build PWA — el cálculo de needsRebuild en apps.service
+    // (computeBuildableHash) compara contra lastBuiltSchema, que sin
+    // actualizar siempre detecta "cambios" frente al hash anterior.
     await this.prisma.app.update({
       where: { id: appId },
-      data: { pwaEnabled: true, pwaUrl, pwaLastDeployedAt: new Date() },
+      data: {
+        pwaEnabled: true,
+        pwaUrl,
+        pwaLastDeployedAt: new Date(),
+        needsRebuild: false,
+        lastBuiltSchema: app.schema as any,
+        lastBuiltAt: new Date(),
+      },
     });
 
     // 10. Mark build as completed. logOutput intentionally not stored
