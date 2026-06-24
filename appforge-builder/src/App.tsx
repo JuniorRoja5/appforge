@@ -34,6 +34,7 @@ import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { BookingTrackingPage } from './pages/BookingTrackingPage';
 import { AppUserResetPasswordPage } from './pages/AppUserResetPasswordPage';
 import { AppUserPrivacyPage } from './pages/AppUserPrivacyPage';
+import { AppUserDeleteAccountPage } from './pages/AppUserDeleteAccountPage';
 import { ImpersonationBootstrap } from './components/ImpersonationBootstrap';
 import { ImpersonationBanner } from './components/ImpersonationBanner';
 
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
   { path: '/booking/:appId/:bookingId', element: <BookingTrackingPage /> },
   { path: '/app-user/reset-password/:appId', element: <AppUserResetPasswordPage /> },
   { path: '/app-user/privacy/:appId', element: <AppUserPrivacyPage /> },
+  { path: '/app-user/delete-account/:appId', element: <AppUserDeleteAccountPage /> },
 
   // Redirects
   { path: '/', element: <Navigate to="/dashboard" replace /> },
