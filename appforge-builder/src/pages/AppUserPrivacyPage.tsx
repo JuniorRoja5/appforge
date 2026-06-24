@@ -118,7 +118,22 @@ export const AppUserPrivacyPage: React.FC = () => {
           Política de Privacidad — {data.appName}
         </h1>
         <div
-          className="prose prose-sm max-w-none"
+          // Polish post-G2: defensas de contenido móvil. break-words evita
+          // que palabras largas (URLs, IDs) desborden el contenedor en
+          // viewport estrecho; [&_img]:max-w-full/h-auto contiene imágenes
+          // que vinieran con tamaño fijo del editor; [&_iframe]:max-w-full
+          // cubre embeds (YouTube/Vimeo); [&_table]:block + overflow-x-auto
+          // permite scroll horizontal en tablas anchas en vez de cortar;
+          // [&_pre]:overflow-x-auto idem para bloques de código. El helper
+          // responsiveHtmlClass del runtime vive en otro paquete (separados);
+          // inlineamos las clases aquí — es una única ocurrencia.
+          className={[
+            'prose prose-sm max-w-none break-words',
+            '[&_img]:max-w-full [&_img]:h-auto',
+            '[&_iframe]:max-w-full',
+            '[&_table]:block [&_table]:overflow-x-auto [&_table]:max-w-full',
+            '[&_pre]:overflow-x-auto [&_pre]:max-w-full',
+          ].join(' ')}
           // sanitize OBLIGATORIO. El content viene del reseller editando
           // libremente HTML en su ReactQuill — sin sanitizar, XSS abierto
           // (cualquier <script>, on* handler, etc. ejecutaría aquí).
