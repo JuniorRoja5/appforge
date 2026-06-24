@@ -13,6 +13,8 @@ import { StorageService } from '../storage/storage.service';
 import { StripeService } from '../stripe/stripe.service';
 import { TenantStatus, UserStatus, BuildStatus, PlanType, Role } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 @Injectable()
 export class AdminService {
@@ -199,7 +201,7 @@ export class AdminService {
       where: { id },
       include: {
         users: { select: { status: true, role: true } },
-        apps: { select: { id: true } },
+        apps: { select: { id: true, slug: true } },
       },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -236,12 +238,30 @@ export class AdminService {
       try {
         const builds = await this.prisma.appBuild.findMany({
           where: { appId: app.id, artifactUrl: { not: null } },
-          select: { artifactUrl: true },
+          select: { artifactUrl: true, buildType: true },
         });
         for (const build of builds) {
-          if (build.artifactUrl) {
-            try { await this.storage.delete(build.artifactUrl); } catch { /* ignore */ }
-          }
+          if (!build.artifactUrl) continue;
+          try {
+            if (build.buildType === 'PWA') {
+              // TECH_DEBT #91: artifactUrl tiene doble naturaleza según
+              // buildType. Para PWA es la URL pública (build.processor:
+              // 1098 `artifactUrl: pwaUrl`) y el sitio físico vive en
+              // /var/www/apps/<slug>/ servido por nginx — fuera del
+              // StorageService. storage.delete(URL) sería no-op silencioso
+              // por ENOENT (medido en #90.0). fs.rm con { recursive: true,
+              // force: true } borra el directorio entero y es idempotente
+              // si ya no existe.
+              const pwaDir = path.join('/var/www/apps', app.slug);
+              await fs.rm(pwaDir, { recursive: true, force: true });
+            } else {
+              // APK / AAB / DEBUG: artifactUrl ya es la storage key
+              // (build.processor:527/601 `artifactUrl: storageKey`), y
+              // storage.delete funciona — pasa por resolve() endurecido
+              // de #90.0.
+              await this.storage.delete(build.artifactUrl);
+            }
+          } catch { /* artifact roto no debe abortar el delete del tenant */ }
         }
         const keystore = await this.prisma.appKeystore.findUnique({
           where: { appId: app.id },
