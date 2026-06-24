@@ -228,8 +228,11 @@ export const AppShell: React.FC<Props> = ({ manifest }) => {
       {/* Safe area top */}
       <div style={{ height: 'var(--safe-area-top, 0px)', backgroundColor: 'var(--color-nav-bg, #fff)' }} />
 
-      {/* Header */}
-      <Header />
+      {/* Header — Bug 1: solo en side_drawer (lleva hamburger + tab
+          label, útil). Para bottom_tabs/top_tabs el header solo mostraba
+          {manifest.appName} sin acción → ruido. El safe-area top ya está
+          cubierto por el div de la línea 229 (var(--safe-area-top)). */}
+      {navStyle === 'side_drawer' && <Header />}
 
       {/* Top tabs */}
       {navStyle === 'top_tabs' && <TabBar position="top" />}

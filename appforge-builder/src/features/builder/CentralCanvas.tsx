@@ -51,7 +51,10 @@ const SortableCanvasElement: React.FC<{
   );
 };
 
-export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
+// Bug 1: prop appName eliminada — el span del nombre fijo del header
+// se quitó (era ruido sin acción). El callsite en BuilderLayout
+// también deja de pasarla.
+export const CentralCanvas: React.FC = () => {
   const { elements, selectedElementId, selectElement, designTokens } = useBuilderStore();
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-droppable',
@@ -212,9 +215,15 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
         {/* Notch simulation (Dynamic Island Style) */}
         <div className="absolute top-3 inset-x-0 h-7 bg-[#0f172a] rounded-full w-[120px] mx-auto z-50 shadow-[0_2px_15px_rgba(0,0,0,0.1)]" />
 
-        {/* Phone Header */}
-        <div className="absolute top-0 inset-x-0 h-24 bg-white/60 backdrop-blur-xl z-40 border-b border-gray-200/50 flex items-end justify-between px-6 pb-4">
-          {navStyle === 'side_drawer' && hasTabs ? (
+        {/* Phone Header — Bug 1: solo lleva contenido (hamburger + tab
+            label) cuando navStyle es side_drawer. Para el resto de
+            estilos (bottom_tabs, top_tabs) el div queda vacío con h-12
+            simulando solo el safe-area top del notch — sin el "nombre
+            fijo de la app" que aportaba ruido y no era accionable. */}
+        <div className={`absolute top-0 inset-x-0 bg-white/60 backdrop-blur-xl z-40 border-b border-gray-200/50 flex items-end justify-between px-6 pb-4 ${
+          navStyle === 'side_drawer' && hasTabs ? 'h-24' : 'h-12'
+        }`}>
+          {navStyle === 'side_drawer' && hasTabs && (
             <>
               <button
                 onClick={() => setDrawerOpen(true)}
@@ -229,14 +238,13 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
               </span>
               <div className="w-6" /> {/* Spacer for alignment */}
             </>
-          ) : (
-            <span className="font-semibold text-[17px] tracking-tight text-gray-900" style={{ fontFamily }}>{appName || 'Mi App'}</span>
           )}
         </div>
 
-        {/* Top Tabs (when style is top_tabs) */}
+        {/* Top Tabs (when style is top_tabs) — Bug 1: top-12 porque el
+            header en top_tabs ya no es h-24 sino h-12 (sin nombre fijo). */}
         {navStyle === 'top_tabs' && hasTabs && (
-          <div className="absolute top-24 inset-x-0 z-30 border-b border-gray-200/50 backdrop-blur-xl">
+          <div className="absolute top-12 inset-x-0 z-30 border-b border-gray-200/50 backdrop-blur-xl">
             <TabBar />
           </div>
         )}
@@ -250,7 +258,13 @@ export const CentralCanvas: React.FC<{ appName?: string }> = ({ appName }) => {
             backgroundColor: bgColor,
             color: textColor,
             fontFamily,
-            paddingTop: navStyle === 'top_tabs' && hasTabs ? '10rem' : '7rem',
+            // Bug 1: ajustado al header h-12 cuando no es side_drawer.
+            // side_drawer mantiene h-24 (6rem) → padding 7rem.
+            // top_tabs+hasTabs: header h-12 (3rem) + tab bar (~3.5rem) → 7rem.
+            // resto (bottom_tabs, top_tabs sin hasTabs): header h-12 (3rem) → 4rem.
+            paddingTop: navStyle === 'side_drawer'
+              ? '7rem'
+              : (navStyle === 'top_tabs' && hasTabs ? '7rem' : '4rem'),
             paddingBottom: navStyle === 'bottom_tabs' && hasTabs ? '6rem' : '1.5rem',
           } as React.CSSProperties}
         >

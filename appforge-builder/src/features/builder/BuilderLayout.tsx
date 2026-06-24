@@ -420,7 +420,7 @@ export const BuilderLayout: React.FC = () => {
         {/* Main Builder Area */}
         <div className="flex flex-1 overflow-hidden">
           <LeftSidebar />
-          <CentralCanvas appName={appName} />
+          <CentralCanvas />
           <RightSidebar />
         </div>
       </div>
