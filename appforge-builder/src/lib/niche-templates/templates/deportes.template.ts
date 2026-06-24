@@ -281,6 +281,28 @@ export const deportesTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'social_wall',
+      order: 6,
+      tab_position: 4,
+      tab_label: 'Comunidad',
+      tab_icon: 'users',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        allowImages: true,
+        title: 'Club Social',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+        textColor: '#1f2937',
+        displayMode: 'default',
+        postLayout: 'list',
+        showHeader: true,
+        postsPerPage: 10,
+        allowComments: true,
+        allowLikes: true,
+      },
+    },
   ],
 
   screens: [
