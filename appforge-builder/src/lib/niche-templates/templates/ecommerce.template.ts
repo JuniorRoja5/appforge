@@ -298,6 +298,25 @@ export const ecommerceTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 6,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Club de Fidelidad',
+        description: '10 compras recompensadas con un descuento exclusivo',
+        totalStamps: 10,
+        reward: '10% de descuento',
+        rewardDescription: '10 compras recompensadas con un descuento exclusivo solo para ti.',
+        cardColor: '#111111',
+        stampIcon: 'star',
+        logoUrl: '',
+        termsText: 'Descuento sobre el importe final. No acumulable con otras ofertas.',
+      },
+    },
   ],
 
   screens: [

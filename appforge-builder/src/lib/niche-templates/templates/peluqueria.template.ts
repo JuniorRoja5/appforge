@@ -341,6 +341,25 @@ export const peluqueriaTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 7,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Tu Tarjeta Fidelidad',
+        description: '6 visitas y tu próximo corte es gratis',
+        totalStamps: 6,
+        reward: 'Corte gratis',
+        rewardDescription: 'Tu fidelidad tiene premio. Completa 6 visitas y el siguiente corte es nuestro regalo.',
+        cardColor: '#D4A0A0',
+        stampIcon: 'gift',
+        logoUrl: '',
+        termsText: 'Válido para corte básico. Previa cita. Caduca a los 6 meses.',
+      },
+    },
   ],
 
   screens: [

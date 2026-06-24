@@ -298,6 +298,25 @@ export const supermercadoTemplate: NicheTemplate = {
         showExcerpt: true,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 6,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Tarjeta Cliente',
+        description: 'Acumula sellos y consigue tu vale de descuento',
+        totalStamps: 10,
+        reward: 'Vale de 5€',
+        rewardDescription: 'Acumula 10 sellos y consigue un vale de 5€ en tu próxima compra.',
+        cardColor: '#1B813E',
+        stampIcon: 'gift',
+        logoUrl: '',
+        termsText: 'Mínimo de compra 20€. Válido 30 días desde emisión.',
+      },
+    },
   ],
 
   screens: [

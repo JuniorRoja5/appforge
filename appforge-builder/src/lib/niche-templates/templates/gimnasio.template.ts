@@ -354,6 +354,25 @@ export const gimnasioTemplate: NicheTemplate = {
         showUsageCount: true,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 8,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Tarjeta Gym',
+        description: 'Acumula clases y consigue tu clase de regalo',
+        totalStamps: 10,
+        reward: 'Clase gratis',
+        rewardDescription: '10 clases y la siguiente te la regalamos. Sigue con tu racha.',
+        cardColor: '#1A1A1A',
+        stampIcon: 'check',
+        logoUrl: '',
+        termsText: 'Válido para cualquier clase del horario regular. No acumulable.',
+      },
+    },
   ],
 
   screens: [

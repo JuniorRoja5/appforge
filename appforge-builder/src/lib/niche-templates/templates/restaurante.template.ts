@@ -320,6 +320,25 @@ export const restauranteTemplate: NicheTemplate = {
         showUsageCount: true,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 7,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Club de Fidelidad',
+        description: '10 visitas recompensadas con un postre de regalo',
+        totalStamps: 10,
+        reward: 'Postre gratis',
+        rewardDescription: '10 visitas y el postre corre de nuestra cuenta. ¡Te lo mereces!',
+        cardColor: '#ED2031',
+        stampIcon: 'star',
+        logoUrl: '',
+        termsText: 'Un postre a elegir del menú. No acumulable con otras promociones.',
+      },
+    },
   ],
 
   screens: [

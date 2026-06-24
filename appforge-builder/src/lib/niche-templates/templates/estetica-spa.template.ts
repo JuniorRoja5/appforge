@@ -339,6 +339,25 @@ export const esteticaSpaTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 7,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Tu Tarjeta Belleza',
+        description: '5 tratamientos y el siguiente es un regalo para ti',
+        totalStamps: 5,
+        reward: 'Tratamiento gratis',
+        rewardDescription: '5 visitas merecen una recompensa. Elige el tratamiento que más te apetezca.',
+        cardColor: '#A78BBA',
+        stampIcon: 'heart',
+        logoUrl: '',
+        termsText: 'Válido para tratamiento facial básico. Previa reserva. No transferible.',
+      },
+    },
   ],
 
   screens: [

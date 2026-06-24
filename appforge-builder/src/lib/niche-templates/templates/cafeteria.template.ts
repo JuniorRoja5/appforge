@@ -284,6 +284,25 @@ export const cafeteriaTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'loyalty_card',
+      order: 6,
+      tab_position: null,
+      tab_label: 'Fidelidad',
+      tab_icon: 'award',
+      is_home: false,
+      default_config: {
+        title: 'Tarjeta de Fidelidad',
+        description: 'Acumula sellos en cada visita y disfruta de tu café gratis',
+        totalStamps: 8,
+        reward: 'Café gratis',
+        rewardDescription: 'Completa tu tarjeta y disfruta de tu próximo café completamente gratis.',
+        cardColor: '#5D3A1A',
+        stampIcon: 'coffee',
+        logoUrl: '',
+        termsText: 'Válido en todas nuestras bebidas. Un canje por tarjeta completada.',
+      },
+    },
   ],
 
   screens: [
