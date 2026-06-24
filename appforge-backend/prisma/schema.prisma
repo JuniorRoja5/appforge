@@ -515,6 +515,12 @@ model AppUser {
   lastLoginAt      DateTime?
   resetToken       String?
   resetTokenExpiry DateTime?
+  // G2 Pieza 3 — public account deletion via email token. Independiente
+  // de reset (resetToken) para que un token de reset no pueda usarse
+  // para borrar la cuenta y viceversa. TTL 1h, hash SHA256 (raw token
+  // solo viaja en el email enlace).
+  deleteToken       String?
+  deleteTokenExpiry DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
