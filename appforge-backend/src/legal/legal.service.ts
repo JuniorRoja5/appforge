@@ -34,8 +34,13 @@ export class LegalService {
    * genérico).
    */
   async getPrivacyForPublicPage(appId: string): Promise<PrivacyPublicResponse> {
-    const app = await this.prisma.app.findUnique({
-      where: { id: appId },
+    // findFirst (no findUnique) para poder filtrar deletedAt en el where.
+    // Una app soft-deleted no debe seguir sirviendo su política de
+    // privacidad — sería un leak de datos de una app que el cliente
+    // considera eliminada. El 404 enmascara si el id era válido o no
+    // (sin side-channel sobre existencia).
+    const app = await this.prisma.app.findFirst({
+      where: { id: appId, deletedAt: null },
       select: { name: true, appConfig: true },
     });
 
