@@ -225,6 +225,20 @@ export const fotografoTemplate: NicheTemplate = {
         enableCaptcha: false,
       },
     },
+    {
+      module_id: 'fan_wall',
+      order: 4,
+      tab_position: 4,
+      tab_label: 'Tu Sesión',
+      tab_icon: 'camera',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        title: 'Tu Sesión',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+      },
+    },
   ],
 
   screens: [

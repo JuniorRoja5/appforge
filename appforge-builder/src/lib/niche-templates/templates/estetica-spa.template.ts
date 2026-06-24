@@ -358,6 +358,20 @@ export const esteticaSpaTemplate: NicheTemplate = {
         termsText: 'Válido para tratamiento facial básico. Previa reserva. No transferible.',
       },
     },
+    {
+      module_id: 'fan_wall',
+      order: 8,
+      tab_position: 4,
+      tab_label: 'Resultados',
+      tab_icon: 'sparkles',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        title: 'Tus Transformaciones',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+      },
+    },
   ],
 
   screens: [

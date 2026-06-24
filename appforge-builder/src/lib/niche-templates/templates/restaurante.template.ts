@@ -339,6 +339,20 @@ export const restauranteTemplate: NicheTemplate = {
         termsText: 'Un postre a elegir del menú. No acumulable con otras promociones.',
       },
     },
+    {
+      module_id: 'fan_wall',
+      order: 8,
+      tab_position: null,
+      tab_label: 'Comunidad',
+      tab_icon: 'image',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        title: 'Comparte tu plato',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+      },
+    },
   ],
 
   screens: [

@@ -303,6 +303,20 @@ export const deportesTemplate: NicheTemplate = {
         allowLikes: true,
       },
     },
+    {
+      module_id: 'fan_wall',
+      order: 7,
+      tab_position: null,
+      tab_label: 'Momentos',
+      tab_icon: 'camera',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        title: 'Momentos del Equipo',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+      },
+    },
   ],
 
   screens: [

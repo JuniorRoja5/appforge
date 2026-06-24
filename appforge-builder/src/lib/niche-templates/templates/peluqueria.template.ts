@@ -360,6 +360,20 @@ export const peluqueriaTemplate: NicheTemplate = {
         termsText: 'Válido para corte básico. Previa cita. Caduca a los 6 meses.',
       },
     },
+    {
+      module_id: 'fan_wall',
+      order: 8,
+      tab_position: 4,
+      tab_label: 'Looks',
+      tab_icon: 'camera',
+      is_home: false,
+      default_config: {
+        enabled: true,
+        title: 'Galería de Looks',
+        backgroundColor: '#f9fafb',
+        headerColor: '',
+      },
+    },
   ],
 
   screens: [
