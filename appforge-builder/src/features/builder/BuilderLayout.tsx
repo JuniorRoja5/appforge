@@ -16,6 +16,7 @@ import { BuildPanel } from './BuildPanel';
 import { DropTargetPopover } from './DropTargetPopover';
 import { computeTabs } from './utils/computeTabs';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
+import { ActivationBadge } from './ActivationBadge';
 import { Loader2, Check } from 'lucide-react';
 
 const MODULE_IDS_WITH_APPID = [
@@ -99,6 +100,17 @@ export const BuilderLayout: React.FC = () => {
   } | null>(null);
   const [appName, setAppName] = useState('');
   const [appIconUrl, setAppIconUrl] = useState('');
+  // G3-A: campos extra del app necesarios para el ActivationBadge. El
+  // useEffect existente ya hace getApp(appId); solo guardamos en state
+  // los 2 campos que el badge consume (pwaEnabled, pwaLastDeployedAt).
+  const [pwaEnabled, setPwaEnabled] = useState(false);
+  const [pwaLastDeployedAt, setPwaLastDeployedAt] = useState<string | null>(null);
+  // buildsRefreshKey se incrementa cuando se cierra el BuildPanel — el
+  // badge re-fetch la lista de builds para detectar APK nuevas. Sin
+  // esto, completar un build con el panel abierto no actualiza el badge
+  // hasta refresh manual de la página.
+  const [buildsRefreshKey, setBuildsRefreshKey] = useState(0);
+  const prevBuildPanelOpenRef = useRef(false);
   const configIconUrl = useAppConfigStore((s) => s.config?.icon?.url);
   const effectiveIconUrl = configIconUrl ?? appIconUrl;
 
@@ -128,6 +140,9 @@ export const BuilderLayout: React.FC = () => {
         useBuilderStore.getState().loadApp(elements, tokens);
         setAppName(app.name ?? '');
         setAppIconUrl(app.appConfig?.icon?.url ?? '');
+        // G3-A: capturar campos extra del app que consume el badge.
+        setPwaEnabled(app.pwaEnabled === true);
+        setPwaLastDeployedAt(app.pwaLastDeployedAt ?? null);
       } catch (err) {
         console.error('Error loading app:', err);
         if (!cancelled) {
@@ -248,6 +263,17 @@ export const BuilderLayout: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, [handleSave]);
 
+  // G3-A: detectar flanco de bajada de isBuildPanelOpen (true→false). Al
+  // cerrar el BuildPanel, el usuario pudo lanzar un build nuevo — el
+  // badge debe re-fetch builds. Incrementamos buildsRefreshKey; el badge
+  // tiene un useEffect con esa key como dep que dispara el getBuilds.
+  useEffect(() => {
+    if (prevBuildPanelOpenRef.current && !isBuildPanelOpen) {
+      setBuildsRefreshKey((k) => k + 1);
+    }
+    prevBuildPanelOpenRef.current = isBuildPanelOpen;
+  }, [isBuildPanelOpen]);
+
   // Auto-save: debounce 30s after any store change
   useEffect(() => {
     const unsub = useBuilderStore.subscribe((state, prevState) => {
@@ -367,6 +393,20 @@ export const BuilderLayout: React.FC = () => {
               >
                 {saving ? '...' : 'Guardar'}
               </button>
+              {/* G3-A: badge de progreso del checklist de activación. Va
+                  justo antes de "Generar App" para que actúe como precursor
+                  visual — cuando 4/4 ✓ el CTA queda implícitamente
+                  "desbloqueado". Reactivo a cambios del builder (color,
+                  logo) sin re-fetch. */}
+              {appId && token && (
+                <ActivationBadge
+                  appId={appId}
+                  token={token}
+                  pwaEnabled={pwaEnabled}
+                  pwaLastDeployedAt={pwaLastDeployedAt}
+                  buildsRefreshKey={buildsRefreshKey}
+                />
+              )}
               <button
                 onClick={() => setBuildPanelOpen(true)}
                 className="px-5 py-2 bg-primary hover:opacity-90 text-white text-[13px] font-bold rounded-lg shadow-sm transition-all flex items-center"
