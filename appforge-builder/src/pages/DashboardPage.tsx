@@ -4,6 +4,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useTenantStore } from '../store/useTenantStore';
 import { AppCard } from '../components/AppCard';
 import { getApps, deleteApp, getSubscription, type SubscriptionInfo } from '../lib/api';
+import { MiniPhoneMockup } from '../components/MiniPhoneMockup';
+import { nicheTemplates } from '../lib/niche-templates/nicheRegistry';
 
 interface AppData {
   id: string;
@@ -178,17 +180,38 @@ export const DashboardPage: React.FC = () => {
           ))}
         </div>
       ) : apps.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+        <div className="py-16 flex flex-col items-center">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            Crea tu primera aplicación
+          </h3>
+          <p className="text-sm text-gray-500 mb-10 text-center max-w-md">
+            Elige una de nuestras plantillas profesionales y ten tu app lista en minutos.
+          </p>
+
+          {/* G3-B: preview de 3 plantillas populares como gancho visual. */}
+          {/* `as const` para que TS infiera readonly tuple en vez de string[] */}
+          {/* — sino la comparación con t.id daría warning. find() + null */}
+          {/* check protege si algún id desaparece del registry en el futuro. */}
+          <div className="flex flex-wrap justify-center gap-6 mb-10">
+            {(['restaurante', 'gimnasio', 'cafeteria'] as const).map((id) => {
+              const tpl = nicheTemplates.find((t) => t.id === id);
+              if (!tpl) return null;
+              return (
+                <div key={id} className="flex flex-col items-center gap-2">
+                  <div className="opacity-90 hover:opacity-100 hover:scale-[1.03] transition-all duration-200">
+                    <MiniPhoneMockup tokens={tpl.design_tokens} templateName={tpl.name} />
+                  </div>
+                  <span className="text-xs font-medium text-gray-500">
+                    {tpl.preview_emoji} {tpl.name}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">No tienes aplicaciones aún</h3>
-          <p className="text-sm text-gray-500 mb-6">Crea tu primera app seleccionando una plantilla</p>
+
           <button
             onClick={() => navigate('/apps/new')}
-            className="px-6 py-2.5 bg-primary hover:opacity-90 text-white text-sm font-medium rounded-lg shadow-sm transition-all"
+            className="px-8 py-3 bg-primary hover:opacity-90 text-white text-sm font-semibold rounded-xl shadow-sm transition-all"
           >
             + Crear mi primera app
           </button>
