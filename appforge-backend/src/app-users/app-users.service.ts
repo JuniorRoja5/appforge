@@ -12,7 +12,7 @@ import { LoginAppUserDto } from './dto/login-app-user.dto';
 import { UpdateAppUserDto } from './dto/update-app-user.dto';
 import { ListAppUsersQueryDto } from './dto/list-app-users-query.dto';
 import { RedeemPasswordResetDto } from './dto/reset-password.dto';
-import { passwordResetUrl } from '../lib/tracking-urls';
+import { passwordResetUrl, deleteAccountUrl } from '../lib/tracking-urls';
 import { decrypt } from '../lib/crypto';
 import { StorageCleanupService } from '../storage/storage-cleanup.service';
 import * as bcrypt from 'bcrypt';
@@ -477,6 +477,159 @@ export class AppUsersService {
     </div>
     <p style="color:#6b7280;font-size:13px">Este enlace caduca en <strong>1 hora</strong>. Si no fuiste tú, ignora este email — tu contraseña actual seguirá funcionando.</p>
     <p style="color:#9ca3af;font-size:11px;margin-top:24px;word-break:break-all">Si el botón no funciona, copia este enlace en tu navegador:<br>${resetUrl}</p>
+  </div>
+</div>`,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // G2 Pieza 3 — public account deletion via email token.
+  //
+  // Flujo: usuario llega a /app-user/delete-account/:appId (sin token) →
+  // formulario de email → POST request-delete genera token, envía email →
+  // usuario abre el enlace del email con ?t=<token> → GET delete-account
+  // valida token y muestra email + confirm → POST delete-account ejecuta
+  // deleteMe (que ya incluye cleanup de blobs de #90.A).
+  //
+  // INAMOVIBLE: GET-carga / POST-muta. El GET solo lee y devuelve email;
+  // toda lógica destructiva en el POST. Defensa contra prefetch del
+  // navegador (Chrome especulativo, Outlook, Slack preview, etc.) que
+  // ejecutarían un GET destructivo sin consentimiento del usuario.
+  //
+  // Anti-enumeración: la respuesta de requestAccountDeletion es genérica
+  // tanto si el usuario existe como si no. Mismo patrón que
+  // requestPasswordResetByEmail.
+  // ─────────────────────────────────────────────────────────────────
+
+  async requestAccountDeletion(appId: string, email: string): Promise<{ message: string }> {
+    const genericResponse = {
+      message:
+        'Si existe una cuenta con ese email, te hemos enviado un enlace para confirmar la eliminación.',
+    };
+
+    await this.ensureAppExists(appId);
+
+    const user = await this.prisma.appUser.findUnique({
+      where: { appId_email: { appId, email } },
+    });
+
+    if (!user || user.status === 'BANNED') return genericResponse;
+
+    const rawToken = crypto.randomBytes(24).toString('base64url');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const deleteTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1h TTL
+
+    await this.prisma.appUser.update({
+      where: { id: user.id },
+      data: { deleteToken: hashedToken, deleteTokenExpiry },
+    });
+
+    this.sendDeleteAccountEmail(appId, user, rawToken).catch((err) =>
+      this.logger.warn(
+        `Delete account email failed for user ${user.id} (${appId}): ${(err as Error).message}`,
+      ),
+    );
+
+    return genericResponse;
+  }
+
+  async getDeleteAccountPageData(
+    appId: string,
+    token: string | undefined,
+  ): Promise<{ email: string }> {
+    if (!token) throw new UnauthorizedException('Token requerido.');
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await this.prisma.appUser.findFirst({
+      where: { appId, deleteToken: hashedToken, deleteTokenExpiry: { gt: new Date() } },
+      select: { email: true },
+    });
+
+    if (!user) throw new UnauthorizedException('Token inválido o expirado.');
+    return { email: user.email };
+  }
+
+  async confirmAccountDeletion(
+    appId: string,
+    token: string | undefined,
+  ): Promise<{ message: string }> {
+    if (!token) throw new UnauthorizedException('Token requerido.');
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await this.prisma.appUser.findFirst({
+      where: { appId, deleteToken: hashedToken, deleteTokenExpiry: { gt: new Date() } },
+      select: { id: true },
+    });
+
+    if (!user) throw new UnauthorizedException('Token inválido o expirado.');
+
+    // deleteMe reusa el patrón completo de #90.A: collectAppUserBlobUrls →
+    // prisma.appUser.delete (cascade) → storageCleanup.deleteBlobs. La
+    // fila del AppUser desaparece junto con su deleteToken — el token
+    // queda invalidado de facto.
+    await this.deleteMe(user.id);
+    return { message: 'Tu cuenta ha sido eliminada correctamente.' };
+  }
+
+  private async sendDeleteAccountEmail(
+    appId: string,
+    user: AppUser,
+    rawToken: string,
+  ): Promise<void> {
+    const smtpConfig = await this.prisma.appSmtpConfig.findUnique({
+      where: { appId },
+    });
+    if (!smtpConfig) {
+      this.logger.warn(
+        `App ${appId} has no SMTP configured — delete account email cannot be sent for user ${user.id}`,
+      );
+      return;
+    }
+
+    const app = await this.prisma.app.findUnique({
+      where: { id: appId },
+      select: { name: true },
+    });
+    const appName = app?.name ?? 'AppForge';
+
+    let password: string;
+    try {
+      password = decrypt(smtpConfig.encryptedPass);
+    } catch (err) {
+      this.logger.warn(`SMTP decrypt failed for app ${appId}: ${(err as Error).message}`);
+      return;
+    }
+
+    const transport = nodemailer.createTransport({
+      host: smtpConfig.host,
+      port: smtpConfig.port,
+      secure: smtpConfig.secure,
+      auth: { user: smtpConfig.username, pass: password },
+    });
+
+    const deleteUrl = deleteAccountUrl(appId, rawToken);
+    const greeting = user.firstName ? `Hola ${user.firstName},` : 'Hola,';
+
+    await transport.sendMail({
+      from: `"${smtpConfig.fromName}" <${smtpConfig.fromEmail}>`,
+      to: user.email,
+      subject: `Confirmación de eliminación de cuenta — ${appName}`,
+      html: `
+<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937">
+  <div style="background:linear-gradient(to right,#6366f1,#8b5cf6);color:white;padding:20px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:22px">Eliminar cuenta</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${appName}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p>${greeting}</p>
+    <p>Has solicitado eliminar tu cuenta en <strong>${appName}</strong>. Esta acción es <strong>permanente e irreversible</strong>: se borrarán todos tus datos, publicaciones y actividad.</p>
+    <div style="text-align:center;margin:32px 0">
+      <a href="${deleteUrl}" style="display:inline-block;background:#dc2626;color:white;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600">
+        Confirmar eliminación
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:13px">Este enlace caduca en <strong>1 hora</strong>. Si no fuiste tú, ignora este email — tu cuenta seguirá activa.</p>
+    <p style="color:#9ca3af;font-size:11px;margin-top:24px;word-break:break-all">Si el botón no funciona, copia este enlace en tu navegador:<br>${deleteUrl}</p>
   </div>
 </div>`,
     });

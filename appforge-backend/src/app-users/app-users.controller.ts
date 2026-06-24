@@ -26,6 +26,7 @@ import { UpdateAppUserDto } from './dto/update-app-user.dto';
 import { ListAppUsersQueryDto } from './dto/list-app-users-query.dto';
 import { RedeemPasswordResetDto } from './dto/reset-password.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { RequestDeleteAccountDto } from './dto/request-delete-account.dto';
 
 @Controller('apps/:appId/users')
 export class AppUsersController {
@@ -77,6 +78,42 @@ export class AppUsersController {
     @Body() dto: RequestPasswordResetDto,
   ) {
     return this.appUsersService.requestPasswordResetByEmail(appId, dto.email);
+  }
+
+  // G2 Pieza 3 — public account deletion via email token. Patrón
+  // GET-carga / POST-muta INAMOVIBLE. request-delete envía el email;
+  // GET delete-account valida el token y devuelve solo email; POST
+  // delete-account ejecuta la eliminación. Sin auth JWT — el token raw
+  // del email es la credencial.
+
+  @Post('request-delete')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  requestAccountDeletion(
+    @Param('appId') appId: string,
+    @Body() dto: RequestDeleteAccountDto,
+  ) {
+    return this.appUsersService.requestAccountDeletion(appId, dto.email);
+  }
+
+  @Get('delete-account')
+  getDeleteAccountPageData(
+    @Param('appId') appId: string,
+    @Query('t') token: string,
+  ) {
+    return this.appUsersService.getDeleteAccountPageData(appId, token);
+  }
+
+  @Post('delete-account')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  confirmAccountDeletion(
+    @Param('appId') appId: string,
+    @Query('t') token: string,
+  ) {
+    return this.appUsersService.confirmAccountDeletion(appId, token);
   }
 
   // ──────────────────── Authenticated app-user ────────────────────

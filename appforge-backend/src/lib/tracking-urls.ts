@@ -88,3 +88,13 @@ export function resolvePrivacyUrl(
   if (privacy?.content) return privacyPageUrl(appId);
   return null;
 }
+
+// G2 Pieza 3 — public account deletion page. La URL pública del enlace
+// que viaja en el email. El token raw se incluye como query string `t`;
+// el server compara su SHA256 contra deleteToken en BD. Email NO en la
+// URL (a diferencia de passwordResetUrl): no hace falta — la query del
+// token ya identifica al usuario por findFirst(deleteToken+expiry).
+export function deleteAccountUrl(appId: string, token: string): string {
+  const params = new URLSearchParams({ t: token });
+  return `${builderUrl()}/app-user/delete-account/${appId}?${params}`;
+}
