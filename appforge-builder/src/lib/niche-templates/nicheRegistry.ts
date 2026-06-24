@@ -46,12 +46,11 @@ export const templateCategories: Array<{ id: string; label: string }> = [
   { id: 'professional', label: 'Profesionales' },
 ];
 
-/** Modules not yet implemented — shown as "coming soon" in UI */
-export const COMING_SOON_MODULES = [
-  'loyalty_card',
-  'social_wall',
-  'fan_wall',
-] as const;
+/** Modules not yet implemented — shown as "coming soon" in UI.
+ *  Gap 1 (2026-06-25): loyalty_card, social_wall y fan_wall integrados
+ *  en sus templates relevantes (commits 02138c1, 4914f26, 1884975).
+ *  Lista vacía → ningún módulo se marca como coming soon en la UI. */
+export const COMING_SOON_MODULES = [] as const;
 
 export function getTemplate(id: string): NicheTemplate | undefined {
   return nicheTemplates.find((t) => t.id === id);
