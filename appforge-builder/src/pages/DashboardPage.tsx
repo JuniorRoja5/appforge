@@ -3,27 +3,23 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTenantStore } from '../store/useTenantStore';
 import { AppCard } from '../components/AppCard';
-import { getApps, deleteApp, getSubscription, type SubscriptionInfo } from '../lib/api';
+import { getApps, deleteApp, getSubscription, type AppInfo, type SubscriptionInfo } from '../lib/api';
 import { MiniPhoneMockup } from '../components/MiniPhoneMockup';
 import { nicheTemplates } from '../lib/niche-templates/nicheRegistry';
-
-interface AppData {
-  id: string;
-  name: string;
-  slug: string;
-  status: 'DRAFT' | 'PUBLISHED' | 'BUILDING';
-  createdAt: string;
-  updatedAt: string;
-  appConfig?: Record<string, any> | null;
-}
+import { ActivationChecklistCard } from '../components/ActivationChecklistCard';
 
 export const DashboardPage: React.FC = () => {
-  const [apps, setApps] = useState<AppData[]>([]);
+  // G3-A: cambio AppData → AppInfo para que el state tenga acceso a los
+  // campos extra (designTokens, appConfig, pwaEnabled, pwaLastDeployedAt,
+  // tenantId) que necesita ActivationChecklistCard. AppCard sigue
+  // funcionando porque AppData es subset estructural de AppInfo.
+  const [apps, setApps] = useState<AppInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [sub, setSub] = useState<SubscriptionInfo | null>(null);
   const token = useAuthStore((s) => s.token);
+  const tenantId = useAuthStore((s) => s.user?.tenantId);
   // Banner de bienvenida del white-label: solo visible para reseller sin
   // configurar (nombre Y logo vacíos). Cero persistencia, cero flag en BD —
   // se auto-oculta en cuanto el reseller configura cualquiera de los dos.
@@ -165,6 +161,15 @@ export const DashboardPage: React.FC = () => {
             &times;
           </button>
         </div>
+      )}
+
+      {/* G3-A: checklist de activación. Solo aparece si hay al menos
+          1 app no dismissed y el tenantId está disponible. La card
+          decide internamente la app target (más reciente no dismissed)
+          y se auto-oculta cuando todas las elegibles están al 4/4
+          dismissed o no hay ninguna. */}
+      {!loading && apps.length > 0 && token && tenantId && (
+        <ActivationChecklistCard apps={apps} tenantId={tenantId} token={token} />
       )}
 
       {loading ? (
