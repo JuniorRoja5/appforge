@@ -5,11 +5,15 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 import { CreateFanPostDto } from './dto/create-fan-post.dto';
 
 @Injectable()
 export class FanWallService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   // ──────────────────── Public (runtime) ────────────────────
 
@@ -106,6 +110,14 @@ export class FanWallService {
         data: { resolved: true },
       }),
     ]);
+
+    // #90.A.3: cleanup del blob FUERA del $transaction array. Si una de
+    // las dos operaciones del array falla, Prisma rollbackea el lote
+    // entero y el await arriba propaga el throw — no llegamos aquí, blob
+    // preservado. Si commitea, el blob se borra. post.imageUrl capturado
+    // en findUnique de línea 93. FanPost.imageUrl es String OBLIGATORIO
+    // (schema:641) → array directo sin ternario.
+    await this.storageCleanup.deleteBlobs([post.imageUrl]);
   }
 
   // ──────────────────── Reports ────────────────────
@@ -167,6 +179,11 @@ export class FanWallService {
         data: { resolved: true },
       }),
     ]);
+
+    // #90.A.3: cleanup del blob FUERA del $transaction array (mismo
+    // patrón que deleteOwnPost, espejo en este servicio). post.imageUrl
+    // capturado en findUnique de línea 142. FanPost.imageUrl obligatorio.
+    await this.storageCleanup.deleteBlobs([post.imageUrl]);
   }
 
   async getStats(appId: string, tenantId?: string, role?: string) {

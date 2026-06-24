@@ -6,6 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageCleanupService } from '../storage/storage-cleanup.service';
 import { CreateSocialPostDto } from './dto/create-social-post.dto';
 import { CreateSocialCommentDto } from './dto/create-social-comment.dto';
 import { ReportContentDto } from './dto/report-content.dto';
@@ -16,7 +17,10 @@ import {
 
 @Injectable()
 export class SocialWallService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storageCleanup: StorageCleanupService,
+  ) {}
 
   // ──────────────────── Public (runtime) ────────────────────
 
@@ -184,6 +188,14 @@ export class SocialWallService {
         data: { resolved: true },
       });
     });
+
+    // #90.A.3: cleanup del blob FUERA del $transaction, después del await.
+    // Si la tx hizo rollback, el await arriba habría propagado el throw y
+    // no llegaríamos aquí — blob preservado. Si commiteó, el post ya no
+    // existe en DB y borramos su imagen. post.imageUrl capturado antes
+    // de la tx (línea 149), inmutable a rollbacks. SocialPost.imageUrl
+    // es String? (schema:599) → ternario.
+    await this.storageCleanup.deleteBlobs(post.imageUrl ? [post.imageUrl] : []);
   }
 
   async deleteOwnComment(commentId: string, appUserId: string) {
@@ -467,6 +479,11 @@ export class SocialWallService {
         data: { resolved: true },
       });
     });
+
+    // #90.A.3: cleanup del blob FUERA del $transaction (mismo patrón que
+    // deleteOwnPost, línea espejo). post.imageUrl capturado en findUnique
+    // de línea 421, inmutable a rollback. SocialPost.imageUrl es String?.
+    await this.storageCleanup.deleteBlobs(post.imageUrl ? [post.imageUrl] : []);
   }
 
   async moderateDeleteComment(
