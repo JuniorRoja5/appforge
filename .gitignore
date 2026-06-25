@@ -60,6 +60,14 @@ English version/
 .claude/
 documentacion proyecto.md
 templates/
+# Excepción: los niche-templates del builder son código del repo, no
+# basura. La regla `templates/` arriba bloqueaba `git add` sobre ellos
+# (forzaba `-f` en cada edición editorial). Los .blade.php legacy del
+# Siberian original que ocupaban `./templates/` raíz fueron borrados
+# del disco del VPS (2026-06-25) y ya no están trackeados — la regla
+# padre se queda como defensa por si algún día reaparece la carpeta.
+!appforge-builder/src/lib/niche-templates/templates/
+!appforge-builder/src/lib/niche-templates/templates/**
 seed-error.txt
 *-error.txt
 *-error.log
