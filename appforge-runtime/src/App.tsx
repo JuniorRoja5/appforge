@@ -9,6 +9,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { TermsScreen } from './components/TermsScreen';
 import { AppShell } from './components/AppShell';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 
 // Register all modules
 import './modules';
@@ -177,6 +178,17 @@ export const App: React.FC = () => {
         />
       )}
       {phase === 'ready' && <AppShell manifest={manifest} />}
+      {/* Bug 2: install banner. Solo cuando phase==='ready' — sin esto
+          aparecería sobre splash/onboarding/terms y romperia el flujo
+          de bienvenida. Internamente el componente decide visibilidad
+          (Android beforeinstallprompt / iOS Safari userAgent / dismiss
+          localStorage / standalone mode). */}
+      {phase === 'ready' && (
+        <PWAInstallBanner
+          appName={manifest.appName}
+          iconUrl={manifest.appConfig?.icon?.url}
+        />
+      )}
     </>
   );
 };
