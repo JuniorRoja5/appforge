@@ -147,7 +147,7 @@ const BrandingForm: React.FC<BrandingFormProps> = ({ branding, token }) => {
             disabled={saving}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Aparece en lugar de "AppForge Builder" en el menú superior.
+            Aparece en lugar de "CreaTuApp Builder" en el menú superior.
           </p>
         </div>
 
@@ -168,7 +168,7 @@ const BrandingForm: React.FC<BrandingFormProps> = ({ branding, token }) => {
             label=""
           />
           <p className="text-xs text-gray-500 mt-1">
-            Sustituye el "AF" del menú superior. PNG, JPG, WebP o SVG, hasta 2MB.
+            Sustituye el icono por defecto del menú superior. PNG, JPG, WebP o SVG, hasta 2MB.
           </p>
         </div>
 

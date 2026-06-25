@@ -53,7 +53,7 @@ export const TopBar: React.FC = () => {
             no nuestra marca. */}
         {!isWhiteLabel ? (
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-bold text-white shadow-sm ring-1 ring-primary/20">
-            AF
+            CT
           </div>
         ) : brandLogoUrl ? (
           <img
@@ -78,7 +78,7 @@ export const TopBar: React.FC = () => {
             isWhiteLabel true + sin brandName → sin texto (el badge sostiene). */}
         {!isWhiteLabel ? (
           <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">
-            AppForge <span className="text-gray-400 font-normal">Builder</span>
+            CreaTuApp <span className="text-gray-400 font-normal">Builder</span>
           </h1>
         ) : brandName ? (
           <h1 className="text-[17px] font-semibold tracking-tight text-gray-900">

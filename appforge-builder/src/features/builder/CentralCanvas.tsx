@@ -234,7 +234,7 @@ export const CentralCanvas: React.FC = () => {
                 </svg>
               </button>
               <span className="font-semibold text-[17px] tracking-tight text-gray-900" style={{ fontFamily }}>
-                {tabs.find((t) => t.index === safeActiveTab)?.label ?? 'AppForge'}
+                {tabs.find((t) => t.index === safeActiveTab)?.label ?? 'CreaTuApp'}
               </span>
               <div className="w-6" /> {/* Spacer for alignment */}
             </>
