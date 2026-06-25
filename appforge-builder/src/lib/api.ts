@@ -1,4 +1,36 @@
+import { useAuthStore } from '../store/useAuthStore';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Bug 3: central fetch wrapper que intercepta 401 y dispara logout +
+// redirect a /login. Sin esto, cuando el JWT caduca cada llamada lanza
+// Error con el mensaje crudo del backend (o un genérico) → la UI
+// muestra "Error al guardar" / "Error al cargar" en lugar de echar
+// al usuario a la pantalla de login. Centralizar la lógica aquí evita
+// duplicar el manejo en cada call-site.
+//
+// useAuthStore.getState() para acceder al store fuera de un componente
+// React — patrón estándar de Zustand. No causa circular dependency
+// porque useAuthStore no importa nada de api.ts.
+//
+// window.location.replace (no assign) — evita que el usuario pueda
+// hacer "back" al builder con su sesión rota; el /login reemplaza la
+// entrada en el history stack.
+async function apiFetch(
+  url: string | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.status === 401) {
+    useAuthStore.getState().logout();
+    window.location.replace('/login');
+    // Lanzar para cortar el flujo del caller — pero el redirect ya
+    // está en marcha, el throw es un fail-safe por si el caller no
+    // chequea response.ok.
+    throw new Error('Sesión expirada. Por favor, inicia sesión de nuevo.');
+  }
+  return response;
+}
 
 export const saveAppSchema = async (
   appId: string,
@@ -11,7 +43,7 @@ export const saveAppSchema = async (
     body.designTokens = designTokens;
   }
 
-  const response = await fetch(`${API_URL}/apps/${appId}/schema`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/schema`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -34,7 +66,7 @@ export const login = async (email: string, pass: string): Promise<{
     firstName: string | null; lastName: string | null; avatarUrl: string | null; company: string | null;
   };
 }> => {
-  const response = await fetch(`${API_URL}/auth/login`, {
+  const response = await apiFetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -57,7 +89,7 @@ export const googleLogin = async (idToken: string): Promise<{
     firstName: string | null; lastName: string | null; avatarUrl: string | null; company: string | null;
   };
 }> => {
-  const response = await fetch(`${API_URL}/auth/google`, {
+  const response = await apiFetch(`${API_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken }),
@@ -74,7 +106,7 @@ export const googleLogin = async (idToken: string): Promise<{
 // --- Forgot / Reset Password ---
 
 export const forgotPassword = async (email: string): Promise<{ message: string }> => {
-  const response = await fetch(`${API_URL}/auth/forgot-password`, {
+  const response = await apiFetch(`${API_URL}/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -91,7 +123,7 @@ export const resetPassword = async (
   token: string,
   newPassword: string,
 ): Promise<{ message: string }> => {
-  const response = await fetch(`${API_URL}/auth/reset-password`, {
+  const response = await apiFetch(`${API_URL}/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, token, newPassword }),
@@ -124,7 +156,7 @@ export interface AppInfo {
 }
 
 export const getApps = async (token: string): Promise<AppInfo[]> => {
-  const response = await fetch(`${API_URL}/apps`, {
+  const response = await apiFetch(`${API_URL}/apps`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener apps');
@@ -132,7 +164,7 @@ export const getApps = async (token: string): Promise<AppInfo[]> => {
 };
 
 export const getApp = async (appId: string, token: string): Promise<AppInfo> => {
-  const response = await fetch(`${API_URL}/apps/${appId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener app');
@@ -143,7 +175,7 @@ export const createApp = async (
   data: { name: string; slug: string; schema?: unknown; designTokens?: unknown },
   token: string,
 ): Promise<AppInfo> => {
-  const response = await fetch(`${API_URL}/apps`, {
+  const response = await apiFetch(`${API_URL}/apps`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -159,7 +191,7 @@ export const createApp = async (
 };
 
 export const deleteApp = async (appId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -178,7 +210,7 @@ export const deleteApp = async (appId: string, token: string): Promise<void> => 
 // dead", and the caller (handleExit) wraps this in a best-effort catch so
 // network failure cannot trap the user inside the impersonated UI.
 export const stopImpersonation = async (token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/admin/impersonation/stop`, {
+  const response = await apiFetch(`${API_URL}/admin/impersonation/stop`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -192,7 +224,7 @@ export const uploadFile = async (file: File, token: string) => {
   const formData = new FormData();
   formData.append('file', file);
   
-  const response = await fetch(`${API_URL}/upload/image`, {
+  const response = await apiFetch(`${API_URL}/upload/image`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -212,7 +244,7 @@ export const uploadDocument = async (file: File, token: string) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_URL}/upload/file`, {
+  const response = await apiFetch(`${API_URL}/upload/file`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -284,7 +316,7 @@ export interface AppConfig {
 }
 
 export const getAppConfig = async (appId: string, token: string): Promise<AppConfig> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/config`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/config`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener configuración');
@@ -294,7 +326,7 @@ export const getAppConfig = async (appId: string, token: string): Promise<AppCon
 export const saveAppConfig = async (appId: string, config: Partial<AppConfig>, token: string): Promise<unknown> => {
   // Separate SMTP from the rest (SMTP goes to its own endpoint)
   const { smtp, ...rest } = config;
-  const response = await fetch(`${API_URL}/apps/${appId}/config`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/config`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -311,7 +343,7 @@ export const saveSmtpConfig = async (
   smtp: { host: string; port: number; secure: boolean; username: string; password: string; fromEmail: string; fromName: string },
   token: string,
 ): Promise<unknown> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/config/smtp`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/config/smtp`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -328,7 +360,7 @@ export const testSmtpConfig = async (
   smtpData: { host: string; port: number; secure: boolean; username: string; password?: string; fromEmail: string; fromName: string },
   token: string,
 ): Promise<{ connectionOk: boolean; emailSent: boolean; error?: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/config/test-smtp`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/config/test-smtp`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -344,7 +376,7 @@ export const uploadAppIcon = async (file: File, token: string) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_URL}/upload/app-icon`, {
+  const response = await apiFetch(`${API_URL}/upload/app-icon`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
     body: formData,
@@ -373,7 +405,7 @@ export interface NewsArticle {
 }
 
 export const getNewsArticles = async (appId: string, token: string): Promise<NewsArticle[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/news`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/news`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener artículos');
@@ -385,7 +417,7 @@ export const createNewsArticle = async (
   data: { title: string; content: string; imageUrl?: string; videoUrl?: string; publishedAt?: string },
   token: string,
 ): Promise<NewsArticle> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/news`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/news`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -403,7 +435,7 @@ export const updateNewsArticle = async (
   data: { title?: string; content?: string; imageUrl?: string; videoUrl?: string; publishedAt?: string },
   token: string,
 ): Promise<NewsArticle> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/news/${articleId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/news/${articleId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -420,7 +452,7 @@ export const deleteNewsArticle = async (
   articleId: string,
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/news/${articleId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/news/${articleId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -438,7 +470,7 @@ export interface ContactSubmission {
 }
 
 export const getContactCaptcha = async (appId: string): Promise<{ token: string; expiresAt: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/contact/captcha`);
+  const response = await apiFetch(`${API_URL}/apps/${appId}/contact/captcha`);
   if (!response.ok) throw new Error('Error al obtener captcha');
   return response.json();
 };
@@ -447,7 +479,7 @@ export const submitContactForm = async (
   appId: string,
   body: { data: Record<string, unknown>; fileUrls?: string[]; captchaToken: string; honeypot?: string },
 ): Promise<ContactSubmission> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/contact/submit`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/contact/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -457,7 +489,7 @@ export const submitContactForm = async (
 };
 
 export const getContactSubmissions = async (appId: string, token: string): Promise<ContactSubmission[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/contact`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/contact`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener submissions');
@@ -465,7 +497,7 @@ export const getContactSubmissions = async (appId: string, token: string): Promi
 };
 
 export const deleteContactSubmission = async (appId: string, id: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/contact/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/contact/${id}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -486,7 +518,7 @@ export interface GalleryItem {
 }
 
 export const getGalleryItems = async (appId: string, token: string): Promise<GalleryItem[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/gallery`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/gallery`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener galería');
@@ -498,7 +530,7 @@ export const createGalleryItem = async (
   data: { imageUrl: string; title?: string; description?: string },
   token: string,
 ): Promise<GalleryItem> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/gallery`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/gallery`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -516,7 +548,7 @@ export const updateGalleryItem = async (
   data: { title?: string; description?: string; imageUrl?: string; order?: number },
   token: string,
 ): Promise<GalleryItem> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/gallery/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/gallery/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -529,7 +561,7 @@ export const updateGalleryItem = async (
 };
 
 export const deleteGalleryItem = async (appId: string, id: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/gallery/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/gallery/${id}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -541,7 +573,7 @@ export const reorderGalleryItems = async (
   items: { id: string; order: number }[],
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/gallery/reorder`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/gallery/reorder`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -574,7 +606,7 @@ export interface AppEvent {
 }
 
 export const getEvents = async (appId: string, token: string): Promise<AppEvent[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/events`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/events`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener eventos');
@@ -586,7 +618,7 @@ export const createEvent = async (
   data: { title: string; description?: string; imageUrl?: string; location?: string; eventDate: string; eventEndDate?: string; price?: string; ticketUrl?: string; ticketLabel?: string; category?: string; organizer?: string; contactInfo?: string },
   token: string,
 ): Promise<AppEvent> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/events`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/events`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -604,7 +636,7 @@ export const updateEvent = async (
   data: { title?: string; description?: string; imageUrl?: string; location?: string; eventDate?: string; eventEndDate?: string; price?: string; ticketUrl?: string; ticketLabel?: string; category?: string; organizer?: string; contactInfo?: string },
   token: string,
 ): Promise<AppEvent> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/events/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/events/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -617,7 +649,7 @@ export const updateEvent = async (
 };
 
 export const deleteEvent = async (appId: string, id: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/events/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/events/${id}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -653,7 +685,7 @@ export interface MenuCategory {
 }
 
 export const getMenuCategories = async (appId: string, token: string): Promise<MenuCategory[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener menú');
@@ -665,7 +697,7 @@ export const createMenuCategory = async (
   data: { name: string; description?: string; imageUrl?: string },
   token: string,
 ): Promise<MenuCategory> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -680,7 +712,7 @@ export const updateMenuCategory = async (
   data: { name?: string; description?: string; imageUrl?: string },
   token: string,
 ): Promise<MenuCategory> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -690,7 +722,7 @@ export const updateMenuCategory = async (
 };
 
 export const deleteMenuCategory = async (appId: string, categoryId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -702,7 +734,7 @@ export const reorderMenuCategories = async (
   items: { id: string; order: number }[],
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/reorder`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/reorder`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ items }),
@@ -716,7 +748,7 @@ export const createMenuItem = async (
   data: { name: string; description?: string; price: number; imageUrl?: string; allergens?: string[]; available?: boolean },
   token: string,
 ): Promise<MenuItemAPI> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -732,7 +764,7 @@ export const updateMenuItem = async (
   data: { name?: string; description?: string; price?: number; imageUrl?: string; allergens?: string[]; available?: boolean },
   token: string,
 ): Promise<MenuItemAPI> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/${itemId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/${itemId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -747,7 +779,7 @@ export const deleteMenuItem = async (
   itemId: string,
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/${itemId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/${itemId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -760,7 +792,7 @@ export const reorderMenuItems = async (
   items: { id: string; order: number }[],
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/reorder`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/menu/${categoryId}/items/reorder`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ items }),
@@ -790,7 +822,7 @@ export interface DiscountCoupon {
 }
 
 export const getDiscountCoupons = async (appId: string, token: string): Promise<DiscountCoupon[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener cupones');
@@ -802,7 +834,7 @@ export const createDiscountCoupon = async (
   data: { title: string; code: string; discountType: 'PERCENTAGE' | 'FIXED_AMOUNT'; discountValue: number; description?: string; imageUrl?: string; conditions?: string; maxUses?: number; validFrom?: string; validUntil?: string },
   token: string,
 ): Promise<DiscountCoupon> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -817,7 +849,7 @@ export const updateDiscountCoupon = async (
   data: { title?: string; code?: string; discountType?: 'PERCENTAGE' | 'FIXED_AMOUNT'; discountValue?: number; description?: string; imageUrl?: string; conditions?: string; maxUses?: number; validFrom?: string; validUntil?: string; isActive?: boolean },
   token: string,
 ): Promise<DiscountCoupon> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -827,7 +859,7 @@ export const updateDiscountCoupon = async (
 };
 
 export const deleteDiscountCoupon = async (appId: string, id: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/${id}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/${id}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -835,7 +867,7 @@ export const deleteDiscountCoupon = async (appId: string, id: string, token: str
 };
 
 export const generateCouponCode = async (appId: string, token: string): Promise<{ code: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/generate-code`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/generate-code`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -873,7 +905,7 @@ export interface CatalogCollection {
 }
 
 export const getCatalogCollections = async (appId: string, token: string): Promise<CatalogCollection[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener catálogo');
@@ -885,7 +917,7 @@ export const createCatalogCollection = async (
   data: { name: string; description?: string; imageUrl?: string },
   token: string,
 ): Promise<CatalogCollection> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -900,7 +932,7 @@ export const updateCatalogCollection = async (
   data: { name?: string; description?: string; imageUrl?: string },
   token: string,
 ): Promise<CatalogCollection> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -910,7 +942,7 @@ export const updateCatalogCollection = async (
 };
 
 export const deleteCatalogCollection = async (appId: string, collectionId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -922,7 +954,7 @@ export const reorderCatalogCollections = async (
   items: { id: string; order: number }[],
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/reorder`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/reorder`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ items }),
@@ -936,7 +968,7 @@ export const createCatalogProduct = async (
   data: { name: string; price: number; description?: string; comparePrice?: number; imageUrls?: string[]; inStock?: boolean; tags?: string[] },
   token: string,
 ): Promise<CatalogProduct> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -952,7 +984,7 @@ export const updateCatalogProduct = async (
   data: { name?: string; price?: number; description?: string; comparePrice?: number; imageUrls?: string[]; inStock?: boolean; tags?: string[] },
   token: string,
 ): Promise<CatalogProduct> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/${productId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/${productId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -967,7 +999,7 @@ export const deleteCatalogProduct = async (
   productId: string,
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/${productId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/${productId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -980,7 +1012,7 @@ export const reorderCatalogProducts = async (
   items: { id: string; order: number }[],
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/reorder`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/catalog/${collectionId}/products/reorder`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ items }),
@@ -1010,7 +1042,7 @@ export interface UserProfile {
 }
 
 export const getProfile = async (token: string): Promise<UserProfile> => {
-  const response = await fetch(`${API_URL}/users/me`, {
+  const response = await apiFetch(`${API_URL}/users/me`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener perfil');
@@ -1021,7 +1053,7 @@ export const updateProfile = async (
   data: Partial<Omit<UserProfile, 'id' | 'email' | 'role' | 'tenantId' | 'createdAt'>>,
   token: string,
 ): Promise<UserProfile> => {
-  const response = await fetch(`${API_URL}/users/me`, {
+  const response = await apiFetch(`${API_URL}/users/me`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1040,7 +1072,7 @@ export const changePassword = async (
   data: { currentPassword: string; newPassword: string },
   token: string,
 ): Promise<void> => {
-  const response = await fetch(`${API_URL}/users/me/password`, {
+  const response = await apiFetch(`${API_URL}/users/me/password`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1055,7 +1087,7 @@ export const changePassword = async (
 };
 
 export const requestAccountDeletion = async (password: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/users/me/request-deletion`, {
+  const response = await apiFetch(`${API_URL}/users/me/request-deletion`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1073,7 +1105,7 @@ export const uploadAvatar = async (file: File, token: string) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_URL}/upload/avatar`, {
+  const response = await apiFetch(`${API_URL}/upload/avatar`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
     body: formData,
@@ -1110,7 +1142,7 @@ export interface BookingRecord {
 }
 
 export const getAvailableSlots = async (appId: string, date: string): Promise<string[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/bookings/available?date=${date}`);
+  const response = await apiFetch(`${API_URL}/apps/${appId}/bookings/available?date=${date}`);
   if (!response.ok) throw new Error('Error al obtener slots disponibles');
   return response.json();
 };
@@ -1119,7 +1151,7 @@ export const createBooking = async (
   appId: string,
   data: { date: string; timeSlot: string; formData: Record<string, unknown> },
 ): Promise<BookingRecord> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/bookings`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/bookings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -1140,7 +1172,7 @@ export const getBookings = async (
   if (filters?.date) params.set('date', filters.date);
   if (filters?.status) params.set('status', filters.status);
   const qs = params.toString();
-  const response = await fetch(`${API_URL}/apps/${appId}/bookings${qs ? `?${qs}` : ''}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/bookings${qs ? `?${qs}` : ''}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener reservas');
@@ -1153,7 +1185,7 @@ export const updateBookingStatus = async (
   status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW',
   token: string,
 ): Promise<BookingRecord> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/bookings/${bookingId}/status`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/bookings/${bookingId}/status`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -1166,7 +1198,7 @@ export const updateBookingStatus = async (
 };
 
 export const deleteBooking = async (appId: string, bookingId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/bookings/${bookingId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/bookings/${bookingId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1198,7 +1230,7 @@ export const getPublicBooking = async (
   trackingToken: string,
 ): Promise<PublicBookingData> => {
   const url = `${API_URL}/apps/${appId}/bookings/public/${bookingId}?t=${encodeURIComponent(trackingToken)}`;
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   if (response.status === 404) throw new Error('Reserva no encontrada o enlace inválido');
   if (!response.ok) throw new Error('Error al cargar la reserva');
   return response.json();
@@ -1210,7 +1242,7 @@ export const cancelPublicBooking = async (
   trackingToken: string,
 ): Promise<{ ok: boolean; status: string }> => {
   const url = `${API_URL}/apps/${appId}/bookings/public/${bookingId}/cancel?t=${encodeURIComponent(trackingToken)}`;
-  const response = await fetch(url, { method: 'POST' });
+  const response = await apiFetch(url, { method: 'POST' });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.message || 'Error al cancelar la reserva');
@@ -1240,7 +1272,7 @@ export const requestBuild = async (
   token: string,
   buildType: 'debug' | 'release' | 'aab' | 'ios-export' | 'pwa' = 'debug',
 ): Promise<AppBuild> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/builds`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/builds`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ buildType }),
@@ -1253,7 +1285,7 @@ export const requestBuild = async (
 };
 
 export const getBuilds = async (appId: string, token: string): Promise<AppBuild[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/builds`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/builds`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener builds');
@@ -1261,7 +1293,7 @@ export const getBuilds = async (appId: string, token: string): Promise<AppBuild[
 };
 
 export const getBuild = async (appId: string, buildId: string, token: string): Promise<AppBuild> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/builds/${buildId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/builds/${buildId}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener build');
@@ -1269,7 +1301,7 @@ export const getBuild = async (appId: string, buildId: string, token: string): P
 };
 
 export const getLatestBuild = async (appId: string, token: string): Promise<AppBuild | null> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/builds/latest`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/builds/latest`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener último build');
@@ -1294,7 +1326,7 @@ export interface KeystoreInfo {
 }
 
 export const getKeystoreInfo = async (appId: string, token: string): Promise<KeystoreInfo> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/keystore/info`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/keystore/info`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener info de keystore');
@@ -1343,7 +1375,7 @@ export interface SubscriptionInfo {
 }
 
 export const getSubscription = async (token: string): Promise<SubscriptionInfo> => {
-  const response = await fetch(`${API_URL}/subscription`, {
+  const response = await apiFetch(`${API_URL}/subscription`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener suscripción');
@@ -1351,7 +1383,7 @@ export const getSubscription = async (token: string): Promise<SubscriptionInfo> 
 };
 
 export const getSubscriptionPlans = async (token: string): Promise<SubscriptionPlan[]> => {
-  const response = await fetch(`${API_URL}/subscription/plans`, {
+  const response = await apiFetch(`${API_URL}/subscription/plans`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener planes');
@@ -1361,7 +1393,7 @@ export const getSubscriptionPlans = async (token: string): Promise<SubscriptionP
 // ─── Stripe Billing ─────────────────────────────────────────────────────────
 
 export const createCheckoutSession = async (planType: string, token: string): Promise<{ url: string }> => {
-  const response = await fetch(`${API_URL}/stripe/create-checkout-session`, {
+  const response = await apiFetch(`${API_URL}/stripe/create-checkout-session`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1377,7 +1409,7 @@ export const createCheckoutSession = async (planType: string, token: string): Pr
 };
 
 export const cancelStripeSubscription = async (token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/stripe/cancel`, {
+  const response = await apiFetch(`${API_URL}/stripe/cancel`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1388,7 +1420,7 @@ export const cancelStripeSubscription = async (token: string): Promise<void> => 
 };
 
 export const createPortalSession = async (token: string): Promise<{ url: string }> => {
-  const response = await fetch(`${API_URL}/stripe/portal`, {
+  const response = await apiFetch(`${API_URL}/stripe/portal`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1434,7 +1466,7 @@ export const getInvoices = async (token: string, opts: ListInvoicesOpts = {}): P
   if (opts.createdAfter) params.set('createdAfter', opts.createdAfter);
   if (opts.createdBefore) params.set('createdBefore', opts.createdBefore);
   const qs = params.toString();
-  const response = await fetch(`${API_URL}/stripe/invoices${qs ? '?' + qs : ''}`, {
+  const response = await apiFetch(`${API_URL}/stripe/invoices${qs ? '?' + qs : ''}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -1461,7 +1493,7 @@ export interface PushNotificationItem {
 }
 
 export const getPushNotifications = async (appId: string, token: string): Promise<PushNotificationItem[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/push`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/push`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener notificaciones');
@@ -1473,7 +1505,7 @@ export const sendPushNotification = async (
   data: { title: string; body: string; imageUrl?: string },
   token: string,
 ): Promise<PushNotificationItem> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/push/send`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/push/send`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1489,7 +1521,7 @@ export const sendPushNotification = async (
 };
 
 export const getPushDeviceCount = async (appId: string, token: string): Promise<number> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/push/devices/count`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/push/devices/count`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener conteo de dispositivos');
@@ -1502,7 +1534,7 @@ export const getPushStats = async (appId: string, token: string): Promise<{
   notificationsSent: number;
   lastSentAt: string | null;
 }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/push/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/push/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas push');
@@ -1543,7 +1575,7 @@ export const getAppUsers = async (
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   const qsStr = qs.toString();
-  const response = await fetch(`${API_URL}/apps/${appId}/users${qsStr ? `?${qsStr}` : ''}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users${qsStr ? `?${qsStr}` : ''}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener usuarios de la app');
@@ -1551,7 +1583,7 @@ export const getAppUsers = async (
 };
 
 export const getAppUserStats = async (appId: string, token: string): Promise<{ total: number; active: number; banned: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas de usuarios');
@@ -1559,7 +1591,7 @@ export const getAppUserStats = async (appId: string, token: string): Promise<{ t
 };
 
 export const banAppUser = async (appId: string, userId: string, token: string): Promise<AppUserItem> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/${userId}/ban`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/${userId}/ban`, {
     method: 'PUT',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1568,7 +1600,7 @@ export const banAppUser = async (appId: string, userId: string, token: string): 
 };
 
 export const unbanAppUser = async (appId: string, userId: string, token: string): Promise<AppUserItem> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/${userId}/unban`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/${userId}/unban`, {
     method: 'PUT',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1577,7 +1609,7 @@ export const unbanAppUser = async (appId: string, userId: string, token: string)
 };
 
 export const deleteAppUser = async (appId: string, userId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/${userId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/${userId}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1600,7 +1632,7 @@ export interface AppUserDetail extends AppUserItem {
 }
 
 export const getAppUserDetail = async (appId: string, userId: string, token: string): Promise<AppUserDetail> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/${userId}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/${userId}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener detalle del usuario');
@@ -1610,7 +1642,7 @@ export const getAppUserDetail = async (appId: string, userId: string, token: str
 export const resetAppUserPassword = async (
   appId: string, userId: string, token: string,
 ): Promise<{ resetToken: string; expiresAt: string; emailSent: boolean }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/${userId}/reset-password`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/${userId}/reset-password`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1619,7 +1651,7 @@ export const resetAppUserPassword = async (
 };
 
 export const exportAppUsersCsv = async (appId: string, token: string): Promise<Blob> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/users/export/csv`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/users/export/csv`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al exportar usuarios');
@@ -1662,7 +1694,7 @@ export interface ContentReportItem {
 export const getSocialPosts = async (
   appId: string, token: string, page = 1,
 ): Promise<{ data: SocialPostItem[]; total: number; page: number; limit: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/posts?page=${page}&limit=10`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/social/posts?page=${page}&limit=10`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener posts del social wall');
@@ -1672,7 +1704,7 @@ export const getSocialPosts = async (
 export const getSocialWallStats = async (
   appId: string, token: string,
 ): Promise<{ totalPosts: number; totalComments: number; totalLikes: number; pendingReports: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/social/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas del social wall');
@@ -1687,7 +1719,7 @@ export const getSocialReports = async (
   const qs = targetTypes && targetTypes.length > 0
     ? `?targetType=${encodeURIComponent(targetTypes.join(','))}`
     : '';
-  const response = await fetch(`${API_URL}/apps/${appId}/social/reports${qs}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/social/reports${qs}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener reportes');
@@ -1695,7 +1727,7 @@ export const getSocialReports = async (
 };
 
 export const resolveSocialReport = async (appId: string, reportId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/reports/${reportId}/resolve`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/social/reports/${reportId}/resolve`, {
     method: 'PUT',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1703,7 +1735,7 @@ export const resolveSocialReport = async (appId: string, reportId: string, token
 };
 
 export const deleteSocialPost = async (appId: string, postId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/social/posts/${postId}/moderate`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/social/posts/${postId}/moderate`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1715,7 +1747,7 @@ export const moderateDeleteSocialComment = async (
   commentId: string,
   token: string,
 ): Promise<void> => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_URL}/apps/${appId}/social/comments/${commentId}/moderate`,
     {
       method: 'DELETE',
@@ -1741,7 +1773,7 @@ export interface FanPostItem {
 export const getFanPosts = async (
   appId: string, token: string, page = 1,
 ): Promise<{ data: FanPostItem[]; total: number; page: number; limit: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/fan-wall/posts?page=${page}&limit=12`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/fan-wall/posts?page=${page}&limit=12`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener posts del fan wall');
@@ -1751,7 +1783,7 @@ export const getFanPosts = async (
 export const getFanWallStats = async (
   appId: string, token: string,
 ): Promise<{ totalPosts: number; totalLikes: number; pendingReports: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/fan-wall/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/fan-wall/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas del fan wall');
@@ -1759,7 +1791,7 @@ export const getFanWallStats = async (
 };
 
 export const deleteFanPost = async (appId: string, postId: string, token: string): Promise<void> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/fan-wall/posts/${postId}/moderate`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/fan-wall/posts/${postId}/moderate`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -1796,7 +1828,7 @@ export interface RetentionData {
 export const getAppAnalyticsOverview = async (
   appId: string, period: string, token: string,
 ): Promise<AnalyticsOverview> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/analytics/overview?period=${period}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/analytics/overview?period=${period}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener analíticas');
@@ -1806,7 +1838,7 @@ export const getAppAnalyticsOverview = async (
 export const getAppAnalyticsModules = async (
   appId: string, period: string, token: string,
 ): Promise<ModuleRanking[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/analytics/modules?period=${period}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/analytics/modules?period=${period}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener ranking de módulos');
@@ -1816,7 +1848,7 @@ export const getAppAnalyticsModules = async (
 export const getAppAnalyticsDevices = async (
   appId: string, period: string, token: string,
 ): Promise<DeviceBreakdown> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/analytics/devices?period=${period}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/analytics/devices?period=${period}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener dispositivos');
@@ -1826,7 +1858,7 @@ export const getAppAnalyticsDevices = async (
 export const getAppAnalyticsRetention = async (
   appId: string, period: string, token: string,
 ): Promise<RetentionData> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/analytics/retention?period=${period}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/analytics/retention?period=${period}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener retención');
@@ -1840,7 +1872,7 @@ export const setupLoyalty = async (
   data: { totalStamps: number; reward: string; rewardDescription?: string; pin: string },
   token: string,
 ): Promise<{ id: string; appId: string; totalStamps: number; reward: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/setup`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/setup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(data),
@@ -1855,7 +1887,7 @@ export const setupLoyalty = async (
 export const getLoyaltyConfig = async (
   appId: string,
 ): Promise<{ id: string; totalStamps: number; reward: string; rewardDescription?: string } | null> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/config`);
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/config`);
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Error al obtener configuración de lealtad');
   return response.json();
@@ -1864,7 +1896,7 @@ export const getLoyaltyConfig = async (
 export const getLoyaltyStats = async (
   appId: string, token: string,
 ): Promise<{ activeUsers: number; stampsThisMonth: number; totalRedemptions: number }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas de lealtad');
@@ -1875,7 +1907,7 @@ export const stampLoyalty = async (
   appId: string,
   data: { appUserEmail: string; pin: string },
 ): Promise<{ stampsCollected: number; totalStamps: number; canRedeem: boolean }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/stamp`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/stamp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -1923,7 +1955,7 @@ export const getLoyaltyUsers = async (
   appId: string,
   token: string,
 ): Promise<LoyaltyUserCardItem[] | null> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/users`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/users`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (response.status === 404) return null;
@@ -1935,7 +1967,7 @@ export const getLoyaltyRedemptions = async (
   appId: string,
   token: string,
 ): Promise<LoyaltyRedemptionItem[] | null> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/loyalty/redemptions`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/loyalty/redemptions`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (response.status === 404) return null;
@@ -1950,7 +1982,7 @@ export const redeemCoupon = async (
   couponId: string,
   data?: { appUserId?: string; deviceId?: string },
 ): Promise<{ redemption: { id: string }; currentUses: number; maxUses: number | null }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/${couponId}/redeem`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/${couponId}/redeem`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data || {}),
@@ -1974,7 +2006,7 @@ export interface CouponRedemptionItem {
 export const getCouponRedemptions = async (
   appId: string, couponId: string, token: string,
 ): Promise<CouponRedemptionItem[]> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/${couponId}/redemptions`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/${couponId}/redemptions`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener canjes');
@@ -1984,7 +2016,7 @@ export const getCouponRedemptions = async (
 export const resetCouponRedemptions = async (
   appId: string, couponId: string, token: string,
 ): Promise<{ message: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/${couponId}/reset-redemptions`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/${couponId}/reset-redemptions`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}` },
   });
@@ -2004,7 +2036,7 @@ export const getCouponMerchantConfigStatus = async (
   appId: string,
   token: string,
 ): Promise<CouponMerchantConfigStatus> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener configuración del comerciante');
@@ -2016,7 +2048,7 @@ export const setupCouponMerchantConfig = async (
   pin: string,
   token: string,
 ): Promise<{ id: string; appId: string; createdAt: string; updatedAt: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/merchant-config`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ pin }),
@@ -2036,7 +2068,7 @@ export interface CouponMerchantPublicInfo {
 export const getCouponMerchantPublicInfo = async (
   appId: string,
 ): Promise<CouponMerchantPublicInfo | null> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-info`);
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/merchant-info`);
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Error al obtener info del negocio');
   return response.json();
@@ -2061,7 +2093,7 @@ export const merchantRedeemCoupon = async (
   appId: string,
   data: { code: string; pin: string; appUserEmail?: string },
 ): Promise<MerchantRedeemResult> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/coupons/merchant-redeem`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/coupons/merchant-redeem`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -2101,7 +2133,7 @@ export const createOrder = async (
   appId: string,
   data: { customerName: string; customerPhone?: string; customerEmail?: string; customerNotes?: string; items: { productId: string; quantity: number }[] },
 ): Promise<OrderData> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/orders`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -2114,7 +2146,7 @@ export const createOrder = async (
 };
 
 export const getOrder = async (appId: string, orderId: string): Promise<OrderData> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/orders/${orderId}`);
+  const response = await apiFetch(`${API_URL}/apps/${appId}/orders/${orderId}`);
   if (!response.ok) throw new Error('Error al obtener pedido');
   return response.json();
 };
@@ -2125,7 +2157,7 @@ export const getOrders = async (
   const qs = new URLSearchParams();
   if (params?.status) qs.set('status', params.status);
   if (params?.page) qs.set('page', String(params.page));
-  const response = await fetch(`${API_URL}/apps/${appId}/orders?${qs.toString()}`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/orders?${qs.toString()}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener pedidos');
@@ -2135,7 +2167,7 @@ export const getOrders = async (
 export const updateOrderStatus = async (
   appId: string, orderId: string, status: string, token: string,
 ): Promise<OrderData> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/orders/${orderId}/status`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/orders/${orderId}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ status }),
@@ -2150,7 +2182,7 @@ export const updateOrderStatus = async (
 export const getOrderStats = async (
   appId: string, token: string,
 ): Promise<{ pendingCount: number; todayCount: number; totalRevenue: number; currency: string }> => {
-  const response = await fetch(`${API_URL}/apps/${appId}/orders/stats`, {
+  const response = await apiFetch(`${API_URL}/apps/${appId}/orders/stats`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Error al obtener estadísticas de pedidos');
@@ -2177,7 +2209,7 @@ export const getPublicOrder = async (
   trackingToken: string,
 ): Promise<PublicOrderData> => {
   const url = `${API_URL}/apps/${appId}/orders/public/${orderId}?t=${encodeURIComponent(trackingToken)}`;
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   if (response.status === 404) throw new Error('Pedido no encontrado o enlace inválido');
   if (!response.ok) throw new Error('Error al cargar el pedido');
   return response.json();
@@ -2223,7 +2255,7 @@ export interface UpdateTenantBrandingPayload {
 export const getMyBranding = async (
   token: string,
 ): Promise<TenantBranding> => {
-  const response = await fetch(`${API_URL}/tenants/me/branding`, {
+  const response = await apiFetch(`${API_URL}/tenants/me/branding`, {
     headers: { 'Authorization': `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -2237,7 +2269,7 @@ export const updateMyBranding = async (
   payload: UpdateTenantBrandingPayload,
   token: string,
 ): Promise<TenantBranding> => {
-  const response = await fetch(`${API_URL}/tenants/me/branding`, {
+  const response = await apiFetch(`${API_URL}/tenants/me/branding`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
