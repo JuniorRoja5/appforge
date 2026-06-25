@@ -22,6 +22,12 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         WORKER_MODE: 'separate',
+        // Simetría con ecosystem.prod.config.js (el activo). Aunque
+        // este fichero secundario no se use hoy en prod, alguien podría
+        // arrancar PM2 desde aquí — sin estas envs, el worker que
+        // resulte no encontraría el Android SDK.
+        ANDROID_HOME: '/opt/android-sdk',
+        ANDROID_SDK_ROOT: '/opt/android-sdk',
       },
       max_memory_restart: '512M',
     },
@@ -31,6 +37,8 @@ module.exports = {
       instances: 1,
       env: {
         NODE_ENV: 'production',
+        ANDROID_HOME: '/opt/android-sdk',
+        ANDROID_SDK_ROOT: '/opt/android-sdk',
       },
       // Workers can use more memory during Gradle builds
       max_memory_restart: '1G',

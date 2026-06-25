@@ -27,6 +27,11 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000,
         WORKER_MODE: 'separate', // No procesa builds aquí
+        // ANDROID_HOME/ANDROID_SDK_ROOT: fijos aquí para que sobrevivan
+        // a reboots y pm2 kill. Antes se heredaban del shell del bootstrap
+        // y se perdían en cualquier reinicio (ver cuerpo del commit).
+        ANDROID_HOME: '/opt/android-sdk',
+        ANDROID_SDK_ROOT: '/opt/android-sdk',
       },
       
       // Variables de entorno desde archivo
@@ -79,6 +84,12 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         WORKER_MODE: 'separate', // Este sí procesa builds
+        // ANDROID_HOME/ANDROID_SDK_ROOT: imprescindibles aquí porque
+        // este proceso es quien invoca el Android SDK. findAndroidSdk()
+        // del processor solo mira estas dos envs (y un fallback en HOME);
+        // sin ellas, todo build Android muere con "Android SDK not found".
+        ANDROID_HOME: '/opt/android-sdk',
+        ANDROID_SDK_ROOT: '/opt/android-sdk',
       },
 
       // Variables de entorno desde archivo
