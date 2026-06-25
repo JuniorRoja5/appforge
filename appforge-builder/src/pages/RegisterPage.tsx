@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { googleLogin } from '../lib/api';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import { normalizePlanParam, destinationForPlan } from '../lib/plan-utils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -15,6 +16,12 @@ export const RegisterPage: React.FC = () => {
 
   const setAuth = useAuthStore((s) => s.setAuth);
   const navigate = useNavigate();
+  // Deep-link plan: la landing puede enviarnos `?plan=pro` etc. para que
+  // tras el registro saltemos directo al checkout de Stripe en lugar del
+  // dashboard. Sin param o param inválido → flujo default (/dashboard).
+  const [searchParams] = useSearchParams();
+  const plan = normalizePlanParam(searchParams.get('plan'));
+  const postAuthDestination = destinationForPlan(plan, '/dashboard');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +53,7 @@ export const RegisterPage: React.FC = () => {
 
       const data = await response.json();
       setAuth(data.access_token, data.user);
-      navigate('/dashboard', { replace: true });
+      navigate(postAuthDestination, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al registrar. Inténtalo de nuevo.');
     } finally {
@@ -139,7 +146,7 @@ export const RegisterPage: React.FC = () => {
                 try {
                   const response = await googleLogin(credentialResponse.credential);
                   setAuth(response.access_token, response.user);
-                  navigate('/dashboard', { replace: true });
+                  navigate(postAuthDestination, { replace: true });
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Error con Google login');
                 } finally {

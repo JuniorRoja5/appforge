@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { login, googleLogin } from '../lib/api';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
+import { normalizePlanParam, destinationForPlan } from '../lib/plan-utils';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,7 +15,22 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+  // Deep-link plan + preservación de `from` de ProtectedRoute. Prioridad:
+  //   1. `from` real (ProtectedRoute redirige aquí guardando location). Si
+  //      el usuario intentaba acceder a, por ejemplo, /apps/:id/edit
+  //      deslogueado, ese path es lo que quería — lo respetamos.
+  //   2. Plan deep-link (?plan=pro de la landing) → /pricing?checkout=pro.
+  //   3. /dashboard default.
+  // Excepción: si el `from` es el propio /dashboard (default), tratamos
+  // como ausente para que el plan deep-link no quede tapado por el
+  // default fallback de ProtectedRoute.
+  const fromPath = (location.state as { from?: { pathname: string } })?.from?.pathname;
+  const [searchParams] = useSearchParams();
+  const plan = normalizePlanParam(searchParams.get('plan'));
+  const destination =
+    fromPath && fromPath !== '/dashboard'
+      ? fromPath
+      : destinationForPlan(plan, '/dashboard');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +40,7 @@ export const LoginPage: React.FC = () => {
     try {
       const response = await login(email, password);
       setAuth(response.access_token, response.user);
-      navigate(from, { replace: true });
+      navigate(destination, { replace: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
       if (msg.includes('eliminación') || msg.includes('suspendida')) {
@@ -112,7 +128,7 @@ export const LoginPage: React.FC = () => {
                 try {
                   const response = await googleLogin(credentialResponse.credential);
                   setAuth(response.access_token, response.user);
-                  navigate(from, { replace: true });
+                  navigate(destination, { replace: true });
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Error con Google login');
                 } finally {

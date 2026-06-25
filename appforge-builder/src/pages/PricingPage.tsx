@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import {
   getSubscriptionPlans,
@@ -22,6 +23,12 @@ export const PricingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // Deep-link de la landing: `/pricing?checkout=pro` dispara
+  // automáticamente Stripe checkout del plan indicado tras cargar
+  // subscriptions. searchParams + ref para evitar doble disparo en
+  // StrictMode (el effect corre 2 veces en dev).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const checkoutFiredRef = useRef(false);
 
   useEffect(() => {
     Promise.all([
@@ -49,6 +56,45 @@ export const PricingPage: React.FC = () => {
       setCheckingOut(null);
     }
   };
+
+  // Auto-checkout desde deep-link de la landing. Se ejecuta cuando los
+  // plans + subscription terminaron de cargar (loading=false). Limpia
+  // el param SIEMPRE (no solo cuando dispara): así el back-button no
+  // re-loopea, y un downgrade futuro desde el portal no re-evalúa un
+  // param viejo como upgrade fantasma. El ref evita el doble disparo
+  // de StrictMode entre la limpieza del param y el handleCheckout.
+  useEffect(() => {
+    if (loading || checkoutFiredRef.current) return;
+    const checkoutParam = searchParams.get('checkout');
+    if (!checkoutParam) return;
+
+    // Limpieza incondicional ANTES de evaluar (consume el param una
+    // sola vez). El re-trigger del effect por searchParams cambia ve
+    // checkoutParam=null → early return.
+    setSearchParams({}, { replace: true });
+
+    const targetPlan = plans.find(
+      (p) => p.planType.toLowerCase() === checkoutParam.toLowerCase(),
+    );
+    const currentPlanType = subscription?.subscription?.plan?.planType;
+
+    // Razones para ignorar (silenciosas, sin error visible):
+    //  - Param desconocido (no matchea ningún plan del backend).
+    //  - Es el plan actual del usuario (sería un no-op carísimo).
+    //  - FREE: no tiene Stripe checkout.
+    //  - Ya hay otro checkout en marcha.
+    if (!targetPlan) return;
+    if (targetPlan.planType === currentPlanType) return;
+    if (targetPlan.planType === 'FREE') return;
+    if (checkingOut) return;
+
+    checkoutFiredRef.current = true;
+    handleCheckout(targetPlan.planType);
+    // handleCheckout intencionadamente fuera de deps: no es estable
+    // (closure cada render) y solo nos importa el "snapshot" del primer
+    // run válido — el ref garantiza single-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, plans, subscription, searchParams, setSearchParams, checkingOut]);
 
   const handlePortal = async () => {
     try {
