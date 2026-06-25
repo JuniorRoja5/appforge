@@ -146,7 +146,7 @@ const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) 
         <div
           className={`${responsiveHtmlClass} text-sm`}
           style={{ color: 'var(--color-text-primary)' }}
-          dangerouslySetInnerHTML={{ __html: sanitize(selected.content) }}
+          dangerouslySetInnerHTML={{ __html: sanitize(selected.content).replace(/&nbsp;/g, ' ') }}
         />
         {/* Video embed */}
         {(selected as any).videoUrl && <VideoEmbed url={(selected as any).videoUrl} />}

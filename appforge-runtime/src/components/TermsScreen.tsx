@@ -128,7 +128,7 @@ export const TermsScreen: React.FC<Props> = ({ content, url, onAccept }) => {
           <div
             className={responsiveHtmlClass}
             style={{ color: 'var(--color-text-primary, #374151)', fontSize: 13, lineHeight: 1.7 }}
-            dangerouslySetInnerHTML={{ __html: sanitize(content) }}
+            dangerouslySetInnerHTML={{ __html: sanitize(content).replace(/&nbsp;/g, ' ') }}
           />
         ) : null /* App.tsx guard evita este branch — no debería alcanzarse */}
       </div>

@@ -15,7 +15,7 @@ const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }
       <div
         className={`${responsiveHtmlClass} mx-auto`}
         style={{ color: 'var(--color-text-primary)', lineHeight: '1.6', maxWidth: widthMap[maxWidth] ?? '100%' }}
-        dangerouslySetInnerHTML={{ __html: sanitize(content) }}
+        dangerouslySetInnerHTML={{ __html: sanitize(content).replace(/&nbsp;/g, ' ') }}
       />
     </div>
   );
