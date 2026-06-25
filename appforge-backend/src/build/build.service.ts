@@ -10,7 +10,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { BuildType } from '@prisma/client';
-import { requiresAndroidConfig } from './lib/build-type-traits';
+import { requiresAndroidConfig, requiresLegalDocs } from './lib/build-type-traits';
 import { createHash } from 'crypto';
 import stableStringify from 'json-stable-stringify';
 
@@ -89,6 +89,26 @@ export class BuildService {
     // sea explícitamente declarado como Android.
     if (requiresAndroidConfig(buildType) && !androidConfig?.packageName) {
       throw new BadRequestException('Configura el nombre de paquete Android antes de construir.');
+    }
+
+    // Builds de tienda Play (RELEASE/AAB) exigen privacidad y términos
+    // configurados. "Configurado" = URL externa O contenido inline
+    // (mismo criterio que resolvePrivacyUrl en runtime). DEBUG/PWA/IOS_EXPORT
+    // quedan fuera por diseño (ver build-type-traits.requiresLegalDocs).
+    if (requiresLegalDocs(buildType)) {
+      const privacy = appConfig.privacy as { url?: string; content?: string } | undefined;
+      const terms   = appConfig.terms   as { url?: string; content?: string } | undefined;
+      const hasPrivacy = !!(privacy?.url?.trim() || privacy?.content?.trim());
+      const hasTerms   = !!(terms?.url?.trim()   || terms?.content?.trim());
+      if (!hasPrivacy || !hasTerms) {
+        const faltan = [
+          !hasPrivacy ? 'la política de privacidad' : null,
+          !hasTerms   ? 'los términos y condiciones' : null,
+        ].filter(Boolean).join(' y ');
+        throw new BadRequestException(
+          `Configura ${faltan} antes de publicar en tiendas. Sin estos datos, Google Play rechaza la subida.`,
+        );
+      }
     }
 
     // Check no active build

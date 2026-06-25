@@ -3,6 +3,7 @@ import {
   countsTowardQuota,
   requiresAndroidConfig,
   requiresFcmIfPushModulePresent,
+  requiresLegalDocs,
   QUOTA_COUNTING_BUILD_TYPES,
 } from '../lib/build-type-traits';
 
@@ -43,6 +44,19 @@ describe('build-type-traits', () => {
     it('NO requiere para DEBUG (stub push.ts) ni PWA (Web Push, no Capacitor)', () => {
       expect(requiresFcmIfPushModulePresent(BuildType.DEBUG)).toBe(false);
       expect(requiresFcmIfPushModulePresent(BuildType.PWA)).toBe(false);
+    });
+  });
+
+  describe('requiresLegalDocs', () => {
+    it('requiere para builds de tienda Play (RELEASE, AAB)', () => {
+      expect(requiresLegalDocs(BuildType.RELEASE)).toBe(true);
+      expect(requiresLegalDocs(BuildType.AAB)).toBe(true);
+    });
+
+    it('NO requiere para DEBUG (prueba interna), PWA (no va a Play), ni IOS_EXPORT (App Store, scope distinto)', () => {
+      expect(requiresLegalDocs(BuildType.DEBUG)).toBe(false);
+      expect(requiresLegalDocs(BuildType.PWA)).toBe(false);
+      expect(requiresLegalDocs(BuildType.IOS_EXPORT)).toBe(false);
     });
   });
 

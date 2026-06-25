@@ -81,6 +81,26 @@ export function requiresFcmIfPushModulePresent(t: BuildType): boolean {
     || t === BuildType.IOS_EXPORT;
 }
 
+// ─── Documentos legales (Play compliance) ─────────────────────────────
+//
+// Tipos que requieren `privacy` y `terms` configurados (URL externa o
+// contenido inline) en `App.appConfig` para poder construir. Google Play
+// rechaza subidas — incluso a tracks internos cerrados — sin política
+// de privacidad accesible Y enlazada desde dentro de la app. El runtime
+// expone el enlace global (ver appforge-runtime AppShell); aquí
+// imponemos la presencia de la configuración antes de hornear.
+//
+// Quedan fuera:
+// - DEBUG: prueba interna del binario, no va a Play.
+// - PWA: web servida directa, no va a Play.
+// - IOS_EXPORT: App Store también exige privacy policy (con privacy
+//   nutrition labels desde 2020), pero la guarda específica iOS es
+//   scope distinto. Cuando se aborde el go-live de iOS, añadir aquí.
+export function requiresLegalDocs(t: BuildType): boolean {
+  return t === BuildType.RELEASE
+    || t === BuildType.AAB;
+}
+
 // ─── Reservado ────────────────────────────────────────────────────────
 //
 // `isNativeBuild(t)` — NO se exporta hoy (YAGNI: ningún call site lo
