@@ -415,6 +415,11 @@ export default config;
     await this.injectAndroidPermissions(buildDir, androidPermissions);
     log('Android permissions injected');
 
+    // Force targetSdk/compileSdk to 35 (Play requires >=35 since 2025-08-31).
+    // Goes BEFORE injectVersionInfo: SDK base first, version info on top.
+    await this.injectAndroidSdkVersions(buildDir);
+    log('Android target SDK set: 35');
+
     // Inject version
     await this.injectVersionInfo(buildDir, versionCode, versionName);
     log(`Version set: ${versionName} (${versionCode})`);
@@ -731,6 +736,52 @@ export default config;
       await fs.writeFile(gradlePath, gradle);
     } catch {
       this.logger.warn('Could not inject version info');
+    }
+  }
+
+  /**
+   * Forzar compileSdk/targetSdk a 35 sobre el android/ generado por
+   * `npx cap add android`. Play exige targetSdk>=35 desde 2025-08-31;
+   * Capacitor 6 default es 34/34. Edita variables.gradle por regex y
+   * añade `suppressUnsupportedCompileSdk=35` a gradle.properties para
+   * silenciar el aviso de AGP 8.2.1 al compilar contra API 35.
+   *
+   * NO atrapa errores: un no-op silencioso aquí volvería a hornear SDK
+   * 34 invisible hasta que Play rechace el AAB. Si el regex matchea 0
+   * ocurrencias (futuro bump de Capacitor cambia el formato del
+   * template) → throw con mensaje claro. Mismo principio
+   * "compilado != correcto".
+   */
+  private async injectAndroidSdkVersions(buildDir: string) {
+    const varsPath = path.join(buildDir, 'android', 'variables.gradle');
+    let vars = await fs.readFile(varsPath, 'utf-8');
+
+    const compileMatches = vars.match(/compileSdkVersion\s*=\s*\d+/g)?.length ?? 0;
+    const targetMatches = vars.match(/targetSdkVersion\s*=\s*\d+/g)?.length ?? 0;
+    if (compileMatches === 0 || targetMatches === 0) {
+      throw new Error(
+        `injectAndroidSdkVersions: regex did not match in variables.gradle ` +
+          `(compileSdkVersion matches=${compileMatches}, targetSdkVersion matches=${targetMatches}). ` +
+          `Capacitor template format may have changed; verify @capacitor/cli version.`,
+      );
+    }
+    vars = vars.replace(/compileSdkVersion\s*=\s*\d+/g, 'compileSdkVersion = 35');
+    vars = vars.replace(/targetSdkVersion\s*=\s*\d+/g, 'targetSdkVersion = 35');
+    await fs.writeFile(varsPath, vars);
+
+    const propsPath = path.join(buildDir, 'android', 'gradle.properties');
+    const flag = 'android.suppressUnsupportedCompileSdk=35';
+    let props = '';
+    try {
+      props = await fs.readFile(propsPath, 'utf-8');
+    } catch {
+      // Cap 6 lo genera siempre; defensa por si no existe en algún edge case.
+    }
+    const alreadyPresent = props.split(/\r?\n/).some((line) => line.trim() === flag);
+    if (!alreadyPresent) {
+      if (props.length > 0 && !props.endsWith('\n')) props += '\n';
+      props += `${flag}\n`;
+      await fs.writeFile(propsPath, props);
     }
   }
 
