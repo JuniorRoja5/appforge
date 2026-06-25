@@ -161,7 +161,7 @@ const PreviewComponent: React.FC<{ data: NewsFeedConfig; isSelected: boolean }> 
             </p>
             <div
               className="mt-2 text-xs text-gray-700 leading-relaxed [&_h1]:text-base [&_h1]:font-bold [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:font-bold [&_p]:mb-1.5 [&_strong]:font-bold [&_em]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_a]:text-blue-600 [&_a]:underline"
-              dangerouslySetInnerHTML={{ __html: article.content }}
+              dangerouslySetInnerHTML={{ __html: article.content.replace(/&nbsp;/g, ' ') }}
             />
             {/* Video dentro del cuerpo del artículo */}
             {embedUrl && (

@@ -67,7 +67,7 @@ const PreviewComponent: React.FC<{ data: CustomPageConfig; isSelected: boolean }
             <div
               className="text-xs text-gray-800 leading-relaxed break-words overflow-wrap-anywhere [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-2 [&_h1]:break-words [&_h2]:text-base [&_h2]:font-bold [&_h2]:mb-1.5 [&_h2]:break-words [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mb-1 [&_h3]:break-words [&_p]:mb-1.5 [&_p]:break-words [&_strong]:font-bold [&_em]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mb-1.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mb-1.5 [&_li]:mb-0.5 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_img]:max-w-full [&_img]:rounded [&_img]:my-2 [&_s]:line-through"
               style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
-              dangerouslySetInnerHTML={{ __html: data.htmlContent }}
+              dangerouslySetInnerHTML={{ __html: data.htmlContent.replace(/&nbsp;/g, ' ') }}
             />
           </div>
         )}

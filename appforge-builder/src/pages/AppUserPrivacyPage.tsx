@@ -138,7 +138,7 @@ export const AppUserPrivacyPage: React.FC = () => {
           // libremente HTML en su ReactQuill — sin sanitizar, XSS abierto
           // (cualquier <script>, on* handler, etc. ejecutaría aquí).
           // DOMPurify quita los vectores y deja el formato legítimo.
-          dangerouslySetInnerHTML={{ __html: sanitize(data.content) }}
+          dangerouslySetInnerHTML={{ __html: sanitize(data.content).replace(/&nbsp;/g, ' ') }}
         />
       </div>
     </div>
