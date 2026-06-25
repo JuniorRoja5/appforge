@@ -57,9 +57,22 @@ export class KeystoreService {
         ? path.join(process.env.JAVA_HOME, 'bin', 'keytool')
         : 'keytool';
 
+      // -storetype JKS es obligatorio: desde JDK 9 el tipo por defecto
+      // de keystore es PKCS12, y PKCS12 NO soporta una key-password
+      // distinta de la store-password — keytool emite warning e ignora
+      // silenciosamente nuestra -keypass, sellando la clave privada con
+      // -storepass. Como nuestro schema persiste storePassword y
+      // keyPassword por separado (decryptKeystore las trata como dos
+      // valores), el build inyecta keyPass en build.gradle y Gradle
+      // intenta abrir la clave con esa pass — falla con
+      // "Get Key failed: Given final block not properly padded" porque
+      // la clave realmente está sellada con storePass. JKS sí soporta
+      // dos passwords distintas. apksigner/Gradle/Play aceptan JKS
+      // para firmar releases sin problema.
       const cmd = [
         `"${keytoolPath}"`,
         '-genkeypair', '-v',
+        '-storetype', 'JKS',
         '-keystore', `"${tmpKeystorePath}"`,
         '-keyalg', 'RSA',
         '-keysize', '2048',
