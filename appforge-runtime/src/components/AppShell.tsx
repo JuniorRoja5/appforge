@@ -2,6 +2,10 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { CanvasElement, AppManifest } from '../lib/manifest';
 import { trackEvent } from '../lib/analytics';
 import { TabScreen } from './TabScreen';
+import { BrowserShim as Browser } from '../lib/platform';
+import { sanitize } from '../lib/sanitize';
+import { responsiveHtmlClass } from '../lib/responsive-html';
+import { useBackButton } from '../lib/use-back-button';
 import {
   Home, Newspaper, Calendar, ShoppingBag, UtensilsCrossed, Image, Mail,
   BookOpen, Gift, Star, Link, FileText, User, Video, MessageSquare, Clock,
@@ -20,7 +24,57 @@ interface Props {
 }
 
 export const AppShell: React.FC<Props> = ({ manifest }) => {
-  const { schema, apiUrl, appId, designTokens } = manifest;
+  const { schema, apiUrl, appId, designTokens, appConfig } = manifest;
+
+  // Legal global — desacoplado de user-profile. Play exige que la privacidad
+  // sea accesible desde dentro de la app, no solo desde Play Console. Hasta
+  // ahora el enlace vivía solo dentro de UserProfileRuntime: una app sin
+  // ese módulo salía sin enlace de privacidad y se rechazaba en Play.
+  // Footer minimal SIEMPRE presente cuando hay legal configurado.
+  //
+  // privacyUrlResolved: horneado server-side por build.processor
+  //   (privacy.url externa, o página pública generada, o null).
+  // terms.url: externa del cliente — la abrimos directamente con BrowserShim.
+  // terms.content: HTML inline — abrimos un overlay modal con sanitize.
+  // El backend (build.service.requiresLegalDocs) bloquea AAB/RELEASE sin
+  // ambos, así que en builds reales este footer SIEMPRE aparece.
+  const privacyUrl = appConfig?.privacyUrlResolved ?? null;
+  const termsUrl = appConfig?.terms?.url ?? null;
+  const termsContent = appConfig?.terms?.content ?? null;
+  const hasPrivacy = !!privacyUrl;
+  const hasTerms = !!(termsUrl || termsContent);
+  const hasAnyLegal = hasPrivacy || hasTerms;
+
+  const [termsOverlayOpen, setTermsOverlayOpen] = useState(false);
+
+  // Back-button del runtime cierra el overlay (Capacitor-safe). Pattern
+  // ya rodado en otros módulos (BookingRuntime, etc.). Firma:
+  // useBackButton(handler, enabled) — enabled controla si el handler
+  // está activo (cuando el overlay está abierto).
+  useBackButton(() => setTermsOverlayOpen(false), termsOverlayOpen);
+
+  const handleOpenPrivacy = useCallback(async () => {
+    if (!privacyUrl) return;
+    try {
+      await Browser.open({ url: privacyUrl });
+    } catch {
+      // BrowserShim tiene su propio fallback; swallow lo demás.
+    }
+  }, [privacyUrl]);
+
+  const handleOpenTerms = useCallback(async () => {
+    if (termsUrl) {
+      try {
+        await Browser.open({ url: termsUrl });
+      } catch {
+        // idem
+      }
+      return;
+    }
+    if (termsContent) {
+      setTermsOverlayOpen(true);
+    }
+  }, [termsUrl, termsContent]);
 
   const navStyle = designTokens?.navigation?.style ?? 'bottom_tabs';
   const showLabels = designTokens?.navigation?.show_labels ?? true;
@@ -248,11 +302,85 @@ export const AppShell: React.FC<Props> = ({ manifest }) => {
         )}
       </div>
 
+      {/* Footer legal global — desacoplado de cualquier módulo. Aparece
+          SIEMPRE que el manifest tenga privacy y/o terms configurados, en
+          los 3 navStyles. Encima del TabBar bottom para no taparlo. Estilo
+          discreto (gris, 10px) como cualquier app real (Twitter, Reddit). */}
+      {hasAnyLegal && (
+        <div
+          className="flex items-center justify-center gap-3 py-2 shrink-0 text-[10px]"
+          style={{
+            backgroundColor: 'var(--color-nav-bg, #fff)',
+            borderTop: '1px solid var(--color-divider, #E5E7EB)',
+            color: 'var(--color-text-secondary, #6b7280)',
+            ...(navStyle !== 'bottom_tabs' || !hasTabs
+              ? { paddingBottom: 'calc(8px + var(--safe-area-bottom, 0px))' }
+              : {}),
+          }}
+        >
+          {hasPrivacy && (
+            <button onClick={handleOpenPrivacy} className="underline">
+              Política de privacidad
+            </button>
+          )}
+          {hasPrivacy && hasTerms && <span className="opacity-50">·</span>}
+          {hasTerms && (
+            <button onClick={handleOpenTerms} className="underline">
+              Términos y condiciones
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bottom tabs */}
       {navStyle === 'bottom_tabs' && hasTabs && <TabBar position="bottom" />}
 
       {/* Drawer overlay */}
       <DrawerOverlay />
+
+      {/* Overlay modal de Términos cuando el cliente solo configuró
+          content (HTML inline) sin url. Sanitize obligatorio — el content
+          viene del editor Quill del reseller. Patrón clonado de TermsScreen
+          pero sin el flujo de aceptación (este es un visor, no un gate). */}
+      {termsOverlayOpen && termsContent && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 950,
+            display: 'flex', flexDirection: 'column',
+            backgroundColor: 'var(--color-surface-bg, #f9fafb)',
+          }}
+        >
+          <div
+            className="flex items-center justify-between"
+            style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--color-divider, #e5e7eb)',
+              backgroundColor: 'var(--color-surface-card, #fff)',
+            }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary, #111827)', margin: 0 }}>
+              Términos y Condiciones
+            </h2>
+            <button
+              onClick={() => setTermsOverlayOpen(false)}
+              className="p-1 rounded-full"
+              style={{ color: 'var(--color-text-secondary, #6b7280)' }}
+              aria-label="Cerrar"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div
+            style={{ flex: 1, overflowY: 'auto', padding: 20, WebkitOverflowScrolling: 'touch' }}
+          >
+            <div
+              className={responsiveHtmlClass}
+              style={{ color: 'var(--color-text-primary, #374151)', fontSize: 13, lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: sanitize(termsContent).replace(/&nbsp;/g, ' ') }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
