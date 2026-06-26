@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import {
   requestBuild, getBuilds, getBuild, downloadBuildArtifact,
-  getKeystoreInfo, downloadKeystore, getSubscription,
-  type AppBuild, type KeystoreInfo, type SubscriptionInfo,
+  getKeystoreInfo, downloadKeystore, getSubscription, getApp,
+  type AppBuild, type KeystoreInfo, type SubscriptionInfo, type AppInfo,
 } from '../../lib/api';
 
 interface Props {
@@ -27,16 +27,20 @@ const BUILD_TYPES: { value: BuildType; label: string; description: string; icon:
   { value: 'pwa', label: 'App web (PWA)', description: 'Tus clientes la abren en el navegador, sin instalar nada', icon: Globe },
 ];
 
-type LockReason = 'plan' | 'debug-required' | null;
+type LockReason = 'plan' | 'debug-required' | 'legal-required' | null;
 
 /**
  * Determina por qué un tipo de build queda bloqueado para el cliente (o null
- * si está libre). Tres dimensiones se evalúan en este orden:
+ * si está libre). Cuatro dimensiones se evalúan en este orden:
  *
  * 1. PWA nunca se bloquea — es la oferta del plan FREE, accesible siempre.
  * 2. Sin plan que permita builds nativos → 'plan' (FREE: todo bloqueado salvo PWA).
  * 3. Con plan pero sin DEBUG previo completado → 'debug-required' para RELEASE/
  *    AAB/IOS_EXPORT (DEBUG sí está disponible porque es la puerta para el resto).
+ * 4. Builds de tienda Play (RELEASE/AAB) sin privacidad+términos configurados
+ *    → 'legal-required'. El backend ya impone la guarda dura (build.service →
+ *    requiresLegalDocs); este check es UX espejo para avisar antes de clicar
+ *    y no después de esperar al error del backend.
  *
  * Las dimensiones PWA y 'plan' espejan `subscription.service.canBuild()`: si
  * cambias la política de PWA o de plan aquí, cambia también canBuild — UI y
@@ -47,16 +51,38 @@ type LockReason = 'plan' | 'debug-required' | null;
  * cuota. Si lees este helper y vas a canBuild buscando el gate de
  * debug-required, no lo encontrarás, y eso NO es un bug del backend. Vive
  * solo aquí. No "arregles" canBuild añadiéndolo sin decisión explícita.
+ *
+ * La dimensión 'legal-required' SÍ se espeja en el backend: la decisión
+ * canónica vive en build-type-traits.requiresLegalDocs (RELEASE + AAB).
+ * Aquí replicamos la misma lista para no encolar un build que el backend
+ * va a rechazar. Si cambia la política, cambia ambos sitios.
  */
 function getLockReason(
   buildType: BuildType,
   canBuild: boolean,
   hasCompletedDebug: boolean,
+  hasLegalDocs: boolean,
 ): LockReason {
   if (buildType === 'pwa') return null;
   if (!canBuild) return 'plan';
   if (buildType !== 'debug' && !hasCompletedDebug) return 'debug-required';
+  if ((buildType === 'release' || buildType === 'aab') && !hasLegalDocs) return 'legal-required';
   return null;
+}
+
+/**
+ * "Configurado" = URL externa O contenido inline (mismo criterio que
+ * resolvePrivacyUrl en runtime y que la guarda backend en
+ * build.service:requestBuild). Si el cliente puede tener un enlace
+ * externo o redactar el contenido inline, ambos son válidos.
+ */
+function hasLegalDocsConfigured(appConfig: Record<string, any> | null | undefined): boolean {
+  if (!appConfig) return false;
+  const privacy = appConfig.privacy as { url?: string; content?: string } | undefined;
+  const terms   = appConfig.terms   as { url?: string; content?: string } | undefined;
+  const hasPrivacy = !!(privacy?.url?.trim() || privacy?.content?.trim());
+  const hasTerms   = !!(terms?.url?.trim()   || terms?.content?.trim());
+  return hasPrivacy && hasTerms;
 }
 
 const BUILD_TYPE_LABELS: Record<string, string> = {
@@ -87,6 +113,7 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const [selectedType, setSelectedType] = useState<BuildType>('debug');
   const [keystoreInfo, setKeystoreInfo] = useState<KeystoreInfo | null>(null);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [showKeystoreWarning, setShowKeystoreWarning] = useState(false);
 
   const loadBuilds = useCallback(async () => {
@@ -122,13 +149,28 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   }, [token]);
 
+  // appInfo se usa solo para leer appConfig.privacy/terms y avisar antes
+  // de un build RELEASE/AAB que el backend rechazaría por falta de docs
+  // legales. La verdad última vive en el backend (build.service →
+  // requiresLegalDocs); este loader es UX espejo.
+  const loadAppInfo = useCallback(async () => {
+    if (!appId || !token) return;
+    try {
+      const info = await getApp(appId, token);
+      setAppInfo(info);
+    } catch {
+      // Ignore
+    }
+  }, [appId, token]);
+
   useEffect(() => {
     if (isOpen) {
       loadBuilds();
       loadKeystoreInfo();
       loadSubscription();
+      loadAppInfo();
     }
-  }, [isOpen, loadBuilds, loadKeystoreInfo, loadSubscription]);
+  }, [isOpen, loadBuilds, loadKeystoreInfo, loadSubscription, loadAppInfo]);
 
   // Poll active builds
   useEffect(() => {
@@ -186,12 +228,13 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   )?.status;
 
   const hasCompletedDebug = builds.some((b) => b.buildType.toLowerCase() === 'debug' && b.status === 'COMPLETED');
+  const hasLegalDocs = hasLegalDocsConfigured(appInfo?.appConfig);
 
   const canBuild = subscriptionInfo?.subscription.plan.canBuild ?? true;
   const buildsUsed = subscriptionInfo?.usage.buildsThisMonth ?? 0;
   const buildsLimit = subscriptionInfo?.subscription.plan.maxBuildsPerMonth ?? 999;
 
-  const mainLockReason = getLockReason(selectedType, canBuild, hasCompletedDebug);
+  const mainLockReason = getLockReason(selectedType, canBuild, hasCompletedDebug, hasLegalDocs);
   const isMainLocked = mainLockReason !== null;
 
   // Preselect PWA para planes que no permiten builds nativos. Coherente con
@@ -270,20 +313,43 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
           )}
 
+          {/* Aviso legal — espejo UX del gate dura del backend
+              (build.service → requiresLegalDocs). Solo se muestra cuando
+              el usuario ha seleccionado un tipo de tienda Y falta privacy
+              o terms: no queremos ruido para alguien que está probando
+              con DEBUG. */}
+          {(selectedType === 'release' || selectedType === 'aab') && appInfo && !hasLegalDocs && (
+            <div className="flex items-start gap-2.5 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-amber-800 leading-relaxed">
+                <p className="font-semibold mb-0.5">Faltan datos legales para publicar en tiendas</p>
+                <p>
+                  Google Play exige política de privacidad y términos accesibles desde dentro
+                  de tu app. Configúralos en las pestañas <strong>Privacidad</strong> y{' '}
+                  <strong>Términos</strong> antes de generar una versión para tienda.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Build type selector */}
           <div className="grid grid-cols-2 gap-2 mb-4">
             {BUILD_TYPES.map((bt) => {
               const BtIcon = bt.icon;
-              const lockReason = getLockReason(bt.value, canBuild, hasCompletedDebug);
+              const lockReason = getLockReason(bt.value, canBuild, hasCompletedDebug, hasLegalDocs);
               const isLocked = lockReason !== null;
               const lockedTitle = lockReason === 'plan'
                 ? 'Mejora tu plan para desbloquear esta opción'
                 : lockReason === 'debug-required'
                   ? 'Necesitas generar primero una versión de prueba'
-                  : undefined;
+                  : lockReason === 'legal-required'
+                    ? 'Configura privacidad y términos antes de publicar en tiendas'
+                    : undefined;
               const lockedDescription = lockReason === 'plan'
                 ? 'Disponible al mejorar tu plan'
-                : 'Genera primero una versión de prueba';
+                : lockReason === 'debug-required'
+                  ? 'Genera primero una versión de prueba'
+                  : 'Falta privacidad o términos';
               return (
                 <button
                   key={bt.value}
@@ -391,6 +457,8 @@ export const BuildPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   <>Mejora tu plan para generar tu app nativa</>
                 ) : mainLockReason === 'debug-required' ? (
                   <>Genera primero una versión de prueba</>
+                ) : mainLockReason === 'legal-required' ? (
+                  <>Configura privacidad y términos para publicar</>
                 ) : (
                   <>
                     {BUILD_TYPES.find((bt) => bt.value === selectedType)?.icon &&
