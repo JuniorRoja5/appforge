@@ -2329,3 +2329,46 @@ export const createSupportTicket = async (
   }
   return response.json();
 };
+
+// ───────────────────────────── Feedback ───────────────────────────────
+
+export interface FeedbackPayload {
+  rating: number; // 1-5
+  message?: string;
+  name: string;
+  email: string;
+  company?: string;
+}
+
+/**
+ * Envía un feedback (rating + mensaje opcional). El backend lo redirige
+ * al mismo destino que los tickets de soporte (SUPPORT_EMAIL, default
+ * `hello@creatu.app`) con replyTo del cliente.
+ *
+ * Errores comunes:
+ *   - 400: validación falló (rating fuera de 1-5, email mal formado,
+ *     name vacío).
+ *   - 429: superado el rate-limit horario (3/h, más estricto que soporte).
+ *   - 500: SMTP no respondió — reintentar.
+ */
+export const createFeedback = async (
+  payload: FeedbackPayload,
+  token: string,
+): Promise<{ ok: true }> => {
+  const response = await apiFetch(`${API_URL}/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error('Has enviado mucho feedback en poco tiempo. Espera un rato antes de intentarlo de nuevo.');
+    }
+    throw new Error(err.message || 'No pudimos enviar tu feedback. Inténtalo de nuevo en unos minutos.');
+  }
+  return response.json();
+};
