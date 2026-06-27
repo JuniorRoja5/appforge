@@ -33,6 +33,7 @@ import { HealthModule } from './health/health.module';
 import { LegalModule } from './legal/legal.module';
 import { RuntimeConfigModule } from './runtime-config/runtime-config.module';
 import { SupportModule } from './support/support.module';
+import { FeedbackModule } from './feedback/feedback.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -78,6 +79,7 @@ import { join } from 'path';
     LegalModule,
     RuntimeConfigModule,
     SupportModule,
+    FeedbackModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     ServeStaticModule.forRoot(
       {
