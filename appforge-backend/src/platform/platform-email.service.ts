@@ -228,4 +228,43 @@ export class PlatformEmailService {
       this.logger.warn(`Error al enviar email de pago fallido a ${email}: ${err.message}`);
     }
   }
+
+  /**
+   * Envía un email genérico a una dirección arbitraria. Pensado para
+   * casos que no son notificaciones a clientes registrados (p. ej.
+   * tickets de soporte enviados a hello@creatu.app, alertas internas).
+   *
+   * A diferencia de los métodos anteriores, este LANZA si falla en vez
+   * de loguear y tragarse el error — los flujos que llaman a sendEmail
+   * suelen necesitar saber si el envío salió o no para responder al
+   * cliente (p. ej. el endpoint de soporte devuelve 500 si esto falla).
+   *
+   * `replyTo` es opcional pero crítico para el caso de soporte: sin él,
+   * "Reply" desde el inbox iría al remitente (la propia plataforma),
+   * no al cliente que abrió el ticket.
+   */
+  async sendEmail(opts: {
+    to: string;
+    subject: string;
+    html: string;
+    replyTo?: string;
+  }): Promise<void> {
+    const transport = await this.createTransport();
+    if (!transport) {
+      throw new Error('No hay SMTP de plataforma configurado.');
+    }
+
+    const config = await this.smtpService.getConfigRaw();
+    if (!config) {
+      throw new Error('No hay configuración SMTP disponible.');
+    }
+
+    await transport.sendMail({
+      from: `"${config.fromName}" <${config.fromEmail}>`,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+    });
+  }
 }
