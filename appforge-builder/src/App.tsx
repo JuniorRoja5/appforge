@@ -26,6 +26,7 @@ import { BuilderLayout } from './features/builder/BuilderLayout';
 import { AccountPage } from './pages/AccountPage';
 import { BrandingPage } from './pages/BrandingPage';
 import { PricingPage } from './pages/PricingPage';
+import { SupportPage } from './pages/SupportPage';
 import { PaymentSuccessPage } from './pages/PaymentSuccessPage';
 import { PaymentCancelPage } from './pages/PaymentCancelPage';
 import { StampPage } from './pages/StampPage';
@@ -76,6 +77,7 @@ const router = createBrowserRouter([
       { path: '/billing', element: <BillingPage /> },
       { path: '/branding', element: <BrandingPage /> },
       { path: '/pricing', element: <PricingPage /> },
+      { path: '/support', element: <SupportPage /> },
       { path: '/payment/success', element: <PaymentSuccessPage /> },
       { path: '/payment/cancel', element: <PaymentCancelPage /> },
     ],

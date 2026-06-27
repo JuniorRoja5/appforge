@@ -2283,3 +2283,49 @@ export const updateMyBranding = async (
   }
   return response.json();
 };
+
+// ───────────────────────────── Soporte ────────────────────────────────
+
+export interface SupportTicketPayload {
+  scenario: string;
+  subject: string;
+  message: string;
+  name: string;
+  email: string;
+  company?: string;
+}
+
+/**
+ * Envía un ticket de soporte. El backend lo redirige por email a
+ * SUPPORT_EMAIL (default `hello@creatu.app`) con replyTo del cliente.
+ *
+ * Backend: build-type-traits no aplica aquí; el endpoint requiere
+ * auth (JwtAuthGuard) + rol CLIENT|SUPER_ADMIN + rate-limit 5/hora
+ * por usuario. Errores comunes:
+ *   - 400: validación falló (scenario fuera de SUPPORT_SCENARIOS,
+ *     campos vacíos, email mal formado).
+ *   - 429: superado el rate-limit horario.
+ *   - 500: SMTP no respondió o no pudo enviar — el cliente debería
+ *     reintentar; el mensaje del backend ya está en español plano.
+ */
+export const createSupportTicket = async (
+  payload: SupportTicketPayload,
+  token: string,
+): Promise<{ ok: true }> => {
+  const response = await apiFetch(`${API_URL}/support/tickets`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error('Has enviado muchos mensajes en poco tiempo. Espera unos minutos antes de intentarlo de nuevo.');
+    }
+    throw new Error(err.message || 'No pudimos enviar tu mensaje. Inténtalo de nuevo en unos minutos.');
+  }
+  return response.json();
+};

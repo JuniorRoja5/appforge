@@ -31,6 +31,15 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    to: '/support',
+    label: 'Soporte',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 0v4m0 16v-4m10-10h-4M6 12H2m15.07-7.07l-2.83 2.83M6.76 17.24l-2.83 2.83m0-14.14l2.83 2.83m10.38 8.49l-2.83-2.83" />
+      </svg>
+    ),
+  },
 ];
 
 interface AppNavItem {
