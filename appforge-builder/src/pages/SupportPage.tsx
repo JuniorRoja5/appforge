@@ -29,7 +29,9 @@ type Status = 'idle' | 'sending' | 'sent' | 'error';
 export const SupportPage: React.FC = () => {
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
-  const brandName = useTenantStore((s) => s.brandName);
+  // brandName vive dentro de branding (TenantBranding shape: branding.brandName).
+  // Usamos como fallback si user.company viene vacío.
+  const brandName = useTenantStore((s) => s.branding?.brandName ?? null);
 
   // Pre-relleno desde el store de auth + tenant. Memoized para que un
   // re-render no resetee el form si el usuario ya empezó a editar
