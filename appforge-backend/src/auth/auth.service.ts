@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -111,6 +111,21 @@ export class AuthService {
     if (!freePlan) {
       throw new BadRequestException(
         'Sistema no inicializado correctamente. Contacta al administrador.',
+      );
+    }
+
+    // Comprobación explícita de email duplicado ANTES de la transaction:
+    // sin esto, el insert dentro de $transaction falla con
+    // PrismaClientKnownRequestError (P2002) y NestJS lo traduce a 500
+    // genérico — el cliente ve "Error al registrar" sin saber que basta
+    // con usar otro email. Devolver 409 ConflictException con mensaje en
+    // español plano cierra el bucle UX. Defensa en profundidad: el unique
+    // constraint en DB sigue siendo la verdad última si hay race condition
+    // entre este check y el insert (improbable pero posible).
+    const existingUser = await this.usersService.findByEmail(data.email);
+    if (existingUser) {
+      throw new ConflictException(
+        'Este email ya está registrado. Inicia sesión o usa otro email.',
       );
     }
 
