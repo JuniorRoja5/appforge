@@ -131,9 +131,12 @@ export const ImageInputField: React.FC<ImageInputFieldProps> = ({
         />
       )}
 
-      <div className="flex items-center gap-2">
+      {/* shape='cover' usa preview full-width: en flex horizontal el preview
+          ocupaba todo el ancho y aplastaba los botones (Subir/Cambiar/Quitar)
+          a 0px. Cambio a flex-col cuando cover: preview arriba, botones abajo. */}
+      <div className={shape === 'cover' ? 'flex flex-col gap-2' : 'flex items-center gap-2'}>
         {/* Preview thumbnail (image, broken-fallback, or empty placeholder) */}
-        <div className={`flex-shrink-0 ${shape === 'cover' ? 'w-full' : SIZE_CLASSES[previewSize]}`}>
+        <div className={shape === 'cover' ? 'w-full' : `flex-shrink-0 ${SIZE_CLASSES[previewSize]}`}>
           {showImage ? (
             <img
               src={resolveAssetUrl(value)}
