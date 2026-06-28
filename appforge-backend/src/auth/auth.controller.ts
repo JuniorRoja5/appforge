@@ -2,7 +2,7 @@ import { Controller, Post, Body, UnauthorizedException, HttpCode, HttpStatus, Us
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { Prisma } from '@prisma/client';
+import { RegisterDto } from './dto/register.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -17,13 +17,13 @@ export class AuthController {
   async login(@Body() body: Record<string, any>) {
     const user = await this.authService.validateUser(body.email, body.password);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email o contraseña incorrectos.');
     }
     return this.authService.login(user);
   }
 
   @Post('register')
-  async register(@Body() body: Prisma.UserCreateInput) {
+  async register(@Body() body: RegisterDto) {
     return this.authService.register(body);
   }
 
