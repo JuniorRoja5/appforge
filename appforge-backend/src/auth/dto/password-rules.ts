@@ -11,25 +11,26 @@
  * agujero conocido: el del reset débil pre-fix permitía registrar con
  * `Abcdef12` y luego resetear a `123456`. Cerrado al unificar.
  *
- * Política elegida: OWASP relajado.
+ * Política elegida: OWASP estándar.
  *   - Mínimo 8 caracteres.
- *   - Al menos una letra (latina ASCII) y un dígito.
- *   - SIN exigir mayúscula+minúscula ni símbolos: la audiencia de la
- *     plataforma son creadores no-técnicos; exigir más complica la UX
- *     sin proporción al riesgo real (ataques de fuerza bruta están
- *     mitigados por rate-limit + bcrypt hash en DB).
+ *   - Al menos una minúscula, una mayúscula y un dígito.
+ *     ("contraseña1" falla; "Contraseña1" pasa.)
+ *   - SIN exigir símbolos: punto de equilibrio entre fricción UX y
+ *     entropía. Ataques de fuerza bruta están mitigados también por
+ *     rate-limit + bcrypt hash en DB.
  *   - Máximo 128 caracteres: evita DoS por bcrypt con strings
  *     enormes (cada char eleva el coste de hashing).
  */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
-// (?=.*[a-zA-Z]) → al menos una letra (latina ASCII).
+// (?=.*[a-z])    → al menos una minúscula.
+// (?=.*[A-Z])    → al menos una mayúscula.
 // (?=.*\d)       → al menos un dígito.
 // .{8,}          → mínimo 8 caracteres totales. Hace innecesario añadir
 //                  @MinLength(8) encima del @Matches — duplicaría el
 //                  mensaje de error para el mismo fallo.
-export const PASSWORD_PATTERN = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
+export const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 export const PASSWORD_MESSAGE =
-  'La contraseña debe tener al menos 8 caracteres, una letra y un número.';
+  'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.';
