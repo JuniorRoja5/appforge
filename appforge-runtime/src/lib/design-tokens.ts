@@ -103,7 +103,9 @@ export function applyDesignTokens(tokens: DesignTokens): void {
   root.style.setProperty('--spacing-section', sp.section_gap);
   root.style.setProperty('--spacing-item', sp.item_gap);
 
-  // Apply background
-  document.body.style.backgroundColor = c.surface.background;
-  document.body.style.color = c.text.primary;
+  // El color y background-color del tenant se aplican vía CSS global
+  // (ver appforge-runtime/src/index.css, regla html, body, #root) que
+  // referencia las vars `--color-text-primary` y `--color-surface-bg`
+  // ya seteadas en :root arriba en esta función. Sin asignación inline
+  // al body.style — single source of truth en CSS, sin flash inicial.
 }

@@ -14,6 +14,14 @@ html, body, #root {
   padding: 0;
   overflow: hidden;
   font-family: var(--font-body, 'Inter', system-ui, sans-serif);
+  /* color y background-color del tenant aplicados vía CSS var en lugar
+     de document.body.style.* (JS): el navegador evalúa la var en cuanto
+     applyDesignTokens() la setea en :root, sin esperar a un segundo
+     paint. Elimina el flash blanco que se veía pre-fix entre el primer
+     render (defaults del browser) y el momento en que JS escribía al
+     body. Single source of truth en CSS. */
+  color: var(--color-text-primary, #111827);
+  background-color: var(--color-surface-bg, #ffffff);
   -webkit-font-smoothing: antialiased;
 }
 
