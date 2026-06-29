@@ -16,13 +16,13 @@ interface BuilderState {
   elements: CanvasElement[];
   selectedElementId: string | null;
   designTokens: DesignTokens | null;
-  // Feature flag para Preview-as-Runtime (Fase 1): cuando es true, el
-  // CentralCanvas sustituye el área de contenido del smartphone por un
-  // iframe que carga el runtime real desde preview.creatu.app. Default
-  // false — se activa manualmente desde DevTools por app de prueba:
-  //   useBuilderStore.getState().setUsePreviewIframe(true)
-  // En Fase 4 del plan, cuando el iframe se vuelva default, se elimina
-  // este flag junto con todos los PreviewComponent.
+  // Preview-as-Runtime (Fase 1 cierre): el iframe es ahora el canvas
+  // por defecto para todos los apps. Este flag queda como `true`
+  // permanente — sin action de toggle. Se conserva en el state como
+  // marcador semántico (en Fase 2+ podrá leerse para subscribers al
+  // postMessage, telemetría, gating de UI alternativo, etc.). En
+  // Fase 4 del plan, cuando se eliminen los PreviewComponent del todo
+  // y no exista ya una alternativa, esta propiedad también se retira.
   usePreviewIframe: boolean;
   // Actions
   addElement: (moduleId: string, config: any, navMeta?: { tabIndex?: number | null; tabLabel?: string; tabIcon?: string }) => void;
@@ -34,7 +34,6 @@ interface BuilderState {
   updateDesignTokensPartial: (path: string[], value: unknown) => void;
   updateElementNavMeta: (elementId: string, meta: { tabIndex?: number | null; tabLabel?: string; tabIcon?: string }) => void;
   loadApp: (elements: CanvasElement[], designTokens: DesignTokens | null) => void;
-  setUsePreviewIframe: (value: boolean) => void;
 }
 
 /** Deep-set a value at a given path in an object, returning a new object */
@@ -53,7 +52,7 @@ export const useBuilderStore = create<BuilderState>()(
       elements: [],
       selectedElementId: null,
       designTokens: null,
-      usePreviewIframe: false,
+      usePreviewIframe: true,
 
       addElement: (moduleId, config, navMeta) => set((state) => ({
         elements: [...state.elements, {
@@ -106,8 +105,6 @@ export const useBuilderStore = create<BuilderState>()(
         designTokens,
         selectedElementId: null,
       }),
-
-      setUsePreviewIframe: (value) => set({ usePreviewIframe: value }),
     }),
     { limit: 50 } // Keep up to 50 past states for undo/redo
   )
