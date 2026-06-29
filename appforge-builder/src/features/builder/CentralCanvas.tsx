@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useBuilderStore } from '../../store/useBuilderStore';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -8,6 +9,7 @@ import { getDesignTokenStyles } from '../../lib/niche-templates/applyTheme';
 import { LucideIconByName } from './LucideIconByName';
 import { computeTabs } from './utils/computeTabs';
 import { X } from 'lucide-react';
+import { RuntimePreviewIframe } from './RuntimePreviewIframe';
 
 // --- Sortable wrapper for each canvas element ---
 const SortableCanvasElement: React.FC<{
@@ -55,7 +57,11 @@ const SortableCanvasElement: React.FC<{
 // se quitó (era ruido sin acción). El callsite en BuilderLayout
 // también deja de pasarla.
 export const CentralCanvas: React.FC = () => {
-  const { elements, selectedElementId, selectElement, designTokens } = useBuilderStore();
+  const { elements, selectedElementId, selectElement, designTokens, usePreviewIframe } = useBuilderStore();
+  // appId del URL para alimentar el iframe del runtime preview cuando
+  // usePreviewIframe está activado (Fase 1 Preview-as-Runtime).
+  // BuilderLayout monta esta ruta con :appId — useParams lo provee.
+  const { appId } = useParams<{ appId: string }>();
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas-droppable',
     data: { type: 'canvas' },
@@ -215,6 +221,18 @@ export const CentralCanvas: React.FC = () => {
         {/* Notch simulation (Dynamic Island Style) */}
         <div className="absolute top-3 inset-x-0 h-7 bg-[#0f172a] rounded-full w-[120px] mx-auto z-50 shadow-[0_2px_15px_rgba(0,0,0,0.1)]" />
 
+        {/* Preview-as-Runtime (Fase 1): cuando usePreviewIframe está
+            activado y hay appId, el contenido del smartphone es el
+            runtime real cargado desde preview.creatu.app via iframe. El
+            notch (chrome físico del teléfono, líneas arriba) se mantiene;
+            el header + tabs + drawer + contenido de módulos vienen del
+            propio runtime real. Sin SortableContext aquí — la inserción
+            de módulos pasa al LeftSidebar (botón "+") porque el browser
+            bloquea drag-drop cross-origin sobre el iframe. */}
+        {usePreviewIframe && appId ? (
+          <RuntimePreviewIframe appId={appId} />
+        ) : (
+        <>
         {/* Phone Header — Bug 1: solo lleva contenido (hamburger + tab
             label) cuando navStyle es side_drawer. Para el resto de
             estilos (bottom_tabs, top_tabs) el div queda vacío con h-12
@@ -309,6 +327,8 @@ export const CentralCanvas: React.FC = () => {
 
         {/* Side Drawer Overlay */}
         <DrawerOverlay />
+        </>
+        )}
       </div>
     </main>
   );

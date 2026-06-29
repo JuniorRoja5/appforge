@@ -16,6 +16,14 @@ interface BuilderState {
   elements: CanvasElement[];
   selectedElementId: string | null;
   designTokens: DesignTokens | null;
+  // Feature flag para Preview-as-Runtime (Fase 1): cuando es true, el
+  // CentralCanvas sustituye el área de contenido del smartphone por un
+  // iframe que carga el runtime real desde preview.creatu.app. Default
+  // false — se activa manualmente desde DevTools por app de prueba:
+  //   useBuilderStore.getState().setUsePreviewIframe(true)
+  // En Fase 4 del plan, cuando el iframe se vuelva default, se elimina
+  // este flag junto con todos los PreviewComponent.
+  usePreviewIframe: boolean;
   // Actions
   addElement: (moduleId: string, config: any, navMeta?: { tabIndex?: number | null; tabLabel?: string; tabIcon?: string }) => void;
   updateElementConfig: (elementId: string, config: any) => void;
@@ -26,6 +34,7 @@ interface BuilderState {
   updateDesignTokensPartial: (path: string[], value: unknown) => void;
   updateElementNavMeta: (elementId: string, meta: { tabIndex?: number | null; tabLabel?: string; tabIcon?: string }) => void;
   loadApp: (elements: CanvasElement[], designTokens: DesignTokens | null) => void;
+  setUsePreviewIframe: (value: boolean) => void;
 }
 
 /** Deep-set a value at a given path in an object, returning a new object */
@@ -44,6 +53,7 @@ export const useBuilderStore = create<BuilderState>()(
       elements: [],
       selectedElementId: null,
       designTokens: null,
+      usePreviewIframe: false,
 
       addElement: (moduleId, config, navMeta) => set((state) => ({
         elements: [...state.elements, {
@@ -96,6 +106,8 @@ export const useBuilderStore = create<BuilderState>()(
         designTokens,
         selectedElementId: null,
       }),
+
+      setUsePreviewIframe: (value) => set({ usePreviewIframe: value }),
     }),
     { limit: 50 } // Keep up to 50 past states for undo/redo
   )
