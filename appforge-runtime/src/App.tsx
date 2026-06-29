@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Splash, Prefs } from './lib/platform';
-import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, updateManifestFromMessage, type AppManifest } from './lib/manifest';
+import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, updateManifestFromMessage, PreviewManifestError, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
+import { sendPreviewError } from './lib/preview-bridge';
 import { computeOnboardingHash, getOnboardingHashKey } from './lib/onboarding-hash';
 import { initPush } from './lib/push';
 import { initAuth } from './lib/auth';
@@ -63,6 +64,18 @@ export const App: React.FC = () => {
       } catch (err) {
         console.error('[AppForge] Manifest load failed:', err);
         Splash.hide().catch(() => {});
+        // Phase 2.3 — emit preview-error to the builder so the
+        // PreviewErrorBanner can pick the right copy + show
+        // "Reintentar". Only fires in preview mode (parentOrigin
+        // is allowlisted) — production end-users with no
+        // parentOrigin make this a silent no-op.
+        if (isPreviewMode() && err instanceof PreviewManifestError) {
+          sendPreviewError(err.code, err.message);
+        } else if (isPreviewMode()) {
+          // Generic error in preview mode (e.g. JSON parse failure)
+          // — still inform the builder so the banner shows.
+          sendPreviewError('manifest-unknown', (err as Error).message);
+        }
         setError((err as Error).message);
         return;
       }
@@ -326,7 +339,26 @@ export const App: React.FC = () => {
       <div className="flex items-center justify-center h-full p-8 text-center">
         <div>
           <p className="text-lg font-semibold text-red-600 mb-2">Error al cargar la app</p>
-          <p className="text-sm text-gray-500">{error}</p>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          {/* Phase 2.3 — Reintentar button ONLY in production
+              (PWA / AAB end-user). In preview the builder's
+              PreviewErrorBanner already shows a "Reintentar" CTA;
+              duplicating the button inside the iframe would be
+              redundant and confuse (two CTAs that do the same in
+              the same viewport). */}
+          {!isPreviewMode() && (
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              style={{
+                backgroundColor: 'var(--color-primary, #4F46E5)',
+                color: 'var(--color-text-on-primary, #fff)',
+                borderRadius: 'var(--radius-button, 8px)',
+              }}
+            >
+              Reintentar
+            </button>
+          )}
         </div>
       </div>
     );

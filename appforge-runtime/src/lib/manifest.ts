@@ -171,6 +171,35 @@ let _manifest: AppManifest | null = null;
 let _etag: string | null = null;
 const _listeners: Array<(m: AppManifest) => void> = [];
 
+/**
+ * Phase 2.3 — typed manifest load error for the preview path.
+ *
+ * Carries a `code` that the catch in App.tsx maps to:
+ *   - `sendPreviewError(code, message)` — postMessage to the
+ *     builder so the PreviewErrorBanner can pick a user-facing
+ *     copy and show the "Reintentar" CTA.
+ *   - Internal `setError(message)` for the runtime's own error
+ *     screen (only shown to end-users in PWA/AAB real — preview
+ *     hides the runtime's button to avoid a double-CTA).
+ *
+ * Only thrown from inside the `isPreviewMode()` branch of
+ * loadManifest. The PWA/AAB baked path still throws the generic
+ * Error of before — end-user real has no `parentOrigin` and
+ * doesn't need codes.
+ */
+export type PreviewErrorCode =
+  | 'manifest-404'
+  | 'manifest-500'
+  | 'manifest-network'
+  | 'manifest-unknown';
+
+export class PreviewManifestError extends Error {
+  constructor(public code: PreviewErrorCode, message: string) {
+    super(message);
+    this.name = 'PreviewManifestError';
+  }
+}
+
 // loadManifest contrato preservado (Promise<AppManifest>) — los 14
 // consumidores existentes que hacen `await loadManifest()` no se enteran
 // del cambio. Internamente:
@@ -192,12 +221,38 @@ export async function loadManifest(): Promise<AppManifest> {
     const params = new URLSearchParams(window.location.search);
     const appId = params.get('appId');
     if (!appId) {
-      throw new Error('Preview mode requires ?appId= in URL');
+      throw new PreviewManifestError('manifest-unknown', 'Preview mode requires ?appId= in URL');
     }
     const apiUrl = getPreviewApiUrl();
-    const previewRes = await fetch(`${apiUrl}/apps/${appId}/runtime-config?preview=true`);
+    // Phase 2.3 — try/catch envolviendo el `await fetch` MISMO. Si
+    // la red está caída, `fetch` rechaza ANTES de tener `previewRes`
+    // — si el catch solo cubriera el chequeo de status posterior, el
+    // error sin `status` caería al genérico 'manifest-unknown'. Aquí
+    // diferenciamos 'manifest-network' (no llegamos ni a hablar con
+    // el server) de 'manifest-500' (server respondió pero falló).
+    let previewRes: Response;
+    try {
+      previewRes = await fetch(`${apiUrl}/apps/${appId}/runtime-config?preview=true`);
+    } catch (e) {
+      throw new PreviewManifestError(
+        'manifest-network',
+        `Network error fetching preview manifest: ${(e as Error).message}`,
+      );
+    }
+    if (previewRes.status === 404) {
+      throw new PreviewManifestError('manifest-404', 'Preview manifest not found');
+    }
+    if (previewRes.status >= 500) {
+      throw new PreviewManifestError(
+        'manifest-500',
+        `Preview manifest server error: ${previewRes.status}`,
+      );
+    }
     if (!previewRes.ok) {
-      throw new Error(`Preview manifest fetch failed: ${previewRes.status}`);
+      throw new PreviewManifestError(
+        'manifest-unknown',
+        `Preview manifest fetch failed: ${previewRes.status}`,
+      );
     }
     const live = await previewRes.json() as {
       appName?: string;

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { RuntimePreviewIframe, type PreviewPhase } from './RuntimePreviewIframe';
+import { PreviewErrorBanner, type PreviewErrorCode } from './PreviewErrorBanner';
 
 /**
  * CentralCanvas (Fase 1 cierre, Preview-as-Runtime):
@@ -74,6 +75,36 @@ export const CentralCanvas: React.FC = () => {
     if (previewPhase === 'splash' && !splashAvailable) setPreviewPhase('app');
   }, [previewPhase, onboardingAvailable, splashAvailable]);
 
+  // Phase 2.3 — preview channel error state. CentralCanvas owns it
+  // (not RuntimePreviewIframe) because the banner has to render
+  // ABOVE the smartphone mockup, outside its overflow-hidden frame.
+  // iframeKey drives the retry: bumping it forces the inner <iframe>
+  // to remount with a fresh state tree.
+  const [previewError, setPreviewError] = useState<{ code: PreviewErrorCode; message: string } | null>(null);
+  const [iframeKey, setIframeKey] = useState(0);
+  const handlePreviewError = useCallback((error: { code: PreviewErrorCode; message: string }) => {
+    // Phase 2.3 — functional update: a late handshake-timeout (always
+    // fires at 5s while previewReady is false) must NOT overwrite a
+    // specific error already shown. If the runtime emitted
+    // manifest-404 at t=1s, we don't want "El preview no responde"
+    // pisándolo at t=5s: the channel DID respond (with an error).
+    // The factually correct message is the runtime's. Any other
+    // (non-timeout) error CAN replace an existing one — that's an
+    // upgrade to more specific info.
+    setPreviewError((prev) => {
+      if (prev && error.code === 'handshake-timeout') return prev;
+      return error;
+    });
+  }, []);
+  const handlePreviewReady = useCallback(() => {
+    // Successful handshake after a retry → dismiss any stale banner.
+    setPreviewError(null);
+  }, []);
+  const retryPreview = useCallback(() => {
+    setPreviewError(null);
+    setIframeKey((k) => k + 1);
+  }, []);
+
   return (
     <main
       className="flex-1 flex flex-col items-center overflow-y-auto p-8 gap-4"
@@ -110,6 +141,16 @@ export const CentralCanvas: React.FC = () => {
         })}
       </div>
 
+      {/* Phase 2.3 — preview error banner above the mockup,
+          contextual to the preview (not top-bar global, which would
+          compete with ImpersonationBanner). Width matches the mockup
+          (~390px) so the banner sits visually anchored to it. */}
+      {previewError && (
+        <div className="w-[390px]">
+          <PreviewErrorBanner code={previewError.code} onRetry={retryPreview} />
+        </div>
+      )}
+
       {/* Mobile Device Simulator Frame */}
       <div className="w-[390px] h-[844px] bg-white rounded-[44px] shadow-[0_24px_60px_rgba(0,0,0,0.1),0_0_0_12px_#0f172a,0_0_0_13px_#334155] relative overflow-hidden">
         {/* Notch simulation (Dynamic Island Style) — chrome físico
@@ -121,7 +162,16 @@ export const CentralCanvas: React.FC = () => {
             (iframe nuevo, previewReady=false, queue vacía). Sin el key,
             la sesión vieja podría enviar postMessages al iframe nuevo
             durante su primer paint. */}
-        {appId && <RuntimePreviewIframe key={appId} appId={appId} previewPhase={previewPhase} />}
+        {appId && (
+          <RuntimePreviewIframe
+            key={appId}
+            appId={appId}
+            previewPhase={previewPhase}
+            iframeKey={iframeKey}
+            onPreviewError={handlePreviewError}
+            onPreviewReady={handlePreviewReady}
+          />
+        )}
       </div>
     </main>
   );

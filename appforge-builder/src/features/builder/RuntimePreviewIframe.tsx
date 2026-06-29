@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useBuilderStore } from '../../store/useBuilderStore';
 import { SelectionOverlay, type ElementBounds } from './SelectionOverlay';
+import type { PreviewErrorCode } from './PreviewErrorBanner';
 
 export type PreviewPhase = 'app' | 'onboarding' | 'splash';
 
@@ -14,10 +15,33 @@ interface Props {
    * 'onboarding' / 'splash'. Default 'app' = the editing mode.
    */
   previewPhase: PreviewPhase;
+  /**
+   * Phase 2.3 — monotonic key controlled by the parent
+   * (CentralCanvas). Used as the `key` of the inner <iframe>
+   * element: bumping it forces React to unmount + remount the
+   * iframe with a clean state tree. The parent's retry button
+   * increments this; we don't bump it ourselves.
+   */
+  iframeKey: number;
+  /**
+   * Phase 2.3 — called when the runtime emits preview-error OR
+   * the handshake doesn't complete within HANDSHAKE_TIMEOUT_MS
+   * after mount. The parent owns the error state + the banner UI;
+   * we only detect and report.
+   */
+  onPreviewError: (error: { code: PreviewErrorCode; message: string }) => void;
+  /**
+   * Phase 2.3 — true once the runtime has sent preview-ready for
+   * the current iframe instance. Parent reads this to suppress
+   * the handshake timeout when it already fired (and to know if
+   * the connection is healthy after a retry).
+   */
+  onPreviewReady?: () => void;
 }
 
 const PREVIEW_ORIGIN = 'https://preview.creatu.app';
 const DEBOUNCE_MS = 200;
+const HANDSHAKE_TIMEOUT_MS = 5000;
 
 /**
  * Preview-as-Runtime, Fase 2.1 — sync builder → iframe.
@@ -58,7 +82,7 @@ const DEBOUNCE_MS = 200;
  * quedaría enviando manifest-update al iframe de App B durante el
  * primer paint.
  */
-export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) => {
+export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase, iframeKey, onPreviewError, onPreviewReady }) => {
   // parentOrigin: passed to the iframe so the runtime knows where to
   // send outgoing postMessages (element-click, element-hover,
   // element-bounds) with a strict targetOrigin. See preview-bridge.ts
@@ -75,6 +99,11 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) =
   // command — two consecutive sends with the same tabIndex still
   // fire because the nonce changes, even though tabIndex repeats.
   const navTabNonceRef = useRef(0);
+  // Phase 2.3 — error state lives in the parent (CentralCanvas).
+  // We only own the detection logic (postMessage listener,
+  // handshake timeout) and report via onPreviewError. iframeKey
+  // is a prop the parent controls — bumping it remounts the
+  // iframe via React's key reconciliation.
 
   // Phase 2.2 state — bounds reported by the runtime per element,
   // and the currently hovered element id (null when the cursor is
@@ -109,6 +138,9 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) =
 
       if (data.type === 'preview-ready') {
         setPreviewReady(true);
+        // Phase 2.3 — notify parent so it can dismiss any stale
+        // error banner (e.g. retry succeeded, handshake arrived).
+        onPreviewReady?.();
         const pending = pendingPayloadRef.current;
         if (pending && iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage(
@@ -171,11 +203,48 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) =
         setHoveredId((prev) => (prev === data.elementId ? null : prev));
         return;
       }
+
+      // Phase 2.3 — runtime emits preview-error when its manifest
+      // load fails. Report to the parent so it can show the banner
+      // with the right copy. Message goes to console only — never
+      // shown raw to the user.
+      if (data.type === 'preview-error' && typeof data.code === 'string') {
+        const msg = typeof data.message === 'string' ? data.message : '';
+        console.warn('[Preview] runtime error:', data.code, msg);
+        onPreviewError({ code: data.code as PreviewErrorCode, message: msg });
+        return;
+      }
     };
 
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [selectElement]);
+  }, [selectElement, onPreviewError, onPreviewReady]);
+
+  // Phase 2.3 — handshake timeout. If the runtime hasn't sent
+  // preview-ready within HANDSHAKE_TIMEOUT_MS (5s), report
+  // 'handshake-timeout' to the parent so it shows the banner.
+  // Re-runs when iframeKey changes (the parent's retry bumps it
+  // → fresh iframe instance → fresh timer).
+  useEffect(() => {
+    if (previewReady) return;
+    const timer = setTimeout(() => {
+      onPreviewError({ code: 'handshake-timeout', message: 'Handshake timeout' });
+    }, HANDSHAKE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [previewReady, iframeKey, onPreviewError]);
+
+  // Phase 2.3 — when the parent bumps iframeKey (retry), the
+  // <iframe key={iframeKey}> below remounts. We reset our local
+  // state so we don't keep stale flags/queue from the previous
+  // instance. previewReady is the most important: a stale `true`
+  // would suppress the timeout and let a broken iframe pass.
+  useEffect(() => {
+    setPreviewReady(false);
+    pendingPayloadRef.current = null;
+    setBounds({});
+    setHoveredId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iframeKey]);
 
   // Bounds cleanup on schema change: if the user deletes a module,
   // its entry stays in `bounds` forever. Prune entries for ids that
@@ -248,7 +317,15 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) =
 
   return (
     <>
+      {/* Phase 2.3 — key={iframeKey} drives the retry mechanism.
+          Parent (CentralCanvas) bumps the key; React unmounts +
+          remounts a fresh iframe with a clean state tree. The
+          surrounding RuntimePreviewIframe component stays mounted
+          (its key in CentralCanvas is appId), so its post-message
+          listener, store subscriptions, and our state-reset
+          useEffect above all stay alive across retries. */}
       <iframe
+        key={iframeKey}
         ref={iframeRef}
         src={src}
         title="Preview de la app"

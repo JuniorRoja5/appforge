@@ -1,4 +1,4 @@
-import { isPreviewMode } from './manifest';
+import { isPreviewMode, type PreviewErrorCode } from './manifest';
 
 /**
  * Preview-as-Runtime Phase 2.2 — outgoing postMessage bridge.
@@ -106,4 +106,25 @@ export function sendElementBounds(elementId: string, bounds: ElementBounds): voi
  */
 export function sendElementUnmounted(elementId: string): void {
   sendToParent({ type: 'element-unmounted', elementId });
+}
+
+/**
+ * Phase 2.3 — preview-error: notify the builder that the runtime
+ * failed to load (manifest 404/500, network down, unknown).
+ *
+ * `code` lets the builder pick the right user-facing message
+ * ("Sin conexión..." vs "Esta app no se encontró..." etc.) and
+ * decide whether to retry automatically in the future. `message`
+ * is the raw error text for logs / debug — never shown to the
+ * end-user.
+ *
+ * `PreviewErrorCode` lives in manifest.ts (next to where it's
+ * thrown by PreviewManifestError). preview-bridge.ts re-uses it
+ * for the postMessage shape — single source of truth.
+ *
+ * In production (PWA / AAB without parentOrigin in URL),
+ * sendToParent is a silent no-op — zero overhead for end-users.
+ */
+export function sendPreviewError(code: PreviewErrorCode, message: string): void {
+  sendToParent({ type: 'preview-error', code, message });
 }
