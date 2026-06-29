@@ -129,8 +129,15 @@ export class AuthService {
       );
     }
 
-    // Atomic: create tenant + subscription + user in a single transaction
-    const tenant = await this.prisma.$transaction(async (tx) => {
+    // Atomic: create tenant + subscription + user en UNA SOLA transaction.
+    // Pre-fix: el user.create vivía fuera del $transaction; si fallaba
+    // (p. ej. unique constraint en email tras una race entre el check
+    // L125 y el insert), quedaba un tenant + subscription huérfanos en
+    // DB sin user asociado. usersService.create() es trivialmente
+    // equivalente a prisma.user.create({ data }) (medido en
+    // users.service.ts L44-48) — sin side effects que se pierdan al
+    // moverlo dentro del tx.
+    const { user } = await this.prisma.$transaction(async (tx) => {
       const t = await tx.tenant.create({
         data: { name: data.email.split('@')[0] },
       });
@@ -141,14 +148,15 @@ export class AuthService {
           expiresAt: new Date('2099-12-31'),
         },
       });
-      return t;
-    });
-
-    const user = await this.usersService.create({
-      email: data.email,
-      password: hashedPassword,
-      role: 'CLIENT',
-      tenant: { connect: { id: tenant.id } },
+      const u = await tx.user.create({
+        data: {
+          email: data.email,
+          password: hashedPassword,
+          role: 'CLIENT',
+          tenant: { connect: { id: t.id } },
+        },
+      });
+      return { tenant: t, user: u };
     });
 
     this.notifyNewRegistration(user, 'email');
