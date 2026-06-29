@@ -144,6 +144,13 @@ async function bootstrap() {
     process.env.PUBLIC_BUILDER_URL,
     process.env.PUBLIC_ADMIN_URL,
     process.env.PUBLIC_PWA_URL,
+    // PUBLIC_PREVIEW_URL: subdominio dedicado del runtime servido como
+    // iframe dentro del builder (preview-as-runtime, ver plan Fase 0).
+    // Sin este origen permitido, las llamadas del iframe a /apps/:id/
+    // runtime-config y resto de endpoints públicos fallan con CORS y el
+    // preview se ve vacío. Mismo patrón que las otras URLs — env var por
+    // entorno, sin hardcodear el dominio en código.
+    process.env.PUBLIC_PREVIEW_URL,
   ].filter(Boolean) as string[];
 
   // SECURITY NOTE (C4): CORS allows !origin (null Origin) intentionally.

@@ -3,6 +3,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -37,10 +38,15 @@ export class RuntimeConfigController {
   @UseGuards(ThrottlerGuard)
   async getRuntimeConfig(
     @Param('appId', ParseUUIDPipe) appId: string,
+    // ?preview=true: el iframe del builder (preview.creatu.app) marca su
+    // llamada. Hoy el service no diferencia comportamiento, pero el
+    // parámetro queda registrado para futuras divergencias (omitir
+    // filtros de plan, etc.). Ver runtime-config.service.ts.
+    @Query('preview') preview: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.service.getRuntimeConfig(appId);
+    const result = await this.service.getRuntimeConfig(appId, preview === 'true');
 
     // ETag por updatedAt en ISO (precisión ms — evita el wart de
     // Last-Modified, que es segundo). Comilla obligatoria por RFC 7232:

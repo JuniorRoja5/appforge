@@ -9,6 +9,13 @@ import { resolvePrivacyUrl } from '../lib/tracking-urls';
 // que viven en el mismo JSON pero son operacionales del build, no del runtime.
 export interface RuntimeConfigResponse {
   version: string;
+  // appName: añadido para el flujo preview-as-runtime (Fase 0).
+  // El runtime en modo preview no tiene manifest baked (no hay PWA
+  // horneada per-app aquí — el iframe sirve el runtime standalone
+  // contra runtime-config). Sin appName, el header del AppShell no
+  // tiene qué pintar. Para el runtime en producción (PWA/AAB) este
+  // campo es informativo extra; el shape baked sigue mandando.
+  appName: string;
   schema: unknown;
   designTokens: unknown;
   appConfig: {
@@ -23,7 +30,16 @@ export interface RuntimeConfigResponse {
 export class RuntimeConfigService {
   constructor(private prisma: PrismaService) {}
 
-  async getRuntimeConfig(appId: string): Promise<RuntimeConfigResponse> {
+  /**
+   * @param appId UUID de la app.
+   * @param isPreview true cuando el cliente llega desde el iframe del
+   *   builder (preview.creatu.app/?appId=...&preview=true). Hoy NO altera
+   *   el response — todos los filtros aplican igual. Preventivo para
+   *   futuras divergencias (p.ej. omitir filtros de plan que hagan que
+   *   un módulo deshabilitado por billing no se vea en preview; el
+   *   cliente que está diseñando debe ver TODO lo que ha configurado).
+   */
+  async getRuntimeConfig(appId: string, _isPreview = false): Promise<RuntimeConfigResponse> {
     // findFirst + deletedAt:null en una sola query — apps soft-deleted no se
     // sirven al runtime (devolvemos 404, igual que ensureOwnership en
     // apps.service:41). select explícito como defensa en profundidad: si
@@ -33,6 +49,7 @@ export class RuntimeConfigService {
       where: { id: appId, deletedAt: null },
       select: {
         id: true,
+        name: true,
         schema: true,
         designTokens: true,
         appConfig: true,
@@ -48,6 +65,7 @@ export class RuntimeConfigService {
 
     return {
       version: app.updatedAt.toISOString(),
+      appName: app.name,
       schema: app.schema,
       designTokens: app.designTokens,
       appConfig: {
