@@ -45,16 +45,26 @@ export const useBuilderStore = create<BuilderState>()(
       selectedElementId: null,
       designTokens: null,
 
-      addElement: (moduleId, config, navMeta) => set((state) => ({
-        elements: [...state.elements, {
-          id: crypto.randomUUID(),
-          moduleId,
-          config,
-          tabIndex: navMeta?.tabIndex ?? null,
-          tabLabel: navMeta?.tabLabel ?? '',
-          tabIcon: navMeta?.tabIcon ?? 'circle',
-        }]
-      })),
+      // addElement auto-selecciona el módulo recién creado: el cliente
+      // que acaba de añadirlo casi siempre quiere configurarlo a
+      // continuación, y la selección es lo que destapa el SettingsPanel
+      // + el TabAssignment en el RightSidebar. Sin auto-select, tras un
+      // "+" el cliente tendría que ir a la sección "Estructura" del
+      // LeftSidebar y clicar la fila correcta — fricción innecesaria.
+      addElement: (moduleId, config, navMeta) => set((state) => {
+        const newId = crypto.randomUUID();
+        return {
+          elements: [...state.elements, {
+            id: newId,
+            moduleId,
+            config,
+            tabIndex: navMeta?.tabIndex ?? null,
+            tabLabel: navMeta?.tabLabel ?? '',
+            tabIcon: navMeta?.tabIcon ?? 'circle',
+          }],
+          selectedElementId: newId,
+        };
+      }),
 
       updateElementConfig: (elementId, config) => set((state) => ({
         elements: state.elements.map(el => el.id === elementId ? { ...el, config } : el)
