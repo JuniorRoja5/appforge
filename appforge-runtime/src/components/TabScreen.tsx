@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import type { CanvasElement } from '../lib/manifest';
 import { getModule } from '../modules/registry';
 import { trackModuleView } from '../lib/analytics';
+import { isPreviewMode } from '../lib/manifest';
+import { getParentOrigin, sendElementClick } from '../lib/preview-bridge';
 import { RuntimeErrorBoundary } from './RuntimeErrorBoundary';
 import { PreviewSelectableWrapper } from './PreviewSelectableWrapper';
 
@@ -35,9 +37,19 @@ export const TabScreen: React.FC<Props> = ({ elements, apiUrl, appId }) => {
     [elements],
   );
 
+  // Phase 2.2b — click on empty area of the preview (between
+  // modules, padding) → sendElementClick(null) → builder
+  // deselects, RightSidebar returns to "Tema y Diseño". Each
+  // PreviewSelectableWrapper already stops propagation on its
+  // own onClick, so clicks on modules never reach this handler.
+  const handleEmptyClick = () => {
+    if (isPreviewMode() && getParentOrigin()) sendElementClick(null);
+  };
+
   return (
     <div
       className="flex-1 overflow-y-auto"
+      onClick={handleEmptyClick}
       style={{
         padding: `var(--spacing-screen-v, 20px) var(--spacing-screen-h, 16px)`,
         backgroundColor: 'var(--color-surface-bg, #fff)',

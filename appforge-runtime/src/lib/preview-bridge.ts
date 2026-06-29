@@ -73,7 +73,13 @@ function sendToParent(message: unknown): void {
   }
 }
 
-export function sendElementClick(elementId: string): void {
+/**
+ * elementId === null when the user clicks on empty area inside
+ * the preview (between modules, padding, etc). The builder
+ * interprets that as a deselect → selectElement(null) → the
+ * RightSidebar returns to "Tema y Diseño".
+ */
+export function sendElementClick(elementId: string | null): void {
   sendToParent({ type: 'element-click', elementId });
 }
 

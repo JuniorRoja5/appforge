@@ -2,8 +2,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useBuilderStore } from '../../store/useBuilderStore';
 import { SelectionOverlay, type ElementBounds } from './SelectionOverlay';
 
+export type PreviewPhase = 'app' | 'onboarding' | 'splash';
+
 interface Props {
   appId: string;
+  /**
+   * Phase 2.2b Pieza A — current selected preview phase from the
+   * segmented control in CentralCanvas. The iframe receives a
+   * `preview-phase` postMessage every time this changes (after
+   * the handshake), so the runtime can switch between 'ready' /
+   * 'onboarding' / 'splash'. Default 'app' = the editing mode.
+   */
+  previewPhase: PreviewPhase;
 }
 
 const PREVIEW_ORIGIN = 'https://preview.creatu.app';
@@ -48,7 +58,7 @@ const DEBOUNCE_MS = 200;
  * quedaría enviando manifest-update al iframe de App B durante el
  * primer paint.
  */
-export const RuntimePreviewIframe: React.FC<Props> = ({ appId }) => {
+export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase }) => {
   // parentOrigin: passed to the iframe so the runtime knows where to
   // send outgoing postMessages (element-click, element-hover,
   // element-bounds) with a strict targetOrigin. See preview-bridge.ts
@@ -60,6 +70,11 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId }) => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pendingPayloadRef = useRef<{ schema: unknown; designTokens: unknown } | null>(null);
   const [previewReady, setPreviewReady] = useState(false);
+  // Phase 2.2b — monotonic nonce for navigate-to-tab commands.
+  // The runtime treats each (tabIndex, nonce) pair as a single-shot
+  // command — two consecutive sends with the same tabIndex still
+  // fire because the nonce changes, even though tabIndex repeats.
+  const navTabNonceRef = useRef(0);
 
   // Phase 2.2 state — bounds reported by the runtime per element,
   // and the currently hovered element id (null when the cursor is
@@ -72,6 +87,7 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId }) => {
   const elements = useBuilderStore((s) => s.elements);
   const designTokens = useBuilderStore((s) => s.designTokens);
   const selectElement = useBuilderStore((s) => s.selectElement);
+  const selectedElementId = useBuilderStore((s) => s.selectedElementId);
 
   // Listener for all incoming postMessages from the iframe. Handles:
   //   - preview-ready: the original handshake (Phase 2.1).
@@ -104,7 +120,11 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId }) => {
         return;
       }
 
-      if (data.type === 'element-click' && typeof data.elementId === 'string') {
+      if (data.type === 'element-click'
+        && (typeof data.elementId === 'string' || data.elementId === null)
+      ) {
+        // null = user clicked empty area inside the preview →
+        // deselect (RightSidebar returns to "Tema y Diseño").
         selectElement(data.elementId);
         return;
       }
@@ -172,6 +192,38 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId }) => {
       return pruned ? next : prev;
     });
   }, [elements]);
+
+  // Phase 2.2b — navigate-to-tab: when the selection changes (from
+  // any source: panel click, mockup click, popover auto-select),
+  // tell the iframe to switch to the selected module's tab so the
+  // outline becomes visible. Skip if the module has tabIndex null
+  // (visible on all tabs — no navigation needed) or if the iframe
+  // is not ready yet (the handshake hasn't completed).
+  // Each send carries a monotonic nonce — the runtime treats every
+  // command as one-shot, so the end-user can still click other
+  // tabs in the preview without being snapped back.
+  useEffect(() => {
+    if (!previewReady || !selectedElementId) return;
+    const sel = elements.find((el) => el.id === selectedElementId);
+    if (!sel || sel.tabIndex == null) return;
+    navTabNonceRef.current += 1;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'navigate-to-tab', tabIndex: sel.tabIndex, nonce: navTabNonceRef.current },
+      PREVIEW_ORIGIN,
+    );
+  }, [selectedElementId, elements, previewReady]);
+
+  // Phase 2.2b Pieza A — preview-phase: send the current phase to
+  // the iframe whenever it changes (after handshake). The runtime
+  // listener maps 'app' → 'ready', 'onboarding' → 'onboarding',
+  // 'splash' → 'splash'.
+  useEffect(() => {
+    if (!previewReady) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'preview-phase', phase: previewPhase },
+      PREVIEW_ORIGIN,
+    );
+  }, [previewPhase, previewReady]);
 
   // Suscripción a cambios del store + debounce 200ms + envío al iframe.
   // Reactivo a (elements, designTokens, previewReady): si previewReady

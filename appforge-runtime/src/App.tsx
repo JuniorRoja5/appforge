@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Splash } from './lib/platform';
 import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, updateManifestFromMessage, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
@@ -24,6 +24,21 @@ export const App: React.FC = () => {
   const [manifest, setManifest] = useState<AppManifest | null>(null);
   const [phase, setPhase] = useState<AppPhase>('loading');
   const [error, setError] = useState('');
+  // Phase 2.2b — forceTab as a single-shot command from the builder.
+  // The nonce changes on every send, so AppShell's useEffect (with
+  // forceTab as object dependency) fires once per command — never
+  // again on internal activeTab changes. Without the nonce + with
+  // activeTab in the deps, manual tab clicks would re-trigger the
+  // effect and snap the user back to the last forced tab, trapping
+  // them. The nonce makes navigate-to-tab a fire-once command, not
+  // a sticky state.
+  const [forceTab, setForceTab] = useState<{ tabIndex: number; nonce: number } | null>(null);
+  // Tracks whether we've already sent the preview-ready handshake.
+  // The handshake must fire exactly once — when phase reaches
+  // 'ready' the first time. Without this ref, switching phase via
+  // the preview-phase selector ('ready' → 'onboarding' → 'ready')
+  // would re-send it on every return to 'ready'.
+  const handshakeSentRef = useRef(false);
 
   useEffect(() => {
     console.log('[AppForge] Loading manifest...');
@@ -99,6 +114,16 @@ export const App: React.FC = () => {
   }, []);
 
   const handleSplashFinish = useCallback(() => {
+    // Phase 2.2b — in preview mode, finishing splash returns to
+    // 'ready' (the App view) instead of advancing to onboarding /
+    // terms. The constructor is using a preview-phase selector to
+    // INSPECT each phase visually; advancing through the natural
+    // flow would hijack their navigation. Real PWA / AAB end-users
+    // keep the original chain.
+    if (isPreviewMode()) {
+      setPhase('ready');
+      return;
+    }
     if (manifest?.appConfig.onboarding?.enabled && !localStorage.getItem('appforge_onboarding_seen')) {
       setPhase('onboarding');
     } else if (needsTerms(manifest)) {
@@ -109,6 +134,13 @@ export const App: React.FC = () => {
   }, [manifest, needsTerms]);
 
   const handleOnboardingFinish = useCallback(() => {
+    // Phase 2.2b — same reasoning as handleSplashFinish: in preview
+    // we always return to 'ready' after viewing onboarding, never
+    // advance to terms.
+    if (isPreviewMode()) {
+      setPhase('ready');
+      return;
+    }
     if (needsTerms(manifest)) {
       setPhase('terms');
     } else {
@@ -141,8 +173,18 @@ export const App: React.FC = () => {
   // AppShell reacciona a schema vía useMemo([schema]) y a designTokens vía
   // las CSS variables reescritas. applyDesignTokens es idempotente — re-
   // llamar es seguro.
+  // Phase 2.2b — in PREVIEW mode the subscriber lives in ALL phases
+  // (app / onboarding / splash), so edits in the SettingsPanel
+  // repaint live regardless of which phase the constructor is
+  // inspecting. The original gate (phase === 'ready' only) was
+  // correct for production — it honored §5: don't change the legal
+  // doc / onboarding under the end-user's feet at runtime — but it
+  // made the preview-phase selector silently broken: editing a
+  // welcome slide while in 'onboarding' phase did not repaint.
+  // In production (NOT preview), the gate stays as before.
   useEffect(() => {
-    if (phase !== 'ready') return;
+    if (!isPreviewMode() && phase !== 'ready') return;
+
     const current = getManifest();
     if (current) {
       setManifest(current);
@@ -153,12 +195,17 @@ export const App: React.FC = () => {
       if (live.designTokens) applyDesignTokens(live.designTokens);
     });
 
-    // Preview-as-Runtime Fase 2.1 — handshake: el iframe del builder
-    // espera este mensaje antes de empezar a enviar manifest-update.
-    // Sin él, los primeros edits del cliente se perderían (postMessage
-    // antes de que esté montado el listener del runtime). En PWA real
-    // no hay parent — postMessage a window.parent === self es no-op.
-    if (isPreviewMode() && window.parent !== window) {
+    // Preview-as-Runtime Phase 2.1 — handshake fires ONCE, when
+    // phase first reaches 'ready' AND we are in preview mode AND
+    // we have a parent window. Guard with handshakeSentRef so
+    // phase changes via preview-phase selector don't re-send it.
+    if (
+      !handshakeSentRef.current
+      && phase === 'ready'
+      && isPreviewMode()
+      && window.parent !== window
+    ) {
+      handshakeSentRef.current = true;
       window.parent.postMessage({ type: 'preview-ready' }, '*');
     }
 
@@ -192,8 +239,41 @@ export const App: React.FC = () => {
       if (!ALLOWED_ORIGINS.has(event.origin)) return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
+
       if (data.type === 'manifest-update' && data.payload) {
         updateManifestFromMessage(data.payload);
+        return;
+      }
+
+      // Phase 2.2b — navigate-to-tab: single-shot command from the
+      // builder. The nonce makes every command a fresh object so
+      // AppShell's useEffect (with forceTab in deps, but NOT
+      // activeTab) fires exactly once per send. End-user clicks on
+      // the runtime's TabBar update activeTab without re-triggering
+      // the override — they don't get snapped back to the last
+      // forced tab. Two consecutive selects of modules on the same
+      // tab still work because the nonce changes both times even
+      // if tabIndex repeats.
+      if (
+        data.type === 'navigate-to-tab'
+        && typeof data.tabIndex === 'number'
+        && typeof data.nonce === 'number'
+      ) {
+        setForceTab({ tabIndex: data.tabIndex, nonce: data.nonce });
+        return;
+      }
+
+      // Phase 2.2b Pieza A — preview-phase: the builder offers a
+      // segmented control "App / Bienvenida / Splash". Each option
+      // forces the runtime into a phase so the constructor can see
+      // what they are designing. Terms is intentionally NOT a
+      // selectable phase — it is a gate, not visual content.
+      if (data.type === 'preview-phase' && typeof data.phase === 'string') {
+        if (data.phase === 'app') setPhase('ready');
+        else if (data.phase === 'onboarding') setPhase('onboarding');
+        else if (data.phase === 'splash') setPhase('splash');
+        // Any other value is ignored silently.
+        return;
       }
     };
 
@@ -240,7 +320,7 @@ export const App: React.FC = () => {
           onAccept={handleTermsAccept}
         />
       )}
-      {phase === 'ready' && <AppShell manifest={manifest} />}
+      {phase === 'ready' && <AppShell manifest={manifest} forceTab={forceTab} />}
       {/* Bug 2: install banner. Solo cuando phase==='ready' — sin esto
           aparecería sobre splash/onboarding/terms y romperia el flujo
           de bienvenida. Internamente el componente decide visibilidad

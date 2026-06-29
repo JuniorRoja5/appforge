@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { CanvasElement, AppManifest } from '../lib/manifest';
 import { trackEvent } from '../lib/analytics';
 import { TabScreen } from './TabScreen';
@@ -21,9 +21,21 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
 
 interface Props {
   manifest: AppManifest;
+  /**
+   * Phase 2.2b — single-shot command to jump to a specific tab.
+   * The nonce changes every time the builder issues a new
+   * navigate-to-tab, so the useEffect below — with forceTab in
+   * deps but NOT activeTab — fires exactly once per command.
+   * End-user clicks on the TabBar update activeTab through the
+   * internal setActiveTab path without re-triggering the effect.
+   * Without the nonce + with activeTab in the deps, a manual tab
+   * click after a forced navigation would compare forceTab !==
+   * activeTab and snap back to the forced tab, trapping the user.
+   */
+  forceTab?: { tabIndex: number; nonce: number } | null;
 }
 
-export const AppShell: React.FC<Props> = ({ manifest }) => {
+export const AppShell: React.FC<Props> = ({ manifest, forceTab }) => {
   const { schema, apiUrl, appId, designTokens, appConfig } = manifest;
 
   // Legal global — desacoplado de user-profile. Play exige que la privacidad
@@ -110,6 +122,18 @@ export const AppShell: React.FC<Props> = ({ manifest }) => {
     const tab = tabs.find((t) => t.index === index);
     if (tab) trackEvent('screen_view', undefined, { tab: tab.label });
   }, [tabs]);
+
+  // Phase 2.2b — single-shot tab override from the builder. Fires
+  // exactly once per nonce (= once per navigate-to-tab command).
+  // activeTab is intentionally NOT in the deps: that would re-run
+  // the effect after the user clicks a different tab manually and
+  // snap them back to the forced one.
+  useEffect(() => {
+    if (forceTab == null) return;
+    if (!tabs.some((t) => t.index === forceTab.tabIndex)) return;
+    setActiveTabRaw(forceTab.tabIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceTab, tabs]);
 
   const hasTabs = tabs.length > 1;
 

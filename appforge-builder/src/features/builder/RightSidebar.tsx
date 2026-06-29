@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { useBuilderStore } from '../../store/useBuilderStore';
 import { getModule } from '../../modules/registry';
 import { ThemeEditorPanel } from './ThemeEditorPanel';
@@ -73,7 +74,7 @@ const TabAssignment: React.FC<{ elementId: string; moduleId: string; currentTabI
 };
 
 export const RightSidebar: React.FC = () => {
-  const { elements, selectedElementId, updateElementConfig, removeElement } = useBuilderStore();
+  const { elements, selectedElementId, updateElementConfig, removeElement, selectElement } = useBuilderStore();
 
   const selectedElement = elements.find(el => el.id === selectedElementId);
   const moduleDef = selectedElement ? getModule(selectedElement.moduleId) : null;
@@ -82,6 +83,24 @@ export const RightSidebar: React.FC = () => {
 
   return (
     <aside className="w-[400px] bg-white border-l border-gray-200/80 flex flex-col h-full overflow-hidden shrink-0 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
+      {/* Phase 2.2b — when a module is selected, show a "← Tema y
+          Diseño" link above the header so the user can return to
+          the global theme panel without having to delete the module
+          or click empty area of the preview. This was a regression
+          from the old canvas: clicking empty area used to call
+          selectElement(null) implicitly via the <main onClick>;
+          when the canvas became an iframe, that path disappeared. */}
+      {selectedElement && (
+        <button
+          onClick={() => selectElement(null)}
+          className="flex items-center gap-1.5 px-5 pt-3 pb-1 text-[11px] font-semibold text-gray-500 hover:text-primary transition-colors text-left"
+          title="Volver al panel global de tema y diseño"
+        >
+          <ArrowLeft size={12} strokeWidth={2.5} />
+          Tema y Diseño
+        </button>
+      )}
+
       <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-white/95 backdrop-blur-xl sticky top-0 z-10">
         <div>
           <h2 className="font-bold text-[11px] uppercase tracking-widest text-gray-400">

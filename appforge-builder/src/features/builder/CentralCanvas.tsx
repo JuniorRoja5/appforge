@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { RuntimePreviewIframe } from './RuntimePreviewIframe';
+import { RuntimePreviewIframe, type PreviewPhase } from './RuntimePreviewIframe';
 
 /**
  * CentralCanvas (Fase 1 cierre, Preview-as-Runtime):
@@ -19,24 +19,63 @@ import { RuntimePreviewIframe } from './RuntimePreviewIframe';
  *
  * Inserción de módulos: se hace desde LeftSidebar (botón "+" en
  * hover). El drag-drop cross-origin sobre el iframe lo bloquea el
- * browser por seguridad — out of scope hoy, TECH_DEBT futuro.
+ * browser por seguridad — out of scope hoy, llega en Fase 2.4.
  *
  * Sin `appId` no hay iframe (caso edge: routing roto / dev manual).
  * El smartphone se ve vacío con solo el notch. Mejor que un iframe
  * a `?appId=undefined` que daría 400 en backend.
+ *
+ * Phase 2.2b Pieza A — selector segmented "App / Bienvenida /
+ * Splash" sobre el mockup. Por defecto en "App" (modo editor de
+ * módulos, sin fricción). Cuando el cliente quiere inspeccionar
+ * sus pantallas de bienvenida, elige "Bienvenida" y el iframe
+ * entra en phase='onboarding' con sus slides reales. "Splash"
+ * idem para la pantalla splash. Terms NO es un fase seleccionable
+ * — es un gate de aceptación, no contenido visual.
  */
 export const CentralCanvas: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
+  const [previewPhase, setPreviewPhase] = useState<PreviewPhase>('app');
+
+  const phaseOptions: { value: PreviewPhase; label: string }[] = [
+    { value: 'app', label: 'App' },
+    { value: 'onboarding', label: 'Bienvenida' },
+    { value: 'splash', label: 'Splash' },
+  ];
 
   return (
     <main
-      className="flex-1 flex justify-center items-center overflow-y-auto p-12"
+      className="flex-1 flex flex-col items-center overflow-y-auto p-8 gap-4"
       style={{
         backgroundColor: '#f8fafc',
         backgroundImage: 'radial-gradient(#e2e8f0 1px, transparent 1px)',
         backgroundSize: '32px 32px',
       }}
     >
+      {/* Segmented control: phase of the preview. Compact pill
+          group above the mockup, centered, low visual weight so
+          it doesn't compete with the canvas content. */}
+      <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full p-0.5 shadow-sm shrink-0">
+        {phaseOptions.map((opt) => {
+          const isActive = previewPhase === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setPreviewPhase(opt.value)}
+              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
+                isActive
+                  ? 'bg-primary text-white'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              aria-pressed={isActive}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Mobile Device Simulator Frame */}
       <div className="w-[390px] h-[844px] bg-white rounded-[44px] shadow-[0_24px_60px_rgba(0,0,0,0.1),0_0_0_12px_#0f172a,0_0_0_13px_#334155] relative overflow-hidden">
         {/* Notch simulation (Dynamic Island Style) — chrome físico
@@ -48,7 +87,7 @@ export const CentralCanvas: React.FC = () => {
             (iframe nuevo, previewReady=false, queue vacía). Sin el key,
             la sesión vieja podría enviar postMessages al iframe nuevo
             durante su primer paint. */}
-        {appId && <RuntimePreviewIframe key={appId} appId={appId} />}
+        {appId && <RuntimePreviewIframe key={appId} appId={appId} previewPhase={previewPhase} />}
       </div>
     </main>
   );
