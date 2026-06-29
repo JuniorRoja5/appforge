@@ -2,6 +2,49 @@
 
 import { Prefs } from './platform';
 
+/**
+ * Modo preview-as-runtime: este bundle del runtime es servido también
+ * desde `preview.creatu.app/?appId=X` como iframe dentro del builder
+ * (plan Preview-as-Runtime, Fase 0).
+ *
+ * Detección por HOSTNAME (no solo query param) para garantizar que
+ * cualquier URL servida desde preview.creatu.app aplica el modo,
+ * incluso si el iframe no añadiera explícitamente &preview=true. El
+ * query param `?preview=true` queda como override para dev local
+ * (localhost). En PWA y AAB de cliente final, el hostname será el del
+ * cliente — nunca preview.creatu.app — así que el modo no se activa
+ * accidentalmente.
+ *
+ * Importado por App.tsx (decide skip de splash/onboarding/terms/push/
+ * analytics) y consumido aquí internamente por loadManifest() (decide
+ * skip del baked + fetch directo a runtime-config).
+ */
+export function isPreviewMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.location.hostname === 'preview.creatu.app') return true;
+  return new URLSearchParams(window.location.search).has('preview');
+}
+
+/**
+ * En modo preview no hay manifest baked (`app-manifest.json` no
+ * existe en preview.creatu.app — es app standalone). El apiUrl viene
+ * derivado del hostname:
+ *   - preview.creatu.app  → https://api.creatu.app
+ *   - localhost           → http://localhost:3000  (dev local del runtime)
+ *   - cualquier otro      → fallback prod (api.creatu.app)
+ *
+ * Si en algún momento se quiere ser más explícito (multi-env, staging),
+ * pasar `?apiUrl=` como query param desde el iframe del builder. Pero
+ * por ahora la derivación por hostname cubre los 2 entornos reales sin
+ * coordinación entre paquetes.
+ */
+function getPreviewApiUrl(): string {
+  if (typeof window === 'undefined') return 'https://api.creatu.app';
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000';
+  return 'https://api.creatu.app';
+}
+
 export interface CanvasElement {
   id: string;
   moduleId: string;
@@ -140,6 +183,38 @@ const _listeners: Array<(m: AppManifest) => void> = [];
 //   4) Retorna lo inmediato.
 export async function loadManifest(): Promise<AppManifest> {
   if (_manifest) return _manifest;
+
+  // PREVIEW MODE: el bundle no se ha horneado per-app — es app standalone
+  // servida desde preview.creatu.app/?appId=X. Saltamos el baked
+  // (no existe `app-manifest.json` aquí) y fetcheamos directo
+  // runtime-config con ?preview=true. apiUrl derivado del hostname.
+  if (isPreviewMode()) {
+    const params = new URLSearchParams(window.location.search);
+    const appId = params.get('appId');
+    if (!appId) {
+      throw new Error('Preview mode requires ?appId= in URL');
+    }
+    const apiUrl = getPreviewApiUrl();
+    const previewRes = await fetch(`${apiUrl}/apps/${appId}/runtime-config?preview=true`);
+    if (!previewRes.ok) {
+      throw new Error(`Preview manifest fetch failed: ${previewRes.status}`);
+    }
+    const live = await previewRes.json() as {
+      appName?: string;
+      schema: CanvasElement[];
+      designTokens: DesignTokens;
+      appConfig: AppManifest['appConfig'];
+    };
+    _manifest = {
+      appId,
+      apiUrl,
+      appName: live.appName ?? '',
+      schema: live.schema,
+      designTokens: live.designTokens,
+      appConfig: live.appConfig,
+    };
+    return _manifest;
+  }
 
   // 1) Baked siempre primero — per-app empaquetado por build.processor,
   // garantiza appId/apiUrl + snapshot offline para arranque sin red.

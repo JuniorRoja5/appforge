@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Splash } from './lib/platform';
-import { loadManifest, getManifest, onManifestUpdate, type AppManifest } from './lib/manifest';
+import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
 import { initPush } from './lib/push';
 import { initAuth } from './lib/auth';
@@ -16,6 +16,10 @@ import './modules';
 
 type AppPhase = 'loading' | 'splash' | 'onboarding' | 'terms' | 'ready';
 
+// isPreviewMode importado de lib/manifest.ts — única fuente de verdad,
+// usada también ahí para decidir si saltar el baked y fetchear
+// runtime-config directo. Ver el JSDoc del helper en lib/manifest.ts.
+
 export const App: React.FC = () => {
   const [manifest, setManifest] = useState<AppManifest | null>(null);
   const [phase, setPhase] = useState<AppPhase>('loading');
@@ -23,23 +27,36 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     console.log('[AppForge] Loading manifest...');
+    const previewMode = isPreviewMode();
     loadManifest()
       .then((m) => {
-        console.log('[AppForge] Manifest loaded:', m.appName, 'schema elements:', m.schema?.length);
+        console.log('[AppForge] Manifest loaded:', m.appName, 'schema elements:', m.schema?.length, previewMode ? '(preview mode)' : '');
         setManifest(m);
         if (m.designTokens) applyDesignTokens(m.designTokens);
 
-        // Initialize push notifications (no-op on web or if module not present)
-        initPush().catch((err) => console.warn('[Push] Init failed:', err));
-
-        // Initialize app-user auth (restore session from Preferences)
+        // Initialize app-user auth (restore session from Preferences).
+        // Se inicializa también en preview — es no-op si no hay sesión,
+        // cubre el caso de módulos que leen `getUser()` defensivamente.
         initAuth().catch((err) => console.warn('[Auth] Init failed:', err));
 
-        // Initialize analytics tracking (device info, session, flush timer)
-        initAnalytics().catch((err) => console.warn('[Analytics] Init failed:', err));
+        if (!previewMode) {
+          // Push notifications + analytics: skipped en preview-mode.
+          // El cliente que está diseñando no debe registrar dispositivos
+          // ni emitir eventos analytics — esos efectos secundarios
+          // pertenecen al end-user real de la app generada, no a la
+          // sesión de preview del builder.
+          initPush().catch((err) => console.warn('[Push] Init failed:', err));
+          initAnalytics().catch((err) => console.warn('[Analytics] Init failed:', err));
+        }
 
-        // Determine initial phase
-        if (m.appConfig.splash?.enabled) {
+        if (previewMode) {
+          // Preview-mode: directo a 'ready'. Saltamos splash, onboarding
+          // y terms gate — el cliente que diseña ya aceptó los términos
+          // del builder y no quiere atravesar tres pantallas de bienvenida
+          // para ver su app.
+          setPhase('ready');
+          Splash.hide().catch(() => {});
+        } else if (m.appConfig.splash?.enabled) {
           setPhase('splash');
           // Delay hiding native splash so the JS splash screen paints first
           setTimeout(() => Splash.hide().catch(() => {}), 150);
