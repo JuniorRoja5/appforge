@@ -158,6 +158,21 @@ export const BuilderLayout: React.FC = () => {
     return () => { cancelled = true; };
   }, [appId, token, navigate]);
 
+  // Phase 2.2c — load the AppConfig store at builder mount, not only
+  // when the user opens the Configuración modal. CentralCanvas reads
+  // config?.splash?.enabled / config?.onboarding?.{enabled,slides} to
+  // decide which preview-phase buttons are available; without this
+  // eager load, config stays null until the modal opens at least
+  // once, and "Bienvenida" / "Splash" sit permanently disabled even
+  // when the constructor has them configured.
+  const loadConfig = useAppConfigStore((s) => s.loadConfig);
+  useEffect(() => {
+    if (!appId || !token) return;
+    loadConfig(appId, token).catch((err) => {
+      console.error('Error loading app config on mount:', err);
+    });
+  }, [appId, token, loadConfig]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },

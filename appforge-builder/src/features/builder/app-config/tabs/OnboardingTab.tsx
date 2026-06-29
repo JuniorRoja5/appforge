@@ -131,23 +131,65 @@ export const OnboardingTab: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Image */}
-                <div className="flex items-center gap-3">
-                  {slide.imageUrl ? (
-                    <div className="w-16 h-16 rounded-lg border border-gray-200 overflow-hidden shrink-0">
-                      <img src={resolveAssetUrl(slide.imageUrl)} alt="" className="w-full h-full object-cover" />
+                {/* Image preview with safe-zone overlay (Phase 2.2c).
+                    Aspect 9:16 to mimic a phone screen. Image rendered
+                    with object-cover (same as the runtime), so what the
+                    constructor sees here is what gets cropped in the
+                    final app. The dashed central rectangle marks the
+                    "safe zone" — content guaranteed to be visible on
+                    any phone aspect ratio. The surrounding area is
+                    dimmed with a box-shadow inset so the safe area
+                    stands out clearly. Without this guide, the most
+                    common failure of the welcome screens is text or
+                    logos pinned to the edges that get cropped on
+                    narrower / taller phones.
+                    Width 50% of card so the slide controls (title /
+                    description) fit alongside; height auto via aspect. */}
+                <div className="flex gap-4 items-start">
+                  <div className="w-[45%] shrink-0">
+                    <div
+                      className="relative w-full rounded-lg border border-gray-200 overflow-hidden bg-gray-50"
+                      style={{ aspectRatio: '9 / 16' }}
+                    >
+                      {slide.imageUrl ? (
+                        <img
+                          src={resolveAssetUrl(slide.imageUrl)}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Image size={28} className="text-gray-300" />
+                        </div>
+                      )}
+                      {/* Safe-zone overlay. Inner dashed rectangle at
+                          80% width × 70% height, centered. Box-shadow
+                          inset paints the dim area outside without
+                          needing 4 separate divs. Container has
+                          overflow-hidden so the shadow doesn't leak. */}
+                      <div
+                        className="absolute pointer-events-none"
+                        style={{
+                          top: '15%',
+                          left: '10%',
+                          width: '80%',
+                          height: '70%',
+                          border: '1.5px dashed rgba(255, 255, 255, 0.9)',
+                          borderRadius: '4px',
+                          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.4)',
+                        }}
+                      />
                     </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
-                      <Image size={18} className="text-gray-300" />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => fileRefs.current[slide.id]?.click()}
-                    className="text-[11px] text-primary hover:underline"
-                  >
-                    {uploadingSlideId === slide.id ? 'Subiendo...' : slide.imageUrl ? 'Cambiar imagen' : 'Subir imagen'}
-                  </button>
+                    <button
+                      onClick={() => fileRefs.current[slide.id]?.click()}
+                      className="block w-full mt-2 text-[11px] text-primary hover:underline text-center"
+                    >
+                      {uploadingSlideId === slide.id ? 'Subiendo...' : slide.imageUrl ? 'Cambiar imagen' : 'Subir imagen'}
+                    </button>
+                    <p className="text-[10px] text-gray-400 mt-1 leading-tight text-center">
+                      Mantén logos y texto dentro del marco — los bordes pueden recortarse en algunos móviles.
+                    </p>
+                  </div>
                   <input
                     ref={(el) => { fileRefs.current[slide.id] = el; }}
                     type="file"
@@ -159,25 +201,27 @@ export const OnboardingTab: React.FC = () => {
                       e.target.value = '';
                     }}
                   />
+                  {/* Title + Description column. The original layout had
+                      these below the image; with the new phone-shape
+                      preview on the left, they sit on the right. */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <input
+                      type="text"
+                      value={slide.title}
+                      onChange={(e) => updateSlide(slide.id, { title: e.target.value })}
+                      placeholder="Título de la diapositiva"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                    <textarea
+                      value={slide.description}
+                      onChange={(e) => updateSlide(slide.id, { description: e.target.value })}
+                      placeholder="Descripción breve"
+                      rows={4}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
                 </div>
 
-                {/* Title */}
-                <input
-                  type="text"
-                  value={slide.title}
-                  onChange={(e) => updateSlide(slide.id, { title: e.target.value })}
-                  placeholder="Título de la diapositiva"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
-
-                {/* Description */}
-                <textarea
-                  value={slide.description}
-                  onChange={(e) => updateSlide(slide.id, { description: e.target.value })}
-                  placeholder="Descripción breve"
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                />
               </div>
             ))}
           </div>

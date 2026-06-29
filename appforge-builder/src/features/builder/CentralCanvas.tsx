@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { RuntimePreviewIframe, type PreviewPhase } from './RuntimePreviewIframe';
 
 /**
@@ -36,12 +37,42 @@ import { RuntimePreviewIframe, type PreviewPhase } from './RuntimePreviewIframe'
 export const CentralCanvas: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>('app');
+  const config = useAppConfigStore((s) => s.config);
 
-  const phaseOptions: { value: PreviewPhase; label: string }[] = [
-    { value: 'app', label: 'App' },
-    { value: 'onboarding', label: 'Bienvenida' },
-    { value: 'splash', label: 'Splash' },
+  // Phase 2.2c — a phase is "available" in the selector only if the
+  // constructor has actually configured it. Showing 'splash' / 'onboarding'
+  // when they are disabled would let the constructor inspect content the
+  // real app never renders — confusing and inconsistent. Disabled options
+  // stay visible (the constructor knows the feature exists) but cannot be
+  // selected.
+  const splashAvailable = config?.splash?.enabled === true;
+  const onboardingAvailable = config?.onboarding?.enabled === true
+    && (config?.onboarding?.slides?.length ?? 0) > 0;
+
+  const phaseOptions: { value: PreviewPhase; label: string; available: boolean; disabledHint: string }[] = [
+    { value: 'app', label: 'App', available: true, disabledHint: '' },
+    {
+      value: 'onboarding',
+      label: 'Bienvenida',
+      available: onboardingAvailable,
+      disabledHint: 'Actívala y añade diapositivas en Configuración › Bienvenida',
+    },
+    {
+      value: 'splash',
+      label: 'Splash',
+      available: splashAvailable,
+      disabledHint: 'Actívalo en Configuración › Splash',
+    },
   ];
+
+  // If the constructor disables a phase while the preview is showing it,
+  // revert to 'app' automatically. Without this, the segmented control
+  // and the runtime get out of sync — the runtime keeps rendering the
+  // (now empty) phase and the constructor sees a phantom selection.
+  useEffect(() => {
+    if (previewPhase === 'onboarding' && !onboardingAvailable) setPreviewPhase('app');
+    if (previewPhase === 'splash' && !splashAvailable) setPreviewPhase('app');
+  }, [previewPhase, onboardingAvailable, splashAvailable]);
 
   return (
     <main
@@ -58,17 +89,20 @@ export const CentralCanvas: React.FC = () => {
       <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full p-0.5 shadow-sm shrink-0">
         {phaseOptions.map((opt) => {
           const isActive = previewPhase === opt.value;
+          const isDisabled = !opt.available;
+          let className = 'px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ';
+          if (isDisabled) className += 'text-gray-300 cursor-not-allowed';
+          else if (isActive) className += 'bg-primary text-white';
+          else className += 'text-gray-600 hover:text-gray-900';
           return (
             <button
               key={opt.value}
               type="button"
-              onClick={() => setPreviewPhase(opt.value)}
-              className={`px-3 py-1 text-[12px] font-semibold rounded-full transition-colors ${
-                isActive
-                  ? 'bg-primary text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={() => { if (!isDisabled) setPreviewPhase(opt.value); }}
+              disabled={isDisabled}
+              className={className}
               aria-pressed={isActive}
+              title={isDisabled ? opt.disabledHint : undefined}
             >
               {opt.label}
             </button>
