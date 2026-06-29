@@ -51,7 +51,9 @@ export const OnboardingScreen: React.FC<Props> = ({ config, onFinish }) => {
     if (currentSlide < slides.length - 1) {
       setCurrentSlide((prev) => prev + 1);
     } else {
-      localStorage.setItem('appforge_onboarding_seen', 'true');
+      // Phase 2.2d — persistence moved to App.tsx.handleOnboardingFinish,
+      // which writes a content-hash via Prefs (multi-platform) so
+      // marketing updates to the onboarding reach returning users.
       onFinish();
     }
   };
@@ -63,7 +65,7 @@ export const OnboardingScreen: React.FC<Props> = ({ config, onFinish }) => {
   };
 
   const handleSkip = () => {
-    localStorage.setItem('appforge_onboarding_seen', 'true');
+    // Phase 2.2d — same: persistence handled in the parent.
     onFinish();
   };
 

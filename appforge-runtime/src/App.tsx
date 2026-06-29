@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Splash } from './lib/platform';
+import { Splash, Prefs } from './lib/platform';
 import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, updateManifestFromMessage, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
+import { computeOnboardingHash, getOnboardingHashKey } from './lib/onboarding-hash';
 import { initPush } from './lib/push';
 import { initAuth } from './lib/auth';
 import { initAnalytics } from './lib/analytics';
@@ -39,66 +40,89 @@ export const App: React.FC = () => {
   // the preview-phase selector ('ready' → 'onboarding' → 'ready')
   // would re-send it on every return to 'ready'.
   const handshakeSentRef = useRef(false);
+  // Phase 2.2d — onboarding versioned by content hash. `currentHash`
+  // is the hash of the live onboarding config in this session;
+  // `seenHash` is the hash the end-user previously accepted (loaded
+  // from Prefs at boot). Re-show the onboarding when they differ —
+  // marketing updates reach all users, not only fresh installs.
+  // Both stored in refs (not state) because they don't drive the
+  // visual render — they only gate the phase transitions inside
+  // useCallback handlers that already have manifest as a dep.
+  const currentOnboardingHashRef = useRef<string | null>(null);
+  const seenOnboardingHashRef = useRef<string | null>(null);
 
   useEffect(() => {
     console.log('[AppForge] Loading manifest...');
     const previewMode = isPreviewMode();
-    loadManifest()
-      .then((m) => {
-        console.log('[AppForge] Manifest loaded:', m.appName, 'schema elements:', m.schema?.length, previewMode ? '(preview mode)' : '');
-        setManifest(m);
-        if (m.designTokens) applyDesignTokens(m.designTokens);
-
-        // Initialize app-user auth (restore session from Preferences).
-        // Se inicializa también en preview — es no-op si no hay sesión,
-        // cubre el caso de módulos que leen `getUser()` defensivamente.
-        initAuth().catch((err) => console.warn('[Auth] Init failed:', err));
-
-        if (!previewMode) {
-          // Push notifications + analytics: skipped en preview-mode.
-          // El cliente que está diseñando no debe registrar dispositivos
-          // ni emitir eventos analytics — esos efectos secundarios
-          // pertenecen al end-user real de la app generada, no a la
-          // sesión de preview del builder.
-          initPush().catch((err) => console.warn('[Push] Init failed:', err));
-          initAnalytics().catch((err) => console.warn('[Analytics] Init failed:', err));
-        }
-
-        if (previewMode) {
-          // Preview-mode: directo a 'ready'. Saltamos splash, onboarding
-          // y terms gate — el cliente que diseña ya aceptó los términos
-          // del builder y no quiere atravesar tres pantallas de bienvenida
-          // para ver su app.
-          setPhase('ready');
-          Splash.hide().catch(() => {});
-        } else if (m.appConfig.splash?.enabled) {
-          setPhase('splash');
-          // Delay hiding native splash so the JS splash screen paints first
-          setTimeout(() => Splash.hide().catch(() => {}), 150);
-        } else if (m.appConfig.onboarding?.enabled && !localStorage.getItem('appforge_onboarding_seen')) {
-          setPhase('onboarding');
-        } else if (
-          // G2 Commit C-fix: sincroniza el guard de entrada de fase con el
-          // guard del render (línea 115). Sin el `|| terms?.url`, un cliente
-          // con solo URL externa nunca entra en 'terms' y la app salta de
-          // splash a 'ready' sin pasar por TermsScreen. El JSX corregido
-          // quedaba como código muerto para ese caso. Build verde no caza
-          // dos condiciones que deben coincidir pero no lo hacen.
-          (m.appConfig.terms?.content || m.appConfig.terms?.url)
-          && !localStorage.getItem('appforge_terms_accepted')
-        ) {
-          setPhase('terms');
-        } else {
-          setPhase('ready');
-          // No JS splash — hide native splash immediately
-          Splash.hide().catch(() => {});
-        }
-      })
-      .catch((err) => {
+    // Wrapper async to await Prefs.get for the onboarding hash —
+    // the rest of the chain remains identical.
+    (async () => {
+      let m: AppManifest;
+      try {
+        m = await loadManifest();
+      } catch (err) {
         console.error('[AppForge] Manifest load failed:', err);
         Splash.hide().catch(() => {});
-        setError(err.message);
-      });
+        setError((err as Error).message);
+        return;
+      }
+
+      console.log('[AppForge] Manifest loaded:', m.appName, 'schema elements:', m.schema?.length, previewMode ? '(preview mode)' : '');
+      setManifest(m);
+      if (m.designTokens) applyDesignTokens(m.designTokens);
+
+      // Initialize app-user auth (restore session from Preferences).
+      // Se inicializa también en preview — es no-op si no hay sesión,
+      // cubre el caso de módulos que leen `getUser()` defensivamente.
+      initAuth().catch((err) => console.warn('[Auth] Init failed:', err));
+
+      if (!previewMode) {
+        // Push notifications + analytics: skipped en preview-mode.
+        initPush().catch((err) => console.warn('[Push] Init failed:', err));
+        initAnalytics().catch((err) => console.warn('[Analytics] Init failed:', err));
+      }
+
+      // Phase 2.2d — pre-compute the onboarding content hash for
+      // this session and load the previously-seen hash from Prefs.
+      // Both go into refs that handleSplashFinish /
+      // handleOnboardingFinish read when deciding the next phase.
+      // In preview mode we skip the Prefs read entirely (the
+      // constructor doesn't need the "seen" gate; preview is for
+      // inspecting content).
+      const currentHash = computeOnboardingHash(m.appConfig.onboarding);
+      currentOnboardingHashRef.current = currentHash;
+      if (!previewMode) {
+        try {
+          const { value } = await Prefs.get({ key: getOnboardingHashKey(m.appId) });
+          seenOnboardingHashRef.current = value ?? null;
+        } catch {
+          seenOnboardingHashRef.current = null;
+        }
+      }
+      const onboardingNeedsShow = !previewMode
+        && !!m.appConfig.onboarding?.enabled
+        && (m.appConfig.onboarding?.slides?.length ?? 0) > 0
+        && currentHash !== seenOnboardingHashRef.current;
+
+      if (previewMode) {
+        // Preview-mode: directo a 'ready'.
+        setPhase('ready');
+        Splash.hide().catch(() => {});
+      } else if (m.appConfig.splash?.enabled) {
+        setPhase('splash');
+        setTimeout(() => Splash.hide().catch(() => {}), 150);
+      } else if (onboardingNeedsShow) {
+        setPhase('onboarding');
+      } else if (
+        (m.appConfig.terms?.content || m.appConfig.terms?.url)
+        && !localStorage.getItem('appforge_terms_accepted')
+      ) {
+        setPhase('terms');
+      } else {
+        setPhase('ready');
+        Splash.hide().catch(() => {});
+      }
+    })();
   }, []);
 
   const needsTerms = useCallback((m: AppManifest | null) => {
@@ -124,7 +148,11 @@ export const App: React.FC = () => {
       setPhase('ready');
       return;
     }
-    if (manifest?.appConfig.onboarding?.enabled && !localStorage.getItem('appforge_onboarding_seen')) {
+    // Phase 2.2d — re-use the hash comparison cached at boot.
+    const onboardingNeedsShow = !!manifest?.appConfig.onboarding?.enabled
+      && (manifest?.appConfig.onboarding?.slides?.length ?? 0) > 0
+      && currentOnboardingHashRef.current !== seenOnboardingHashRef.current;
+    if (onboardingNeedsShow) {
       setPhase('onboarding');
     } else if (needsTerms(manifest)) {
       setPhase('terms');
@@ -140,6 +168,18 @@ export const App: React.FC = () => {
     if (isPreviewMode()) {
       setPhase('ready');
       return;
+    }
+    // Phase 2.2d — persist the hash the end-user just accepted. The
+    // next cold start will read it back; if the constructor has
+    // updated the onboarding content in the meantime, the live
+    // hash differs and the new version shows. If unchanged, this
+    // call is idempotent. Fire-and-forget: errors here shouldn't
+    // block the user from entering the app.
+    if (manifest?.appId && currentOnboardingHashRef.current) {
+      const hash = currentOnboardingHashRef.current;
+      Prefs.set({ key: getOnboardingHashKey(manifest.appId), value: hash })
+        .then(() => { seenOnboardingHashRef.current = hash; })
+        .catch((err) => console.warn('[Onboarding] hash persist failed:', err));
     }
     if (needsTerms(manifest)) {
       setPhase('terms');
