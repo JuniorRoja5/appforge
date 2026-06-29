@@ -101,6 +101,10 @@ export interface SubscriptionPlan {
 export interface TenantListItem {
   id: string;
   name: string;
+  // Email del primer usuario del tenant (asc) — owner del registro.
+  // Backend lo enriquece en admin.service.listTenants; null si el
+  // tenant no tiene users (edge case improbable).
+  ownerEmail: string | null;
   status: TenantStatus;
   createdAt: string;
   subscription: { plan: SubscriptionPlan } | null;

@@ -67,6 +67,17 @@ export class AdminService {
         include: {
           subscription: { include: { plan: true } },
           _count: { select: { apps: true, users: true } },
+          // Primer user del tenant (orden de creación asc) = owner del
+          // tenant. Take 1 + orderBy createdAt asc: el primer usuario
+          // creado fue el que disparó la creación del tenant (ver
+          // auth.service.register). Si el flujo cambia y un tenant
+          // pudiera crearse sin user inicial, ownerEmail caería a null
+          // — el frontend ya maneja ese caso con '—'.
+          users: {
+            select: { email: true },
+            take: 1,
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -129,6 +140,10 @@ export class AdminService {
       ...t,
       buildsThisMonth: buildCounts[t.id] ?? 0,
       storageBytes: storageSums[t.id] ?? 0,
+      // Email del primer user del tenant (asc) = owner. Take 1 en el
+      // include limita la lista a 1 elemento; ?? null cubre el edge case
+      // (improbable) de un tenant sin users.
+      ownerEmail: t.users[0]?.email ?? null,
     }));
 
     return { data: enriched, total, page, limit };

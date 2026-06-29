@@ -76,6 +76,13 @@ export const TenantsPage: React.FC = () => {
       render: (t) => <span className="font-medium text-gray-900">{t.name}</span>,
     },
     {
+      key: 'ownerEmail',
+      header: 'Email',
+      render: (t) => (
+        <span className="text-gray-600 text-sm">{t.ownerEmail ?? '—'}</span>
+      ),
+    },
+    {
       key: 'plan',
       header: 'Plan',
       render: (t) => (
