@@ -350,3 +350,54 @@ export function onManifestUpdate(fn: (m: AppManifest) => void): () => void {
     if (idx >= 0) _listeners.splice(idx, 1);
   };
 }
+
+/**
+ * Preview-as-Runtime Fase 2.1: aplica un manifest-update recibido por
+ * postMessage desde el builder. Reusa el mismo mecanismo de listeners
+ * que el refresh ETag (la sesión viva ya está acostumbrada a recibir
+ * updates en caliente).
+ *
+ * GUARDS:
+ *  - Solo aplica si `isPreviewMode()` — defensa en profundidad. En PWA
+ *    real producción ningún mensaje cross-frame debería poder mutar el
+ *    manifest, incluso si el llamador se equivocó.
+ *  - Solo aplica si `_manifest` ya está inicializado (loadManifest
+ *    terminó). El handshake `preview-ready` garantiza este orden por
+ *    construcción, pero defensa adicional contra race en mount.
+ *  - Preserva `appId`, `apiUrl`, `appName` del manifest base. Solo se
+ *    actualizan los campos editorial (`schema`, `designTokens`,
+ *    `appConfig`). El builder no puede inyectar appId/apiUrl/appName.
+ *
+ * NO PERSISTE a Prefs (a diferencia de refreshManifest). El preview es
+ * ephemeral — cada sesión arranca del runtime-config?preview=true en
+ * vivo, no leyendo cache. Si persistiéramos, contaminamos el cache que
+ * usaría una potencial PWA real instalada en el mismo browser (aunque
+ * en preview.creatu.app eso no debería ocurrir, defensa amplia).
+ */
+export function updateManifestFromMessage(payload: {
+  schema?: CanvasElement[];
+  designTokens?: DesignTokens;
+  appConfig?: AppManifest['appConfig'];
+}): void {
+  if (!isPreviewMode()) return;
+  if (!_manifest) return;
+
+  const merged: AppManifest = {
+    appId: _manifest.appId,
+    apiUrl: _manifest.apiUrl,
+    appName: _manifest.appName,
+    schema: payload.schema ?? _manifest.schema,
+    designTokens: payload.designTokens ?? _manifest.designTokens,
+    appConfig: payload.appConfig ?? _manifest.appConfig,
+  };
+
+  _manifest = merged;
+
+  _listeners.forEach((fn) => {
+    try {
+      fn(_manifest!);
+    } catch {
+      // Listener throw no debe afectar a los demás listeners
+    }
+  });
+}

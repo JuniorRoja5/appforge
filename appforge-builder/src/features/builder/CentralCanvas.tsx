@@ -43,7 +43,12 @@ export const CentralCanvas: React.FC = () => {
             del teléfono, queda por encima del iframe (z-50). */}
         <div className="absolute top-3 inset-x-0 h-7 bg-[#0f172a] rounded-full w-[120px] mx-auto z-50 shadow-[0_2px_15px_rgba(0,0,0,0.1)]" />
 
-        {appId && <RuntimePreviewIframe appId={appId} />}
+        {/* key={appId}: si el cliente navega entre apps en el builder,
+            React desmonta + remonta este componente con state limpio
+            (iframe nuevo, previewReady=false, queue vacía). Sin el key,
+            la sesión vieja podría enviar postMessages al iframe nuevo
+            durante su primer paint. */}
+        {appId && <RuntimePreviewIframe key={appId} appId={appId} />}
       </div>
     </main>
   );

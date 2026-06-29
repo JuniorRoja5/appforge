@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Splash } from './lib/platform';
-import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, type AppManifest } from './lib/manifest';
+import { loadManifest, getManifest, onManifestUpdate, isPreviewMode, updateManifestFromMessage, type AppManifest } from './lib/manifest';
 import { applyDesignTokens } from './lib/design-tokens';
 import { initPush } from './lib/push';
 import { initAuth } from './lib/auth';
@@ -152,8 +152,54 @@ export const App: React.FC = () => {
       setManifest(live);
       if (live.designTokens) applyDesignTokens(live.designTokens);
     });
+
+    // Preview-as-Runtime Fase 2.1 — handshake: el iframe del builder
+    // espera este mensaje antes de empezar a enviar manifest-update.
+    // Sin él, los primeros edits del cliente se perderían (postMessage
+    // antes de que esté montado el listener del runtime). En PWA real
+    // no hay parent — postMessage a window.parent === self es no-op.
+    if (isPreviewMode() && window.parent !== window) {
+      window.parent.postMessage({ type: 'preview-ready' }, '*');
+    }
+
     return unsubscribe;
   }, [phase]);
+
+  // Preview-as-Runtime Fase 2.1 — listener cross-frame para
+  // manifest-update enviado por el builder con debounce 200ms.
+  // Verificación estricta de origin: SOLO mensajes provenientes de
+  // app.creatu.app son procesados. Cualquier otro origin se ignora
+  // en silencio (no log, no toast — no queremos dar señal a un
+  // attacker de que el listener existe).
+  //
+  // En PWA real (no preview), el useEffect retorna early sin montar
+  // listener — coste cero en producción del end-user.
+  //
+  // Listener montado en mount, no en phase==='ready', porque
+  // updateManifestFromMessage ya defiende contra _manifest === null
+  // (guard interno). Mantenerlo siempre activo evita race: si por
+  // algún motivo el preview-ready se envía pero el listener aún no
+  // está montado al recibir el primer manifest-update, lo perdemos.
+  useEffect(() => {
+    if (!isPreviewMode()) return;
+
+    const ALLOWED_ORIGINS = new Set([
+      'https://app.creatu.app',
+      'https://builder.creatu.app',
+    ]);
+
+    const handler = (event: MessageEvent) => {
+      if (!ALLOWED_ORIGINS.has(event.origin)) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'manifest-update' && data.payload) {
+        updateManifestFromMessage(data.payload);
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   if (error) {
     return (
