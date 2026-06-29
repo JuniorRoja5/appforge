@@ -16,14 +16,6 @@ interface BuilderState {
   elements: CanvasElement[];
   selectedElementId: string | null;
   designTokens: DesignTokens | null;
-  // Preview-as-Runtime (Fase 1 cierre): el iframe es ahora el canvas
-  // por defecto para todos los apps. Este flag queda como `true`
-  // permanente — sin action de toggle. Se conserva en el state como
-  // marcador semántico (en Fase 2+ podrá leerse para subscribers al
-  // postMessage, telemetría, gating de UI alternativo, etc.). En
-  // Fase 4 del plan, cuando se eliminen los PreviewComponent del todo
-  // y no exista ya una alternativa, esta propiedad también se retira.
-  usePreviewIframe: boolean;
   // Actions
   addElement: (moduleId: string, config: any, navMeta?: { tabIndex?: number | null; tabLabel?: string; tabIcon?: string }) => void;
   updateElementConfig: (elementId: string, config: any) => void;
@@ -52,7 +44,6 @@ export const useBuilderStore = create<BuilderState>()(
       elements: [],
       selectedElementId: null,
       designTokens: null,
-      usePreviewIframe: true,
 
       addElement: (moduleId, config, navMeta) => set((state) => ({
         elements: [...state.elements, {
