@@ -3,12 +3,10 @@ import { BrowserShim as Browser } from '../../lib/platform';
 import { Phone, Mail, Instagram, Facebook, MessageCircle, Linkedin, Globe } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
-
-interface QuickLink {
-  id: string;
-  type: 'phone' | 'email' | 'instagram' | 'facebook' | 'whatsapp' | 'linkedin' | 'web';
-  value: string;
-}
+// Phase 3b (B1) — QuickLink type imported from the shared schema; the
+// local `interface QuickLink` is gone. Single source of truth for the
+// 7-value enum and the id/value field shapes.
+import type { QuickLink } from '../../lib/shared/module-schemas/hero_profile.schema';
 
 const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
   phone: Phone, email: Mail, instagram: Instagram, facebook: Facebook,

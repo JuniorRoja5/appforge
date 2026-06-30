@@ -1,31 +1,19 @@
 import React, { useState } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Link2, Globe, Facebook, Instagram, Twitter, Youtube,
   Phone, Mail, Linkedin, MessageCircle, Send,
   Plus, Trash2, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
 } from 'lucide-react';
+// Phase 3b (B1) — schema imported from the shared package. Subschema
+// (LinkItem) is exported by shared so we get it from the same import.
+import {
+  LinksConfigSchema,
+  type LinksConfig,
+  type LinkItem,
+} from '../../lib/shared/module-schemas/links.schema';
 
-// --- Zod schema ---
-const LinkItemSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  url: z.string(),
-  icon: z.enum([
-    'globe', 'facebook', 'instagram', 'twitter', 'youtube',
-    'tiktok', 'whatsapp', 'telegram', 'email', 'phone', 'linkedin', 'custom',
-  ]),
-});
-
-const LinksConfigSchema = z.object({
-  title: z.string(),
-  links: z.array(LinkItemSchema),
-  style: z.enum(['list', 'buttons', 'cards']),
-});
-
-export type LinksConfig = z.infer<typeof LinksConfigSchema>;
-type LinkItem = z.infer<typeof LinkItemSchema>;
+export type { LinksConfig };
 
 // --- Icon map ---
 const ICON_MAP: Record<string, React.ReactNode> = {

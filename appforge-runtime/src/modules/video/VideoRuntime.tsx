@@ -1,5 +1,15 @@
 import React from 'react';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B1) — VideoItem type imported from the shared schema; the
+// local `interface VideoItem` is gone. The runtime stays permissive on
+// `id` and `title` (both optional here, both required in the contract)
+// because old single-url legacy manifests synthesize a partial item
+// without them — see video.schema.ts JSDoc.
+import type { VideoItem as VideoItemContract } from '../../lib/shared/module-schemas/video.schema';
+
+type VideoItem = Partial<Pick<VideoItemContract, 'id' | 'title'>> & {
+  url: string;
+};
 
 function getEmbedUrl(url: string): string | null {
   // YouTube
@@ -9,12 +19,6 @@ function getEmbedUrl(url: string): string | null {
   const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
   if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
   return null;
-}
-
-interface VideoItem {
-  id?: string;
-  url: string;
-  title?: string;
 }
 
 const VideoRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {

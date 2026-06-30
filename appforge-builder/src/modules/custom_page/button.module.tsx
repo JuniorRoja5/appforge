@@ -1,18 +1,10 @@
 import React from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { Link } from 'lucide-react';
+// Phase 3b (B1) — schema imported from the shared package.
+import { ButtonModuleConfigSchema, type ButtonModuleConfig } from '../../lib/shared/module-schemas/button_module.schema';
 
-const ButtonSchema = z.object({
-  label: z.string(),
-  url: z.string(),
-  style: z.enum(['solid', 'outline']),
-  color: z.string(),
-  textColor: z.string(),
-  radius: z.string()
-});
-
-export type ButtonModuleData = z.infer<typeof ButtonSchema>;
+type ButtonModuleData = ButtonModuleConfig;
 
 const PreviewComponent: React.FC<{ data: ButtonModuleData; isSelected: boolean }> = ({ data, isSelected }) => {
   const isSolid = data.style === 'solid';
@@ -164,7 +156,7 @@ export const ButtonModule: ModuleDefinition<ButtonModuleData> = {
   name: 'Botón',
   description: 'Un botón con enlace web',
   icon: <Link size={20} />,
-  schema: ButtonSchema,
+  schema: ButtonModuleConfigSchema,
   defaultConfig: {
     label: 'Visitar Web',
     url: '',

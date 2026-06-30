@@ -5,6 +5,10 @@ import { FileText, ExternalLink } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
+// appforge-shared/src/module-schemas/pdf_reader.schema.ts and will be
+// imported in Phase 3c when safeParse + fallback UX arrives. This is the
+// cleanest of the B1 runtimes: no legacy fallbacks, no zombie reads.
 
 const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Documento';

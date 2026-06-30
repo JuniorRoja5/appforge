@@ -1,6 +1,12 @@
 import React from 'react';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
+// appforge-shared/src/module-schemas/button_module.schema.ts and will be
+// imported in Phase 3c when safeParse + fallback UX arrives. The STYLE_MAP
+// below stays permissive (accepts `solid`/`outline` from the present
+// contract plus `filled`/`outlined`/`ghost` from legacy manifests) — that
+// flexibility is the runtime's job, not the contract's.
 
 // Map builder's style names to variant styles
 const STYLE_MAP: Record<string, string> = {

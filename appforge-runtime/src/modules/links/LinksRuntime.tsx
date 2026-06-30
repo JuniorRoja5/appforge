@@ -2,13 +2,17 @@ import React from 'react';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { ExternalLink, Globe, Instagram, Facebook, MessageCircle, Youtube, Twitter } from 'lucide-react';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B1) — LinkItem type imported from the shared schema; the local
+// `interface LinkItem` is gone. The runtime stays permissive on icon
+// (the contract enumerates 12 values, the runtime renders 6 and falls
+// back to ExternalLink for the rest), so we widen `icon` to a generic
+// `string | undefined` at the consumption site instead of in the contract.
+import type { LinkItem as LinkItemContract } from '../../lib/shared/module-schemas/links.schema';
 
-interface LinkItem {
+type LinkItem = Omit<LinkItemContract, 'id' | 'icon'> & {
   id?: string;
-  label: string;
-  url: string;
   icon?: string;
-}
+};
 
 const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
   globe: Globe, instagram: Instagram, facebook: Facebook,

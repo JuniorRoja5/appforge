@@ -1,22 +1,13 @@
 import React from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { Image as ImageIcon } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B1) — schema imported from the shared package. Local Zod
+// declaration removed; local type alias preserved (TextRuntime pattern).
+import { ImageModuleConfigSchema, type ImageModuleConfig } from '../../lib/shared/module-schemas/image_module.schema';
 
-const ImageSchema = z.object({
-  url: z.string().refine(
-    (v) => v === '' || v.startsWith('http') || v.startsWith('/'),
-    'URL inválida (debe ser http(s) o ruta relativa)',
-  ),
-  alt: z.string(),
-  objectFit: z.enum(['cover', 'contain', 'fill']),
-  radius: z.string(),
-  height: z.string()
-});
-
-export type ImageModuleData = z.infer<typeof ImageSchema>;
+type ImageModuleData = ImageModuleConfig;
 
 const PreviewComponent: React.FC<{ data: ImageModuleData; isSelected: boolean }> = ({ data, isSelected }) => {
   return (
@@ -144,7 +135,7 @@ export const ImageModule: ModuleDefinition<ImageModuleData> = {
   name: 'Imagen',
   description: 'Muestra una imagen desde una URL',
   icon: <ImageIcon size={20} />,
-  schema: ImageSchema,
+  schema: ImageModuleConfigSchema,
   defaultConfig: {
     url: '',
     alt: 'Imagen',

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Phone,
   Mail,
@@ -16,29 +15,13 @@ import {
 } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
-
-// --- Zod schemas ---
-
-const QuickLinkSchema = z.object({
-  id: z.string(),
-  type: z.enum(['phone', 'email', 'instagram', 'facebook', 'whatsapp', 'linkedin', 'web']),
-  value: z.string(),
-});
-
-type QuickLink = z.infer<typeof QuickLinkSchema>;
-
-const HeroProfileConfigSchema = z.object({
-  coverImageUrl: z.string(),
-  profileImageUrl: z.string(),
-  name: z.string(),
-  subtitle: z.string(),
-  description: z.string(),
-  quickLinks: z.array(QuickLinkSchema),
-  layout: z.enum(['centered', 'left', 'overlap']),
-  coverHeight: z.enum(['small', 'medium', 'large']),
-});
-
-type HeroProfileConfig = z.infer<typeof HeroProfileConfigSchema>;
+// Phase 3b (B1) — schemas imported from the shared package. Subschema
+// (QuickLink) is exported by shared so we get it from the same import.
+import {
+  HeroProfileConfigSchema,
+  type HeroProfileConfig,
+  type QuickLink,
+} from '../../lib/shared/module-schemas/hero_profile.schema';
 
 // --- Icon map for quick link types ---
 

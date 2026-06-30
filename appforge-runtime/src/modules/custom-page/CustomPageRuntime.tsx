@@ -2,6 +2,10 @@ import React from 'react';
 import { sanitize } from '../../lib/sanitize';
 import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
+// appforge-shared/src/module-schemas/custom_page.schema.ts and will be
+// imported in Phase 3c. Defensive read of `data.content` is backwards-compat
+// with manifests saved before the rename to `htmlContent`.
 
 const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const content = (data.htmlContent as string) ?? (data.content as string) ?? '';

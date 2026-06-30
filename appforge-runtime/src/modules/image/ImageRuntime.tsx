@@ -2,6 +2,12 @@ import React from 'react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
+// appforge-shared/src/module-schemas/image_module.schema.ts and will be
+// imported in Phase 3c when safeParse + fallback UX arrives. Defensive
+// reads of `data.src` / `data.borderRadius` are backwards-compat with
+// manifests saved before the rename and are deliberately kept outside the
+// schema (see the shared file's JSDoc).
 
 const ImageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // Builder uses 'url', old runtime used 'src' — accept both

@@ -1,27 +1,15 @@
 import React, { useState } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { Play, Plus, Trash2, Video as VideoIcon, Grid } from 'lucide-react';
+// Phase 3b (B1) — schema imported from the shared package. Subschema
+// (VideoItem) is exported by shared so we get it from the same import.
+import {
+  VideoConfigSchema,
+  type VideoConfig,
+  type VideoItem,
+} from '../../lib/shared/module-schemas/video.schema';
 
-// --- Zod schema ---
-const VideoItemSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  title: z.string(),
-});
-
-const VideoConfigSchema = z.object({
-  title: z.string(),
-  videos: z.array(VideoItemSchema),
-  layout: z.enum(['single', 'grid']),
-  columns: z.number().min(1).max(2),
-  backgroundColor: z.string().default('#ffffff'),
-  titleColor: z.string().default('#1f2937'),
-  descriptionColor: z.string().default('#6b7280'),
-});
-
-export type VideoConfig = z.infer<typeof VideoConfigSchema>;
-type VideoItem = z.infer<typeof VideoItemSchema>;
+export type { VideoConfig };
 
 // --- Helpers ---
 /**

@@ -1,22 +1,18 @@
 import React, { useState, useRef } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   FileText, Upload, Trash2, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react';
 import { uploadDocument } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+// Phase 3b (B1) — schema imported from the shared package.
+import {
+  PdfReaderConfigSchema,
+  type PdfReaderConfig,
+} from '../../lib/shared/module-schemas/pdf_reader.schema';
 
-// --- Zod schema ---
-const PdfReaderConfigSchema = z.object({
-  pdfUrl: z.string(),
-  title: z.string(),
-  showTitle: z.boolean(),
-  fileName: z.string().optional(),
-});
-
-export type PdfReaderConfig = z.infer<typeof PdfReaderConfigSchema>;
+export type { PdfReaderConfig };
 
 // --- Preview Component ---
 const PreviewComponent: React.FC<{ data: PdfReaderConfig; isSelected: boolean }> = ({ data, isSelected }) => {

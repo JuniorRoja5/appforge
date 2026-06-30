@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { FileText, ChevronDown, ChevronUp, Palette } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+// Phase 3b (B1) — schema imported from the shared package.
+import {
+  CustomPageConfigSchema,
+  type CustomPageConfig,
+} from '../../lib/shared/module-schemas/custom_page.schema';
 
-// --- Zod schema ---
-const CustomPageConfigSchema = z.object({
-  htmlContent: z.string(),
-  backgroundColor: z.string(),
-  padding: z.number(),
-  maxWidth: z.enum(['full', 'narrow', 'medium']),
-});
-
-export type CustomPageConfig = z.infer<typeof CustomPageConfigSchema>;
+export type { CustomPageConfig };
 
 // --- Quill config (extended from news_feed with image support) ---
 const QUILL_MODULES = {
