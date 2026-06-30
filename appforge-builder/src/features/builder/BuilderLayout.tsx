@@ -15,6 +15,7 @@ import { AppConfigModal } from './app-config/AppConfigModal';
 import { BuildPanel } from './BuildPanel';
 import { DropTargetPopover } from './DropTargetPopover';
 import { computeTabs } from './utils/computeTabs';
+import { MODULE_TAB_LABELS, MODULE_TAB_ICONS } from './utils/moduleTabDefaults';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { ActivationBadge } from './ActivationBadge';
 import { Loader2, Check } from 'lucide-react';
@@ -26,64 +27,12 @@ const MODULE_IDS_WITH_APPID = [
   'loyalty_card',
 ];
 
-/** Spanish display labels for navigation tabs */
-const MODULE_TAB_LABELS: Record<string, string> = {
-  news_feed: 'Noticias',
-  photo_gallery: 'Galería',
-  events: 'Eventos',
-  contact: 'Contacto',
-  menu_restaurant: 'Carta',
-  discount_coupon: 'Cupones',
-  catalog: 'Catálogo',
-  booking: 'Reservas',
-  social_wall: 'Social',
-  fan_wall: 'Fan Wall',
-  push_notification: 'Avisos',
-  user_profile: 'Perfil',
-  links: 'Enlaces',
-  pdf_reader: 'PDF',
-  video: 'Videos',
-  loyalty_card: 'Fidelidad',
-  testimonials: 'Testimonios',
-  hero_profile: 'Hero',
-  custom_page: 'Página',
-  text_module: 'Texto',
-  image_module: 'Imagen',
-  button_module: 'Botón',
-};
-
-/** Icon name mapping (must match keys in LucideIconByName ICON_MAP) */
-const MODULE_TAB_ICONS: Record<string, string> = {
-  news_feed: 'book-open',
-  photo_gallery: 'camera',
-  events: 'calendar',
-  contact: 'phone',
-  menu_restaurant: 'utensils',
-  discount_coupon: 'tag',
-  catalog: 'shopping-bag',
-  booking: 'clock',
-  social_wall: 'message-circle',
-  fan_wall: 'heart',
-  push_notification: 'bell',
-  user_profile: 'user',
-  links: 'link',
-  pdf_reader: 'file-text',
-  video: 'camera',
-  loyalty_card: 'star',
-  testimonials: 'message-circle',
-  hero_profile: 'user',
-  custom_page: 'file-text',
-  text_module: 'file-text',
-  image_module: 'image',
-  button_module: 'circle',
-};
-
 export const BuilderLayout: React.FC = () => {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
   const { undo, redo, futureStates, pastStates } = useBuilderStore.temporal.getState();
-  const { addElement, updateElementConfig, moveElement } = useBuilderStore();
+  const { addElement, updateElementConfig } = useBuilderStore();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -183,41 +132,59 @@ export const BuilderLayout: React.FC = () => {
     setActiveId(event.active.id as string);
   };
 
+  /**
+   * Phase 2.4b — single entry point for "add a module from the
+   * palette". Both flows funnel through here:
+   *   1. Drag a module to the smartphone mockup → handleDragEnd
+   *      detects type:'module' + over canvas-droppable, calls this.
+   *   2. Click the "+" button in the ModuleItem of LeftSidebar →
+   *      onAddModule callback passed down, which calls this.
+   *
+   * If the app has no sections yet → addElement directly with
+   * tabIndex:0 + the default label/icon (first-section implicit).
+   * If the app already has sections → setPendingDrop, which renders
+   * the DropTargetPopover ("¿Dónde colocar?") so the constructor
+   * picks the section.
+   *
+   * Before 2.4b this exact logic lived in TWO places — duplicated
+   * between BuilderLayout.handleDragEnd (drag flow) and
+   * LeftSidebar.handleStartAdd (button "+" flow added in 2.1c).
+   * Consolidating eliminates the duplication and ensures both
+   * paths stay in sync (a fix in one used to silently leave the
+   * other broken).
+   */
+  const addModuleFromPalette = useCallback((moduleId: string) => {
+    const moduleDef = getModule(moduleId);
+    if (!moduleDef) return;
+    const config = { ...moduleDef.defaultConfig };
+    if (appId && MODULE_IDS_WITH_APPID.includes(moduleId)) {
+      config.appId = appId;
+    }
+    const tabLabel = MODULE_TAB_LABELS[moduleId] ?? moduleDef.name;
+    const tabIcon = MODULE_TAB_ICONS[moduleId] ?? 'circle';
+    const existingTabs = computeTabs(useBuilderStore.getState().elements);
+    if (existingTabs.length === 0) {
+      addElement(moduleId, config, { tabIndex: 0, tabLabel, tabIcon });
+    } else {
+      setPendingDrop({ moduleId, config, tabLabel, tabIcon });
+    }
+  }, [appId, addElement]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
     if (!over) return;
 
-    // Palette → Canvas: add new module
-    if (active.data.current?.type === 'module') {
-      const isCanvasDrop = over.id === 'canvas-droppable' ||
-        useBuilderStore.getState().elements.some((el) => el.id === over.id);
-      if (isCanvasDrop) {
-        const moduleId = active.data.current.moduleId;
-        const moduleDef = getModule(moduleId);
-        if (moduleDef) {
-          const config = { ...moduleDef.defaultConfig };
-          if (appId && MODULE_IDS_WITH_APPID.includes(moduleId)) {
-            config.appId = appId;
-          }
-          const tabLabel = MODULE_TAB_LABELS[moduleId] ?? moduleDef.name;
-          const tabIcon = MODULE_TAB_ICONS[moduleId] ?? 'circle';
-
-          // Check existing tabs — if none, add directly; otherwise show popover
-          const existingTabs = computeTabs(useBuilderStore.getState().elements);
-          if (existingTabs.length === 0) {
-            addElement(moduleId, config, { tabIndex: 0, tabLabel, tabIcon });
-          } else {
-            setPendingDrop({ moduleId, config, tabLabel, tabIcon });
-          }
-        }
+    // Phase 2.4b — palette module dropped on the canvas drop zone.
+    // The previous "Canvas element reorder (sortable)" branch that
+    // assumed the SortableContext from before Fase 1 has been
+    // removed — that flow was killed when the canvas became an
+    // iframe. The drop zone is exclusively for palette modules now.
+    if (active.data.current?.type === 'module' && over.id === 'canvas-droppable') {
+      const moduleId = active.data.current.moduleId;
+      if (typeof moduleId === 'string') {
+        addModuleFromPalette(moduleId);
       }
-      return;
-    }
-
-    // Canvas element reorder (sortable)
-    if (active.id !== over.id && active.data.current?.sortable) {
-      moveElement(active.id as string, over.id as string);
     }
   };
 
@@ -434,7 +401,7 @@ export const BuilderLayout: React.FC = () => {
 
         {/* Main Builder Area */}
         <div className="flex flex-1 overflow-hidden">
-          <LeftSidebar />
+          <LeftSidebar onAddModule={addModuleFromPalette} />
           <CentralCanvas />
           <RightSidebar />
         </div>

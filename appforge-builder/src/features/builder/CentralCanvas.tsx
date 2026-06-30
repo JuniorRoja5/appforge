@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useDroppable } from '@dnd-kit/core';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { RuntimePreviewIframe, type PreviewPhase } from './RuntimePreviewIframe';
 import { PreviewErrorBanner, type PreviewErrorCode } from './PreviewErrorBanner';
@@ -105,6 +106,17 @@ export const CentralCanvas: React.FC = () => {
     setIframeKey((k) => k + 1);
   }, []);
 
+  // Phase 2.4b — declare the smartphone mockup as the drop zone for
+  // palette modules being dragged from LeftSidebar. dnd-kit handles
+  // collision detection automatically; BuilderLayout's handleDragEnd
+  // routes drops with `over.id === 'canvas-droppable'` to
+  // addModuleFromPalette. `isOver` becomes true while a drag is
+  // hovering over the mockup, used below to add a soft ring as a
+  // visual cue ("you can drop here").
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: 'canvas-droppable',
+  });
+
   return (
     <main
       className="flex-1 flex flex-col items-center overflow-y-auto p-8 gap-4"
@@ -151,8 +163,18 @@ export const CentralCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile Device Simulator Frame */}
-      <div className="w-[390px] h-[844px] bg-white rounded-[44px] shadow-[0_24px_60px_rgba(0,0,0,0.1),0_0_0_12px_#0f172a,0_0_0_13px_#334155] relative overflow-hidden">
+      {/* Mobile Device Simulator Frame.
+          Phase 2.4b: this div is the drop zone for palette drags.
+          setDroppableRef attaches the dnd-kit listener; isOver
+          adds a primary-colored ring when a module is being
+          dragged over the mockup so the constructor sees the
+          "you can drop here" affordance. */}
+      <div
+        ref={setDroppableRef}
+        className={`w-[390px] h-[844px] bg-white rounded-[44px] shadow-[0_24px_60px_rgba(0,0,0,0.1),0_0_0_12px_#0f172a,0_0_0_13px_#334155] relative overflow-hidden transition-shadow ${
+          isOver ? 'ring-4 ring-primary/60 ring-offset-2' : ''
+        }`}
+      >
         {/* Notch simulation (Dynamic Island Style) — chrome físico
             del teléfono, queda por encima del iframe (z-50). */}
         <div className="absolute top-3 inset-x-0 h-7 bg-[#0f172a] rounded-full w-[120px] mx-auto z-50 shadow-[0_2px_15px_rgba(0,0,0,0.1)]" />

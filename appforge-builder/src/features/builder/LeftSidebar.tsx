@@ -1,104 +1,54 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import React from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { Plus, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { getRegistry, getModule } from '../../modules/registry';
 import { useBuilderStore, type CanvasElement } from '../../store/useBuilderStore';
-import { computeTabs } from './utils/computeTabs';
-import { DropTargetPopover } from './DropTargetPopover';
-
-/**
- * Etiqueta en español para la sección de navegación cuando se crea
- * una nueva sección a partir de un módulo. Si el módulo no está en
- * el mapa, fallback al `name` de su ModuleDefinition. Recuperado del
- * BuilderLayout viejo (commit 3a2799b^) — verbatim, sin tocar el
- * mapeo para no alterar UX que el cliente ya conocía.
- */
-const MODULE_TAB_LABELS: Record<string, string> = {
-  news_feed: 'Noticias',
-  photo_gallery: 'Galería',
-  events: 'Eventos',
-  contact: 'Contacto',
-  menu_restaurant: 'Carta',
-  discount_coupon: 'Cupones',
-  catalog: 'Catálogo',
-  booking: 'Reservas',
-  social_wall: 'Social',
-  fan_wall: 'Fan Wall',
-  push_notification: 'Avisos',
-  user_profile: 'Perfil',
-  links: 'Enlaces',
-  pdf_reader: 'PDF',
-  video: 'Videos',
-  loyalty_card: 'Fidelidad',
-  testimonials: 'Testimonios',
-  hero_profile: 'Hero',
-  custom_page: 'Página',
-  text_module: 'Texto',
-  image_module: 'Imagen',
-  button_module: 'Botón',
-};
-
-/**
- * Icono Lucide para la sección de navegación cuando se crea una
- * nueva sección. Las keys deben existir en el ICON_MAP de
- * LucideIconByName — si no, el TabBar pinta el fallback genérico.
- * Recuperado verbatim del BuilderLayout viejo (commit 3a2799b^).
- */
-const MODULE_TAB_ICONS: Record<string, string> = {
-  news_feed: 'book-open',
-  photo_gallery: 'camera',
-  events: 'calendar',
-  contact: 'phone',
-  menu_restaurant: 'utensils',
-  discount_coupon: 'tag',
-  catalog: 'shopping-bag',
-  booking: 'clock',
-  social_wall: 'message-circle',
-  fan_wall: 'heart',
-  push_notification: 'bell',
-  user_profile: 'user',
-  links: 'link',
-  pdf_reader: 'file-text',
-  video: 'camera',
-  loyalty_card: 'star',
-  testimonials: 'message-circle',
-  hero_profile: 'user',
-  custom_page: 'file-text',
-  text_module: 'file-text',
-  image_module: 'image',
-  button_module: 'circle',
-};
-
-interface PendingAdd {
-  moduleId: string;
-  moduleName: string;
-  config: Record<string, any>;
-  tabLabel: string;
-  tabIcon: string;
-}
 
 /**
  * ModuleItem (catálogo, sección superior): tarjeta de un módulo
- * disponible. Click en el botón "+" levanta la intención al padre
- * (LeftSidebar) vía `onStartAdd(definition)`. El padre decide si
- * añade el módulo directo (app sin secciones todavía) o si abre el
- * DropTargetPopover preguntando en qué sección colocarlo (app con
- * secciones existentes). Lift-up necesario porque el popover es
- * `fixed inset-0` y debe vivir por encima del catálogo, no dentro
- * del row del módulo.
+ * disponible. Two ways to add the module to the app:
  *
- * `e.stopPropagation()` defensivo en el button — evita que clicks
- * burbujeen a listeners del aside / sidebar padre si en el futuro
- * se añaden.
+ *   1. Drag-from-palette (Phase 2.4b): the card itself is draggable
+ *      via dnd-kit's useDraggable. The drag id is `module-${def.id}`
+ *      so it matches the DragOverlay check in BuilderLayout and the
+ *      data carries type:'module' + moduleId so handleDragEnd routes
+ *      it to addModuleFromPalette when dropped on the canvas drop
+ *      zone. The PointerSensor activation distance (5px) ensures
+ *      casual clicks don't start a drag.
+ *
+ *   2. Button "+" (Phase 2.1c): the accessible / keyboard-friendly
+ *      path. Click invokes `onStartAdd(def.id)` which the parent
+ *      (LeftSidebar) bubbles up to BuilderLayout's addModuleFromPalette.
+ *      Both paths now flow through the SAME helper (consolidated in
+ *      2.4b — there used to be two duplicate implementations).
+ *
+ * The "+" button has `stopPropagation` on its onClick so it cannot
+ * accidentally trigger the drag's pointer listeners attached to the
+ * card div, and so its click doesn't bubble to ancestor listeners.
  */
-const ModuleItem: React.FC<{ definition: any; onStartAdd: (definition: any) => void }> = ({ definition, onStartAdd }) => {
+const ModuleItem: React.FC<{ definition: any; onStartAdd: (moduleId: string) => void }> = ({ definition, onStartAdd }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `module-${definition.id}`,
+    data: {
+      type: 'module',
+      moduleId: definition.id,
+    },
+  });
+
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onStartAdd(definition);
+    onStartAdd(definition.id);
   };
 
   return (
-    <div className="group relative flex items-center space-x-3 p-3 mx-4 my-2 bg-white rounded-xl transition-all duration-200 border border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md">
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`group relative flex items-center space-x-3 p-3 mx-4 my-2 bg-white rounded-xl transition-all duration-200 select-none border cursor-grab active:cursor-grabbing ${
+        isDragging ? 'opacity-30' : 'border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md'
+      }`}
+    >
       <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-50 text-gray-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
         <span className="text-xl leading-none">{definition.icon}</span>
       </div>
@@ -109,6 +59,7 @@ const ModuleItem: React.FC<{ definition: any; onStartAdd: (definition: any) => v
       <button
         type="button"
         onClick={handleAdd}
+        onPointerDown={(e) => e.stopPropagation()}
         className="absolute top-1/2 right-2 -translate-y-1/2 w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center opacity-0 group-hover:opacity-100 hover:scale-110 transition-all shadow-md cursor-pointer shrink-0"
         title={`Añadir ${definition.name}`}
         aria-label={`Añadir ${definition.name} a la app`}
@@ -238,67 +189,29 @@ const LayerRow: React.FC<{ el: CanvasElement; index: number; total: number }> = 
   );
 };
 
-export const LeftSidebar: React.FC = () => {
+interface LeftSidebarProps {
+  /**
+   * Phase 2.4b — callback to BuilderLayout's addModuleFromPalette
+   * (the unified entry point for both drag-from-palette and the
+   * "+" button). Receives the moduleId; the parent owns the
+   * defaultConfig copy, the appId injection for modules that need
+   * it, the tab label/icon resolution, and the pendingDrop /
+   * DropTargetPopover flow. LeftSidebar no longer holds any of
+   * that state — it's pure UI for catalog + structure.
+   */
+  onAddModule: (moduleId: string) => void;
+}
+
+export const LeftSidebar: React.FC<LeftSidebarProps> = ({ onAddModule }) => {
   const modules = getRegistry();
   const elements = useBuilderStore((s) => s.elements);
-  const addElement = useBuilderStore((s) => s.addElement);
-
-  const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
-
-  /**
-   * Entrada del flujo de "+": decide si añadimos directo o si abrimos
-   * el popover. Recuperado del BuilderLayout viejo (handleDragEnd
-   * branch "Palette → Canvas"), traducido del drop event a un click.
-   *
-   * Si no hay secciones todavía → first-section-implicit: el módulo
-   * entra con tabIndex:0 y crea la primera sección con su label/icon
-   * por defecto, sin preguntar nada.
-   * Si ya hay secciones → setPendingAdd → render del popover.
-   */
-  const handleStartAdd = (def: any) => {
-    const tabLabel = MODULE_TAB_LABELS[def.id] ?? def.name;
-    const tabIcon = MODULE_TAB_ICONS[def.id] ?? 'circle';
-    const config = { ...def.defaultConfig };
-
-    const existingTabs = computeTabs(elements);
-    if (existingTabs.length === 0) {
-      addElement(def.id, config, { tabIndex: 0, tabLabel, tabIcon });
-    } else {
-      setPendingAdd({ moduleId: def.id, moduleName: def.name, config, tabLabel, tabIcon });
-    }
-  };
-
-  const handleSelectTab = (tabIndex: number) => {
-    if (!pendingAdd) return;
-    // tabLabel/tabIcon vacíos: el módulo aterriza en una sección que
-    // ya existe — su label/icono no se sobreescriben. Mismo patrón
-    // del handleDropSelectTab viejo (BuilderLayout 209-214).
-    addElement(pendingAdd.moduleId, pendingAdd.config, { tabIndex, tabLabel: '', tabIcon: '' });
-    setPendingAdd(null);
-  };
-
-  const handleCreateNew = () => {
-    if (!pendingAdd) return;
-    const usedIndexes = elements
-      .map((el) => el.tabIndex)
-      .filter((i): i is number => i != null);
-    const nextTabIndex = usedIndexes.length > 0 ? Math.max(...usedIndexes) + 1 : 0;
-    addElement(pendingAdd.moduleId, pendingAdd.config, {
-      tabIndex: nextTabIndex,
-      tabLabel: pendingAdd.tabLabel,
-      tabIcon: pendingAdd.tabIcon,
-    });
-    setPendingAdd(null);
-  };
-
-  const handleCancel = () => setPendingAdd(null);
 
   return (
     <aside className="w-[320px] bg-gray-50/50 border-r border-gray-200/80 flex flex-col h-full overflow-hidden shrink-0 z-10">
       {/* Sección 1: catálogo de módulos disponibles. */}
       <div className="px-6 py-4 border-b border-gray-200/60 bg-white/50 backdrop-blur-sm">
         <h2 className="font-bold text-[11px] uppercase tracking-widest text-gray-500">Módulos Disponibles</h2>
-        <p className="text-[13px] text-gray-500 mt-1 font-medium">Pulsa + para añadir un módulo a tu app</p>
+        <p className="text-[13px] text-gray-500 mt-1 font-medium">Arrastra al móvil o pulsa + para añadir</p>
       </div>
 
       {/* Catálogo: flex-[2] (2/3 del alto). La estructura abajo se queda
@@ -309,7 +222,7 @@ export const LeftSidebar: React.FC = () => {
       <div className="flex-[2] overflow-y-auto py-3 space-y-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
         {modules.map((mod) => (
-          <ModuleItem key={mod.id} definition={mod} onStartAdd={handleStartAdd} />
+          <ModuleItem key={mod.id} definition={mod} onStartAdd={onAddModule} />
         ))}
         <div className="h-4" />
       </div>
@@ -327,7 +240,7 @@ export const LeftSidebar: React.FC = () => {
           <div className="px-6 py-8 text-center">
             <p className="text-[12px] text-gray-400 leading-snug">
               Aún no has añadido módulos.<br />
-              Pulsa + en uno de la lista de arriba.
+              Arrastra uno al móvil o pulsa +.
             </p>
           </div>
         ) : (
@@ -340,25 +253,9 @@ export const LeftSidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Popover modal de selección de sección al añadir un módulo
-          cuando la app ya tiene secciones. Renderizado vía portal a
-          <body> para desacoplar el `position: fixed` del contexto
-          del aside — defensa contra futuros transform/filter/
-          will-change/backdrop-filter en cualquier ancestro, que
-          crearían un containing block nuevo y recortarían el modal
-          al ancho del sidebar (320px). Hoy ningún ancestro tiene
-          esas propiedades, pero el portal elimina la dependencia
-          de layout para siempre. */}
-      {pendingAdd && createPortal(
-        <DropTargetPopover
-          existingTabs={computeTabs(elements)}
-          moduleName={pendingAdd.moduleName}
-          onSelectTab={handleSelectTab}
-          onCreateNew={handleCreateNew}
-          onCancel={handleCancel}
-        />,
-        document.body,
-      )}
+      {/* Phase 2.4b — DropTargetPopover render lives in BuilderLayout
+          (consolidated entry point). LeftSidebar no longer renders
+          it; the parent's portal places it above everything. */}
     </aside>
   );
 };
