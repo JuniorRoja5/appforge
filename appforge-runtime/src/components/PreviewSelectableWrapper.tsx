@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { isPreviewMode } from '../lib/manifest';
 import {
   getParentOrigin,
+  sendDragEnd,
+  sendDragMove,
+  sendDragStart,
   sendElementBounds,
   sendElementClick,
   sendElementHover,
@@ -20,6 +23,12 @@ interface Props {
   schemaSignal: string;
   children: React.ReactNode;
 }
+
+// Phase 2.4a — 8px is dnd-kit's default drag activation threshold.
+// Smaller (e.g. 3px) misfires on natural micro-jitter of mouse /
+// touch; larger (e.g. 16px) feels unresponsive. Module-level
+// constant so it's not recreated each render.
+const DRAG_THRESHOLD_PX = 8;
 
 /**
  * Preview-as-Runtime Phase 2.2 — selectable wrapper around each
@@ -122,6 +131,124 @@ export const PreviewSelectableWrapper: React.FC<Props> = ({
     };
   }, [elementId]);
 
+  // Phase 2.4a — drag-or-click discrimination ref. Persists across
+  // renders without re-render churn. Shape:
+  //   - startX/startY: pointer position at pointerdown (clientX/Y
+  //     of the iframe viewport).
+  //   - pointerId: passed to setPointerCapture so subsequent
+  //     pointermove/up/cancel events keep targeting this element
+  //     even if the cursor leaves it (or leaves the iframe).
+  //   - isDragging: flipped true on the first pointermove beyond
+  //     DRAG_THRESHOLD_PX. Discriminates "click that moved a
+  //     micro-pixel" from "real drag intent".
+  //   - safetyTimer: 30s timeout that force-cleans state if no
+  //     pointerup arrives (e.g. cursor exited the OS window and
+  //     the browser stopped emitting events). Prevents a stuck
+  //     "isDragging=true" that would suppress selection forever.
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    pointerId: number;
+    isDragging: boolean;
+    safetyTimer: number | null;
+  } | null>(null);
+
+  const cleanupDrag = useCallback(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (drag.safetyTimer !== null) {
+      clearTimeout(drag.safetyTimer);
+    }
+    if (ref.current?.hasPointerCapture(drag.pointerId)) {
+      ref.current.releasePointerCapture(drag.pointerId);
+    }
+    dragRef.current = null;
+  }, []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Only left button / primary touch. Right-click context menus
+    // and middle-click scrolls must not trigger drag.
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const el = ref.current;
+    if (!el) return;
+    // setPointerCapture guarantees the rest of the gesture
+    // (pointermove/up/cancel) targets THIS element even if the
+    // cursor exits its rect — critical for the builder to keep
+    // receiving drag-move messages while the user drags toward
+    // another module on the same tab.
+    el.setPointerCapture(e.pointerId);
+    const safetyTimer = window.setTimeout(() => {
+      // 30s with no pointerup → assume stuck state, cancel drag.
+      const drag = dragRef.current;
+      if (!drag) return;
+      if (drag.isDragging) sendDragEnd(true);
+      cleanupDrag();
+    }, 30000);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      isDragging: false,
+      safetyTimer,
+    };
+  }, [cleanupDrag]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (e.pointerId !== drag.pointerId) return;
+    if (!drag.isDragging) {
+      // Threshold check: only past 8px do we flip into drag mode.
+      // 8px = dnd-kit default. Smaller threshold (e.g. 3px) would
+      // misfire on natural finger / mouse micro-jitter; larger
+      // (e.g. 16px) feels unresponsive.
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
+      drag.isDragging = true;
+      sendDragStart(elementId);
+    }
+    sendDragMove(e.clientX, e.clientY);
+  }, [elementId]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (e.pointerId !== drag.pointerId) return;
+    if (drag.isDragging) {
+      // Drop intent: builder will commit moveElement if it has
+      // a valid overId distinct from activeId.
+      sendDragEnd(false);
+    } else {
+      // Click intent: pointer never moved enough to qualify as
+      // drag → treat as a normal select-click. Preserves 2.2
+      // behavior for any non-dragging interaction.
+      sendElementClick(elementId);
+    }
+    cleanupDrag();
+  }, [elementId, cleanupDrag]);
+
+  const handlePointerCancel = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (e.pointerId !== drag.pointerId) return;
+    if (drag.isDragging) sendDragEnd(true);
+    cleanupDrag();
+  }, [cleanupDrag]);
+
+  // Defensive: if the wrapper unmounts mid-drag (rare — tab
+  // switch while dragging), release the capture and tell the
+  // builder we canceled. Without this the builder's dragState
+  // would stay set with a dead activeId.
+  useEffect(() => {
+    return () => {
+      const drag = dragRef.current;
+      if (drag?.isDragging) sendDragEnd(true);
+      cleanupDrag();
+    };
+  }, [cleanupDrag]);
+
   if (!isPreviewMode() || !getParentOrigin()) {
     return <>{children}</>;
   }
@@ -130,13 +257,13 @@ export const PreviewSelectableWrapper: React.FC<Props> = ({
     <div
       ref={ref}
       data-element-id={elementId}
-      onClick={(e) => {
-        e.stopPropagation();
-        sendElementClick(elementId);
-      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       onMouseEnter={() => sendElementHover(elementId)}
       onMouseLeave={() => sendElementHover(null)}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', touchAction: 'none' }}
     >
       {children}
     </div>

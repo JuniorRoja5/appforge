@@ -128,3 +128,37 @@ export function sendElementUnmounted(elementId: string): void {
 export function sendPreviewError(code: PreviewErrorCode, message: string): void {
   sendToParent({ type: 'preview-error', code, message });
 }
+
+/**
+ * Phase 2.4a — drag-and-drop reorder over the mockup.
+ *
+ * The wrapper detects a drag (pointerdown + pointermove past
+ * threshold) and emits these three messages so the builder can
+ * track the drag state and compute the drop target against its
+ * bounds map. The pointer capture lives on the runtime side
+ * (setPointerCapture on the wrapper element) — the builder never
+ * captures pointer events; it only reads the coordinates the
+ * runtime reports.
+ *
+ * Coordinates (`x`, `y`) are iframe-viewport coordinates from
+ * pointermove.clientX/Y — same system as `bounds` (verified by
+ * architect against the SelectionOverlay contract). The builder
+ * can do findElementAtPoint(x, y, bounds) without coordinate
+ * translation.
+ *
+ * `canceled` distinguishes a normal drop (pointerup, false) from
+ * a cancelled drag (pointercancel / Escape in 2.4c / safety
+ * timeout, true). The builder only calls moveElement when
+ * canceled === false.
+ */
+export function sendDragStart(elementId: string): void {
+  sendToParent({ type: 'drag-start', elementId });
+}
+
+export function sendDragMove(x: number, y: number): void {
+  sendToParent({ type: 'drag-move', x, y });
+}
+
+export function sendDragEnd(canceled: boolean): void {
+  sendToParent({ type: 'drag-end', canceled });
+}

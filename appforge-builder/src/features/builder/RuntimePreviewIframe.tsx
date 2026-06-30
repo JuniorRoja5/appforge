@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useBuilderStore } from '../../store/useBuilderStore';
 import { SelectionOverlay, type ElementBounds } from './SelectionOverlay';
 import type { PreviewErrorCode } from './PreviewErrorBanner';
@@ -117,6 +117,64 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase, ifr
   const designTokens = useBuilderStore((s) => s.designTokens);
   const selectElement = useBuilderStore((s) => s.selectElement);
   const selectedElementId = useBuilderStore((s) => s.selectedElementId);
+  const moveElement = useBuilderStore((s) => s.moveElement);
+
+  // Phase 2.4a — drag-to-reorder. dragRef tracks active drag without
+  // re-rendering on every drag-move (60Hz updates would otherwise
+  // re-render the whole iframe wrapper). overId is recomputed on
+  // each pointermove via findElementAtPoint against the bounds map
+  // (same coordinate system as the pointer, verified by architect).
+  // 30s safety timer is a defense against a stuck drag-state if
+  // the runtime never sends drag-end (e.g. iframe killed by browser
+  // during drag, parent never gets the pointerup).
+  const dragRef = useRef<{ activeId: string; overId: string | null; safetyTimer: number | null } | null>(null);
+
+  // Phase 2.4a — boundsRef mirrors the bounds state and is read by
+  // the drag-move handler instead of the closure-captured `bounds`.
+  // Two reasons:
+  //   1. If the message listener's useEffect had `bounds` in its
+  //      deps, every element-bounds emission from the runtime
+  //      (which happens on every scroll inside the iframe — touchable
+  //      with mouse wheel during a drag) would tear down and rebuild
+  //      the listener. Beyond being wasteful, it opens a one-tick
+  //      window between cleanup and setup where postMessages can
+  //      be lost.
+  //   2. Without that, the listener's closure freezes the bounds at
+  //      its mount time. drag-move would compute overId against a
+  //      stale snapshot, mislabeling the drop target whenever the
+  //      preview has scrolled since drag-start.
+  // Sync via a tiny useEffect — ref always reflects the latest
+  // state, and `bounds` can leave the listener's dep array.
+  const boundsRef = useRef<Record<string, ElementBounds>>({});
+  useEffect(() => {
+    boundsRef.current = bounds;
+  }, [bounds]);
+
+  const cleanupDragState = useCallback(() => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (d.safetyTimer !== null) clearTimeout(d.safetyTimer);
+    dragRef.current = null;
+  }, []);
+
+  /**
+   * findElementAtPoint — given pointer coordinates in iframe-viewport
+   * space and the bounds map, return the elementId whose rectangle
+   * contains the point, or null if none. Iterative O(N), fine for
+   * N typically 5-20 modules per tab.
+   *
+   * Why not find the bounds with smallest area in case of overlap?
+   * The runtime renders modules in a flex column with gaps — they
+   * don't overlap in normal layout. If a future module style does
+   * overlap (z-index stack), the first match wins; acceptable for
+   * 2.4a, can revisit if real apps exhibit the pattern.
+   */
+  const findElementAtPoint = useCallback((x: number, y: number, boundsMap: Record<string, ElementBounds>): string | null => {
+    for (const [id, b] of Object.entries(boundsMap)) {
+      if (x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height) return id;
+    }
+    return null;
+  }, []);
 
   // Listener for all incoming postMessages from the iframe. Handles:
   //   - preview-ready: the original handshake (Phase 2.1).
@@ -214,11 +272,62 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase, ifr
         onPreviewError({ code: data.code as PreviewErrorCode, message: msg });
         return;
       }
+
+      // Phase 2.4a — drag-and-drop reorder. The runtime detects the
+      // gesture (pointerdown + threshold) and emits drag-start; the
+      // builder tracks state and computes overId against bounds on
+      // each move; on drag-end (if not canceled and overId is valid
+      // and distinct from activeId) we commit moveElement.
+      if (data.type === 'drag-start' && typeof data.elementId === 'string') {
+        // Defensive: if a previous drag is still tracked (shouldn't
+        // happen — runtime always emits drag-end), clean it up.
+        cleanupDragState();
+        const safetyTimer = window.setTimeout(() => {
+          // 30s with no drag-end → assume runtime stopped responding.
+          // Drop the drag silently without commit.
+          console.warn('[Preview] drag-end never arrived; cleaning up after 30s.');
+          cleanupDragState();
+        }, 30000);
+        dragRef.current = { activeId: data.elementId, overId: null, safetyTimer };
+        return;
+      }
+
+      if (data.type === 'drag-move'
+        && typeof data.x === 'number'
+        && typeof data.y === 'number'
+      ) {
+        const d = dragRef.current;
+        if (!d) return;
+        // Use boundsRef (always fresh) — NOT the closure-captured
+        // `bounds`. See the boundsRef comment above for why this
+        // matters when the preview scrolls during a drag.
+        d.overId = findElementAtPoint(data.x, data.y, boundsRef.current);
+        return;
+      }
+
+      if (data.type === 'drag-end') {
+        const d = dragRef.current;
+        if (!d) return;
+        const canceled = data.canceled === true;
+        // Three guards to commit a reorder:
+        //   1. The drag wasn't canceled (pointerup, not pointercancel).
+        //   2. The cursor was over a valid module at drop time.
+        //   3. The drop target is distinct from the active module
+        //      (dropping a module on itself is a no-op).
+        if (!canceled && d.overId !== null && d.overId !== d.activeId) {
+          moveElement(d.activeId, d.overId);
+        }
+        cleanupDragState();
+        return;
+      }
     };
 
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [selectElement, onPreviewError, onPreviewReady]);
+    // bounds NOT in deps — see boundsRef comment above. Other
+    // branches that read bounds use the functional setBounds(prev
+    // => ...) form so they don't capture from the closure either.
+  }, [selectElement, onPreviewError, onPreviewReady, moveElement, cleanupDragState, findElementAtPoint]);
 
   // Phase 2.3 — handshake timeout. If the runtime hasn't sent
   // preview-ready within HANDSHAKE_TIMEOUT_MS (5s), report
@@ -238,11 +347,14 @@ export const RuntimePreviewIframe: React.FC<Props> = ({ appId, previewPhase, ifr
   // state so we don't keep stale flags/queue from the previous
   // instance. previewReady is the most important: a stale `true`
   // would suppress the timeout and let a broken iframe pass.
+  // Phase 2.4a: also clean up any in-flight drag — a stuck
+  // dragRef would block future drags from initiating.
   useEffect(() => {
     setPreviewReady(false);
     pendingPayloadRef.current = null;
     setBounds({});
     setHoveredId(null);
+    cleanupDragState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeKey]);
 
