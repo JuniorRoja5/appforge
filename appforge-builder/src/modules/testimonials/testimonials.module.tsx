@@ -1,30 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { Star, Quote, Plus, Trash2, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B2) — schemas imported from the shared package. Subschema
+// (TestimonialItem) is exported by shared so we get it from the same import.
+import {
+  TestimonialsConfigSchema,
+  type TestimonialsConfig,
+  type TestimonialItem,
+} from '../../lib/shared/module-schemas/testimonials.schema';
 
-// --- Zod schema ---
-const TestimonialItemSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  authorName: z.string(),
-  authorRole: z.string(),
-  authorImageUrl: z.string(),
-  rating: z.number().min(1).max(5),
-});
-
-const TestimonialsConfigSchema = z.object({
-  title: z.string(),
-  testimonials: z.array(TestimonialItemSchema),
-  showRating: z.boolean(),
-  showImage: z.boolean(),
-  layout: z.enum(['carousel', 'list', 'cards']),
-});
-
-export type TestimonialsConfig = z.infer<typeof TestimonialsConfigSchema>;
-type TestimonialItem = z.infer<typeof TestimonialItemSchema>;
+export type { TestimonialsConfig };
 
 // --- Star Rating Display ---
 const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 10 }) => (

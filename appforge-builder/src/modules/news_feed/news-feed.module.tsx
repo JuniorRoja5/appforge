@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Newspaper, Plus, Pencil, Trash2, Save, X,
   Image as ImageIcon, Video, ChevronDown, ChevronUp,
@@ -18,19 +17,14 @@ import {
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B2) — schema imported from the shared package. The visual
+// configuration moves to the contract; article CRUD (Plano 1) stays here.
+import {
+  NewsFeedConfigSchema,
+  type NewsFeedConfig,
+} from '../../lib/shared/module-schemas/news_feed.schema';
 
-// --- Zod schema: configuración visual (se guarda en el JSON del canvas) ---
-const NewsFeedConfigSchema = z.object({
-  layout: z.enum(['list', 'cards']),
-  itemsToShow: z.number().min(1).max(50),
-  showImage: z.boolean(),
-  showDate: z.boolean(),
-  showExcerpt: z.boolean(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(), // Se incrementa al hacer CRUD para refrescar el preview
-});
-
-export type NewsFeedConfig = z.infer<typeof NewsFeedConfigSchema>;
+export type { NewsFeedConfig };
 
 // --- Helper: extraer embed URL de YouTube/Vimeo ---
 function getEmbedUrl(url: string): string | null {

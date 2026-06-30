@@ -6,6 +6,11 @@ import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B2) — no inline sub-interfaces to dedupe here (the
+// `GalleryImage` type is derived from the API, not from the module's
+// config). Schema lives in appforge-shared/src/module-schemas/
+// photo_gallery.schema.ts and will be imported in Phase 3c when
+// safeParse + fallback UX arrives. No zombie reads detected.
 
 type GalleryImage = Awaited<ReturnType<typeof getGallery>>[number];
 

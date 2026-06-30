@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Calendar, Plus, Pencil, Trash2, Save, X,
   ChevronDown, ChevronUp,
@@ -17,19 +16,13 @@ import {
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B2) — schema imported from the shared package.
+import {
+  EventsConfigSchema,
+  type EventsConfig,
+} from '../../lib/shared/module-schemas/events.schema';
 
-// --- Zod schema ---
-const EventsConfigSchema = z.object({
-  layout: z.enum(['list', 'cards']),
-  itemsToShow: z.number().min(1).max(50),
-  showImage: z.boolean(),
-  showLocation: z.boolean(),
-  showDescription: z.boolean(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type EventsConfig = z.infer<typeof EventsConfigSchema>;
+export type { EventsConfig };
 
 // --- Constants ---
 const EVENT_CATEGORIES = [

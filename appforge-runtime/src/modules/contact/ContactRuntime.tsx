@@ -2,15 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getCaptcha, submitContact, uploadAppUserImage } from '../../lib/api';
 import { compressImage } from '../../lib/image-utils';
 import { registerRuntimeModule } from '../registry';
-
-interface ContactField {
-  id: string;
-  type: 'text' | 'email' | 'phone' | 'textarea' | 'file' | 'select';
-  label: string;
-  placeholder?: string;
-  required: boolean;
-  options?: string[];
-}
+// Phase 3b (B2) — ContactField type imported from the shared schema; the
+// local `interface ContactField` is gone. The contract's optionality of
+// `placeholder` and `options` matches what the runtime expects exactly,
+// so a plain alias is correct (no Omit/Pick/Partial needed — the original
+// was already symmetric with the contract).
+import type { ContactField } from '../../lib/shared/module-schemas/contact.schema';
 
 const DEFAULT_FIELDS: ContactField[] = [
   { id: '1', type: 'text', label: 'Nombre', placeholder: 'Tu nombre', required: true },
@@ -41,6 +38,14 @@ const ContactRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
   const titleColor = (data.titleColor as string) ?? '';
   const labelColor = (data.labelColor as string) ?? '';
   const placeholderColor = (data.placeholderColor as string) ?? '';
+  // NOTE: `data.titleAlignment` is a latent hook for the upcoming
+  // "editable header" feature — the runtime reads it defensively even
+  // though the builder does not currently expose it in the schema or
+  // SettingsPanel. When the title-editable epic ships (post-B3), the
+  // schema will declare `titleAlignment` and the builder will edit
+  // it. Until then the cast falls through to 'left' for every real
+  // manifest. Do NOT clean this up as a fontWeight-style zombie —
+  // it's contract that does not exist yet, not dead code.
   const titleAlignment = (data.titleAlignment as string) ?? 'left';
 
   const [formData, setFormData] = useState<Record<string, string>>({});

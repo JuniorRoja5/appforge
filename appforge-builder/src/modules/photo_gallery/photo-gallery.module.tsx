@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Camera, Plus, Trash2, Save, X,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
@@ -17,19 +16,13 @@ import {
 } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
+// Phase 3b (B2) — schema imported from the shared package.
+import {
+  PhotoGalleryConfigSchema,
+  type PhotoGalleryConfig,
+} from '../../lib/shared/module-schemas/photo_gallery.schema';
 
-// --- Zod schema ---
-const PhotoGalleryConfigSchema = z.object({
-  title: z.string().default('Galería'),
-  columns: z.number().min(1).max(4),
-  gap: z.number(),
-  showTitles: z.boolean(),
-  enableLightbox: z.boolean(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type PhotoGalleryConfig = z.infer<typeof PhotoGalleryConfigSchema>;
+export type { PhotoGalleryConfig };
 
 // --- Mock data for preview without real data ---
 const MOCK_PHOTOS = [

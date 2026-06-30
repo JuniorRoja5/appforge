@@ -3,17 +3,24 @@ import { Star, Quote } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B2) — TestimonialItem type imported from the shared schema;
+// the local `interface TestimonialRaw` is rebuilt from the contract via
+// Pick + the legacy-rename fields (name/avatarUrl/role) added back as
+// optionals. The Pick approach (rather than hardcoding the field names)
+// means a future rename in the schema propagates here automatically.
+// The normalized `Testimonial` shape stays local because it isn't part
+// of the contract — it's the runtime's internal model.
+import type { TestimonialItem } from '../../lib/shared/module-schemas/testimonials.schema';
 
-interface TestimonialRaw {
-  authorName?: string;
-  name?: string;
-  text: string;
-  rating: number;
-  authorImageUrl?: string;
-  avatarUrl?: string;
-  authorRole?: string;
-  role?: string;
-}
+type TestimonialRaw = Partial<Pick<TestimonialItem, 'authorName' | 'authorImageUrl' | 'authorRole'>>
+  & Pick<TestimonialItem, 'text' | 'rating'>
+  & {
+    // Legacy field names from manifests saved before the rename to
+    // `authorName` / `authorImageUrl` / `authorRole`.
+    name?: string;
+    avatarUrl?: string;
+    role?: string;
+  };
 
 interface Testimonial {
   name: string;

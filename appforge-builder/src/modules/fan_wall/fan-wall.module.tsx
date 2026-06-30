@@ -1,25 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Camera, Heart,
   ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getFanWallStats } from '../../lib/api';
+// Phase 3b (B2) — schema imported from the shared package.
+import {
+  FanWallConfigSchema,
+  type FanWallConfig,
+} from '../../lib/shared/module-schemas/fan_wall.schema';
 
-// --- Zod schema ---
-const FanWallConfigSchema = z.object({
-  enabled: z.boolean(),
-  title: z.string().default('Fan Wall'),
-  backgroundColor: z.string().default('#f9fafb'),
-  headerColor: z.string().default(''),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type FanWallConfig = z.infer<typeof FanWallConfigSchema>;
+export type { FanWallConfig };
 
 // --- Preview Component ---
 const MOCK_PHOTOS = [

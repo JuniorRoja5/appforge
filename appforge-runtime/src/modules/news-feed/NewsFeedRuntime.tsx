@@ -29,6 +29,15 @@ const stripHtml = (html: string): string => {
 };
 
 const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  // NOTE: `data.title` is a latent hook for the upcoming "editable
+  // header" feature — the runtime reads it defensively even though the
+  // builder does not currently expose a module-level `title` in the
+  // schema or SettingsPanel. When the title-editable epic ships
+  // (post-B3), the schema will declare `title` (with the convention
+  // that an empty string collapses the header) and the builder will
+  // edit it. Until then the cast falls through to 'Noticias' for
+  // every real manifest. Do NOT clean this up as a zombie — it's
+  // contract that does not exist yet, not dead code.
   const title = (data.title as string) ?? 'Noticias';
   const layout = (data.layout as string) ?? 'cards';
   const itemsToShow = (data.itemsToShow as number) ?? 50;

@@ -1,41 +1,23 @@
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Mail, Plus, Trash2, Save, X, Pencil, Inbox,
   ChevronDown, ChevronUp, ArrowUp, ArrowDown,
   Phone, Type, AlignLeft, Upload, List,
 } from 'lucide-react';
+// Phase 3b (B2) — schemas imported from the shared package. Only the
+// type `ContactField` (aliased to the original local name `FormField`)
+// is consumed inside this file; the original `FieldSchema` const was
+// used to build `fields: z.array(FieldSchema)` inline, which now lives
+// in the shared schema, so the value isn't needed here anymore.
+import {
+  ContactConfigSchema,
+  type ContactConfig,
+  type ContactField as FormField,
+} from '../../lib/shared/module-schemas/contact.schema';
 
-// --- Zod schemas ---
-
-const FieldSchema = z.object({
-  id: z.string(),
-  type: z.enum(['text', 'email', 'phone', 'textarea', 'file', 'select']),
-  label: z.string(),
-  placeholder: z.string().optional(),
-  required: z.boolean(),
-  options: z.array(z.string()).optional(),
-});
-
-type FormField = z.infer<typeof FieldSchema>;
-
-const ContactConfigSchema = z.object({
-  formTitle: z.string(),
-  submitButtonText: z.string(),
-  successMessage: z.string(),
-  fields: z.array(FieldSchema),
-  enableHoneypot: z.boolean(),
-  enableCaptcha: z.boolean(),
-  titleColor: z.string(),
-  labelColor: z.string(),
-  placeholderColor: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-type ContactConfig = z.infer<typeof ContactConfigSchema>;
+export type { ContactConfig };
 
 // --- Iconos por tipo de campo ---
 const fieldTypeIcons: Record<FormField['type'], React.ReactNode> = {

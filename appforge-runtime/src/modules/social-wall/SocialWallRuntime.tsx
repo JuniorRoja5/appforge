@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B2) — no inline sub-interfaces to dedupe here (post/comment
+// shapes come from the API via `SocialPostItem` / `SocialCommentItem`,
+// not from the module's config). Schema lives in appforge-shared/src/
+// module-schemas/social_wall.schema.ts and will be imported in Phase 3c
+// when safeParse + fallback UX arrives. No zombie reads detected.
 import {
   isAuthenticated,
   getCurrentUser,

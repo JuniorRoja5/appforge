@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   MessageSquare, Heart,
   ChevronDown, ChevronUp,
@@ -9,29 +8,15 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getSocialWallStats } from '../../lib/api';
+// Phase 3b (B2) — schema imported from the shared package. The `displayModes`
+// and `postLayouts` const arrays move with the schema to keep the literal
+// source single (they only existed to feed `z.enum(...)` in the builder).
+import {
+  SocialWallConfigSchema,
+  type SocialWallConfig,
+} from '../../lib/shared/module-schemas/social_wall.schema';
 
-// --- Zod schema ---
-const displayModes = ['default', 'fullwidth'] as const;
-const postLayouts = ['list', 'cards', 'compact'] as const;
-
-const SocialWallConfigSchema = z.object({
-  enabled: z.boolean(),
-  allowImages: z.boolean(),
-  title: z.string().default('Social Wall'),
-  backgroundColor: z.string().default('#f9fafb'),
-  headerColor: z.string().default(''),
-  textColor: z.string().default('#1f2937'),
-  displayMode: z.enum(displayModes).default('default'),
-  postLayout: z.enum(postLayouts).default('list'),
-  showHeader: z.boolean().default(true),
-  postsPerPage: z.number().min(3).max(50).default(10),
-  allowComments: z.boolean().default(true),
-  allowLikes: z.boolean().default(true),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type SocialWallConfig = z.infer<typeof SocialWallConfigSchema>;
+export type { SocialWallConfig };
 
 // --- Preview Component ---
 const MOCK_POSTS = [
