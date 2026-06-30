@@ -261,6 +261,22 @@ export const PreviewSelectableWrapper: React.FC<Props> = ({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
+      // Phase 2.4a fix — restore the click propagation barrier
+      // that 2.2 had via onClick={...stopPropagation}. The
+      // TabScreen background listens on onClick to deselect (its
+      // handleEmptyClick → sendElementClick(null)), with the
+      // explicit assumption that each wrapper stops its own click
+      // from bubbling. 2.4a's migration to pointer events removed
+      // the wrapper's onClick, breaking that contract: the synthetic
+      // click that follows pointerup bubbles up to TabScreen,
+      // triggering an immediate deselect that erases the selection
+      // just made by handlePointerUp. The selection logic stays in
+      // pointerup; this only restores the propagation barrier the
+      // background expects. Safe on drag too — browsers typically
+      // don't fire a click after a real drag (pointer moved past
+      // threshold), but if any does, stopPropagation only stops
+      // bubbling, never cancels intent.
+      onClick={(e) => e.stopPropagation()}
       onMouseEnter={() => sendElementHover(elementId)}
       onMouseLeave={() => sendElementHover(null)}
       style={{ cursor: 'pointer', touchAction: 'none' }}
