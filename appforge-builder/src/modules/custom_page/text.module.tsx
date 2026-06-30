@@ -1,15 +1,13 @@
 import React from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import { Type } from 'lucide-react';
+// Phase 3a — schema imported from the shared package (single source of
+// truth for both builder and runtime). The local Zod declaration is
+// gone; rename was TextSchema → TextModuleConfigSchema and TextModuleData
+// → TextModuleConfig to match the shared naming convention.
+import { TextModuleConfigSchema, type TextModuleConfig } from '../../lib/shared/module-schemas/text_module.schema';
 
-const TextSchema = z.object({
-  content: z.string(),
-  align: z.enum(['left', 'center', 'right']),
-  fontSize: z.string()
-});
-
-export type TextModuleData = z.infer<typeof TextSchema>;
+type TextModuleData = TextModuleConfig;
 
 const PreviewComponent: React.FC<{ data: TextModuleData; isSelected: boolean }> = ({ data, isSelected }) => {
   return (
@@ -93,7 +91,7 @@ export const TextModule: ModuleDefinition<TextModuleData> = {
   name: 'Bloque de Texto',
   description: 'Añade párrafos y texto simple',
   icon: <Type size={20} />,
-  schema: TextSchema,
+  schema: TextModuleConfigSchema,
   defaultConfig: {
     content: 'Texto de prueba',
     align: 'left',

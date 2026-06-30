@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "copy-shared": "node ../scripts/copy-shared.mjs",
+    "predev": "npm run copy-shared",
+    "prebuild": "npm run copy-shared",
+    "postinstall": "npm run copy-shared",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
@@ -27,7 +31,8 @@
     "dompurify": "^3.4.10",
     "lucide-react": "^0.577.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.2.0",
