@@ -2,14 +2,15 @@ import React from 'react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
-// appforge-shared/src/module-schemas/image_module.schema.ts and will be
-// imported in Phase 3c when safeParse + fallback UX arrives. Defensive
-// reads of `data.src` / `data.borderRadius` are backwards-compat with
-// manifests saved before the rename and are deliberately kept outside the
-// schema (see the shared file's JSDoc).
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Defensive reads of `data.src` / `data.borderRadius` (legacy renames)
+// stay in Inner untouched.
+import { ImageModuleConfigSchema } from '../../lib/shared/module-schemas/image_module.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
-const ImageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const ImageRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // Builder uses 'url', old runtime used 'src' — accept both
   const src = (data.url as string) ?? (data.src as string) ?? '';
   const alt = (data.alt as string) ?? '';
@@ -33,6 +34,14 @@ const ImageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => 
       onError={imgFallback}
     />
   );
+};
+
+const ImageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(ImageModuleConfigSchema, data, 'image_module');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="image_module" error={cfg.error!} />;
+  }
+  return <ImageRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'image_module', Component: ImageRuntime });

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B2) — no inline sub-interfaces to dedupe here (the post
-// shape comes from the API via `FanPostItem`, not from the module's
-// config). Schema lives in appforge-shared/src/module-schemas/
-// fan_wall.schema.ts and will be imported in Phase 3c when safeParse
-// + fallback UX arrives. No zombie reads detected.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Outer preserves the multi-line signature (data + apiUrl + appId).
+import { FanWallConfigSchema } from '../../lib/shared/module-schemas/fan_wall.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 import {
   isAuthenticated,
   getCurrentUser,
@@ -102,7 +103,7 @@ const PhotoDetail: React.FC<{
 
 // ─── Main Component ────────────────────────────────────
 
-const FanWallRuntime: React.FC<{
+const FanWallRuntimeInner: React.FC<{
   data: Record<string, unknown>;
   apiUrl: string;
   appId: string;
@@ -295,6 +296,18 @@ const FanWallRuntime: React.FC<{
       )}
     </div>
   );
+};
+
+const FanWallRuntime: React.FC<{
+  data: Record<string, unknown>;
+  apiUrl: string;
+  appId: string;
+}> = (props) => {
+  const cfg = validateConfig(FanWallConfigSchema, props.data, 'fan_wall');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="fan_wall" error={cfg.error!} />;
+  }
+  return <FanWallRuntimeInner {...props} />;
 };
 
 registerRuntimeModule({ id: 'fan_wall', Component: FanWallRuntime });

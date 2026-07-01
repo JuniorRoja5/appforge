@@ -6,15 +6,15 @@ import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B2) — no inline sub-interfaces to dedupe here (the
-// `GalleryImage` type is derived from the API, not from the module's
-// config). Schema lives in appforge-shared/src/module-schemas/
-// photo_gallery.schema.ts and will be imported in Phase 3c when
-// safeParse + fallback UX arrives. No zombie reads detected.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+import { PhotoGalleryConfigSchema } from '../../lib/shared/module-schemas/photo_gallery.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type GalleryImage = Awaited<ReturnType<typeof getGallery>>[number];
 
-const PhotoGalleryRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const PhotoGalleryRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Galería';
   const columns = (data.columns as number) ?? 2;
   const gap = (data.gap as number) ?? 4;
@@ -128,6 +128,14 @@ const PhotoGalleryRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data
       )}
     </div>
   );
+};
+
+const PhotoGalleryRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(PhotoGalleryConfigSchema, data, 'photo_gallery');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="photo_gallery" error={cfg.error!} />;
+  }
+  return <PhotoGalleryRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'photo_gallery', Component: PhotoGalleryRuntime });

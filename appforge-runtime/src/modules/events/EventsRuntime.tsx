@@ -8,6 +8,12 @@ import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
 import { HorizontalCarousel, carouselItemStyle } from '../../components/HorizontalCarousel';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Latent hook `data.title` preserved (see Inner NOTE).
+import { EventsConfigSchema } from '../../lib/shared/module-schemas/events.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type Event = Awaited<ReturnType<typeof getEvents>>[number];
 
@@ -24,7 +30,7 @@ const openExternal = async (url: string) => {
   try { await Browser.open({ url }); } catch { /* swallow — Browser shim handles its own fallback */ }
 };
 
-const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const EventsRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // NOTE: `data.title` is a latent hook for the upcoming "editable
   // header" feature — the runtime reads it defensively even though the
   // builder does not currently expose a module-level `title` in the
@@ -271,6 +277,14 @@ const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
       </HorizontalCarousel>
     </div>
   );
+};
+
+const EventsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(EventsConfigSchema, data, 'events');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="events" error={cfg.error!} />;
+  }
+  return <EventsRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'events', Component: EventsRuntime });

@@ -1,11 +1,12 @@
 import React from 'react';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — VideoItem type imported from the shared schema; the
-// local `interface VideoItem` is gone. The runtime stays permissive on
-// `id` and `title` (both optional here, both required in the contract)
-// because old single-url legacy manifests synthesize a partial item
-// without them — see video.schema.ts JSDoc.
-import type { VideoItem as VideoItemContract } from '../../lib/shared/module-schemas/video.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Permissive VideoItem type + legacy `data.url` single-URL fallback
+// preserved.
+import { VideoConfigSchema, type VideoItem as VideoItemContract } from '../../lib/shared/module-schemas/video.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type VideoItem = Partial<Pick<VideoItemContract, 'id' | 'title'>> & {
   url: string;
@@ -21,7 +22,7 @@ function getEmbedUrl(url: string): string | null {
   return null;
 }
 
-const VideoRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const VideoRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? '';
   const videos = (data.videos as VideoItem[]) ?? [];
   const layout = (data.layout as string) ?? 'grid';
@@ -80,6 +81,14 @@ const VideoRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => 
       </div>
     </div>
   );
+};
+
+const VideoRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(VideoConfigSchema, data, 'video');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="video" error={cfg.error!} />;
+  }
+  return <VideoRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'video', Component: VideoRuntime });

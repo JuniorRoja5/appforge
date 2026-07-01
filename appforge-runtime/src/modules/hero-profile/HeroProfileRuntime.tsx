@@ -3,10 +3,12 @@ import { BrowserShim as Browser } from '../../lib/platform';
 import { Phone, Mail, Instagram, Facebook, MessageCircle, Linkedin, Globe } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — QuickLink type imported from the shared schema; the
-// local `interface QuickLink` is gone. Single source of truth for the
-// 7-value enum and the id/value field shapes.
-import type { QuickLink } from '../../lib/shared/module-schemas/hero_profile.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// 4 legacy renames (businessName/tagline/avatarUrl/coverUrl) preserved.
+import { HeroProfileConfigSchema, type QuickLink } from '../../lib/shared/module-schemas/hero_profile.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
   phone: Phone, email: Mail, instagram: Instagram, facebook: Facebook,
@@ -31,7 +33,7 @@ function getQuickLinkUrl(link: QuickLink): string {
   }
 }
 
-const HeroProfileRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const HeroProfileRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // Map builder field names to runtime fields
   const name = (data.name as string) ?? (data.businessName as string) ?? '';
   const tagline = (data.subtitle as string) ?? (data.tagline as string) ?? '';
@@ -98,6 +100,14 @@ const HeroProfileRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
       </div>
     </div>
   );
+};
+
+const HeroProfileRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(HeroProfileConfigSchema, data, 'hero_profile');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="hero_profile" error={cfg.error!} />;
+  }
+  return <HeroProfileRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'hero_profile', Component: HeroProfileRuntime });

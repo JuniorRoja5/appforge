@@ -2,12 +2,14 @@ import React from 'react';
 import { sanitize } from '../../lib/sanitize';
 import { responsiveHtmlClass } from '../../lib/responsive-html';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
-// appforge-shared/src/module-schemas/custom_page.schema.ts and will be
-// imported in Phase 3c. Defensive read of `data.content` is backwards-compat
-// with manifests saved before the rename to `htmlContent`.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Legacy `data.content` fallback preserved.
+import { CustomPageConfigSchema } from '../../lib/shared/module-schemas/custom_page.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
-const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const CustomPageRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const content = (data.htmlContent as string) ?? (data.content as string) ?? '';
   const bgColor = (data.backgroundColor as string) ?? '';
   const padding = (data.padding as number) ?? 16;
@@ -23,6 +25,14 @@ const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }
       />
     </div>
   );
+};
+
+const CustomPageRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(CustomPageConfigSchema, data, 'custom_page');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="custom_page" error={cfg.error!} />;
+  }
+  return <CustomPageRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'custom_page', Component: CustomPageRuntime });

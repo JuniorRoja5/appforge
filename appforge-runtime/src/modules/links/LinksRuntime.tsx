@@ -2,12 +2,12 @@ import React from 'react';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { ExternalLink, Globe, Instagram, Facebook, MessageCircle, Youtube, Twitter } from 'lucide-react';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — LinkItem type imported from the shared schema; the local
-// `interface LinkItem` is gone. The runtime stays permissive on icon
-// (the contract enumerates 12 values, the runtime renders 6 and falls
-// back to ExternalLink for the rest), so we widen `icon` to a generic
-// `string | undefined` at the consumption site instead of in the contract.
-import type { LinkItem as LinkItemContract } from '../../lib/shared/module-schemas/links.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Permissive icon type (widened to string) preserved.
+import { LinksConfigSchema, type LinkItem as LinkItemContract } from '../../lib/shared/module-schemas/links.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type LinkItem = Omit<LinkItemContract, 'id' | 'icon'> & {
   id?: string;
@@ -19,7 +19,7 @@ const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
   whatsapp: MessageCircle, youtube: Youtube, twitter: Twitter,
 };
 
-const LinksRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const LinksRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? '';
   const links = (data.links as LinkItem[]) ?? [];
   const style = (data.style as string) ?? 'buttons';
@@ -114,6 +114,14 @@ const LinksRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => 
       )}
     </div>
   );
+};
+
+const LinksRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(LinksConfigSchema, data, 'links');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="links" error={cfg.error!} />;
+  }
+  return <LinksRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'links', Component: LinksRuntime });

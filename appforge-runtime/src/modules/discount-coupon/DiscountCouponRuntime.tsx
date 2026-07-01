@@ -6,12 +6,14 @@ import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B3) — no inline sub-interfaces to dedupe here (coupon shape
-// comes from the API). Schema lives in appforge-shared/src/module-
-// schemas/discount_coupon.schema.ts and will be imported in Phase 3c
-// when safeParse + fallback UX arrives.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Latent hook `data.title` preserved (see Inner NOTE).
+import { DiscountCouponConfigSchema } from '../../lib/shared/module-schemas/discount_coupon.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
-const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const DiscountCouponRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // NOTE: `data.title` is a latent hook for the upcoming "editable
   // header" feature (Phase 3.5). The runtime reads it defensively even
   // though the builder does not currently expose a module-level
@@ -146,6 +148,14 @@ const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ da
       </div>
     </div>
   );
+};
+
+const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(DiscountCouponConfigSchema, data, 'discount_coupon');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="discount_coupon" error={cfg.error!} />;
+  }
+  return <DiscountCouponRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'discount_coupon', Component: DiscountCouponRuntime });

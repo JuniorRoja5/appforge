@@ -19,15 +19,16 @@ import {
   onAuthChange,
   type AppUserData,
 } from '../../lib/auth';
-// Phase 3b (B3) — no inline sub-interfaces to dedupe here (`AppUserData`
-// is API-derived from lib/auth, `Tab` is a local UI enum). Schema
-// lives in appforge-shared/src/module-schemas/user_profile.schema.ts
-// and will be imported in Phase 3c when safeParse + fallback UX
-// arrives. No latent hooks: this module has no header title.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Outer preserves the multi-line signature (data + apiUrl + appId).
+import { UserProfileConfigSchema } from '../../lib/shared/module-schemas/user_profile.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type Tab = 'login' | 'register';
 
-const UserProfileRuntime: React.FC<{
+const UserProfileRuntimeInner: React.FC<{
   data: Record<string, unknown>;
   apiUrl: string;
   appId: string;
@@ -521,6 +522,18 @@ const ProfileView: React.FC<{ user: AppUserData }> = ({ user }) => {
       </button>
     </div>
   );
+};
+
+const UserProfileRuntime: React.FC<{
+  data: Record<string, unknown>;
+  apiUrl: string;
+  appId: string;
+}> = (props) => {
+  const cfg = validateConfig(UserProfileConfigSchema, props.data, 'user_profile');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="user_profile" error={cfg.error!} />;
+  }
+  return <UserProfileRuntimeInner {...props} />;
 };
 
 registerRuntimeModule({

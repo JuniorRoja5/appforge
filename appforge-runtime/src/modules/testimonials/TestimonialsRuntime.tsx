@@ -3,14 +3,14 @@ import { Star, Quote } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B2) — TestimonialItem type imported from the shared schema;
-// the local `interface TestimonialRaw` is rebuilt from the contract via
-// Pick + the legacy-rename fields (name/avatarUrl/role) added back as
-// optionals. The Pick approach (rather than hardcoding the field names)
-// means a future rename in the schema propagates here automatically.
-// The normalized `Testimonial` shape stays local because it isn't part
-// of the contract — it's the runtime's internal model.
-import type { TestimonialItem } from '../../lib/shared/module-schemas/testimonials.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// The Outer gate is critical here: the Inner's `rawItems.map(...)` (L40)
+// would crash if `data.testimonials` came in as a string. The wrapper
+// short-circuits to the placeholder in preview before that runs.
+import { TestimonialsConfigSchema, type TestimonialItem } from '../../lib/shared/module-schemas/testimonials.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type TestimonialRaw = Partial<Pick<TestimonialItem, 'authorName' | 'authorImageUrl' | 'authorRole'>>
   & Pick<TestimonialItem, 'text' | 'rating'>
@@ -40,7 +40,7 @@ function normalizeTestimonial(raw: TestimonialRaw): Testimonial {
   };
 }
 
-const TestimonialsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const TestimonialsRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Testimonios';
   // Builder saves as "testimonials", old runtime expected "items" — support both
   const rawItems = (data.testimonials as TestimonialRaw[]) ?? (data.items as TestimonialRaw[]) ?? [];
@@ -79,6 +79,14 @@ const TestimonialsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data
       </div>
     </div>
   );
+};
+
+const TestimonialsRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(TestimonialsConfigSchema, data, 'testimonials');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="testimonials" error={cfg.error!} />;
+  }
+  return <TestimonialsRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'testimonials', Component: TestimonialsRuntime });

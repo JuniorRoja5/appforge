@@ -5,10 +5,12 @@ import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B3) — no inline sub-interfaces to dedupe here (Categories /
-// MenuItem come from the API). Schema lives in appforge-shared/src/
-// module-schemas/menu_restaurant.schema.ts and will be imported in
-// Phase 3c when safeParse + fallback UX arrives.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Latent hook `data.title` preserved (see Inner NOTE).
+import { MenuRestaurantConfigSchema } from '../../lib/shared/module-schemas/menu_restaurant.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type Categories = Awaited<ReturnType<typeof getMenuCategories>>;
 type MenuItem = Categories[number]['items'][number];
@@ -24,7 +26,7 @@ const ALLERGEN_MAP: Record<string, { emoji: string; label: string }> = {
   apio: { emoji: '🥬', label: 'Apio' },
 };
 
-const MenuRestaurantRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const MenuRestaurantRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // NOTE: `data.title` is a latent hook for the upcoming "editable
   // header" feature (Phase 3.5). The runtime reads it defensively even
   // though the builder does not currently expose a module-level
@@ -196,6 +198,14 @@ const MenuRestaurantRuntime: React.FC<{ data: Record<string, unknown> }> = ({ da
       )}
     </div>
   );
+};
+
+const MenuRestaurantRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(MenuRestaurantConfigSchema, data, 'menu_restaurant');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="menu_restaurant" error={cfg.error!} />;
+  }
+  return <MenuRestaurantRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'menu_restaurant', Component: MenuRestaurantRuntime });

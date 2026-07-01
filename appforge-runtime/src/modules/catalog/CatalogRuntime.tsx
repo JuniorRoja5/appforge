@@ -7,11 +7,12 @@ import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
-
-// Phase 3b (B3) — no inline sub-interfaces to dedupe here (Product /
-// CartItem come from the API, not the module's config). Schema lives
-// in appforge-shared/src/module-schemas/catalog.schema.ts and will be
-// imported in Phase 3c when safeParse + fallback UX arrives.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Latent hook `data.title` preserved (see Inner NOTE).
+import { CatalogConfigSchema } from '../../lib/shared/module-schemas/catalog.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type Collections = Awaited<ReturnType<typeof getCatalogCollections>>;
 type Product = Collections[number]['products'][number];
@@ -23,7 +24,7 @@ interface CartItem {
 
 type View = 'shopping' | 'cart' | 'login-gate' | 'checkout' | 'confirmation';
 
-const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const CatalogRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // NOTE: `data.title` is a latent hook for the upcoming "editable
   // header" feature (Phase 3.5). The runtime reads it defensively even
   // though the builder does not currently expose a module-level
@@ -560,6 +561,14 @@ const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
       )}
     </div>
   );
+};
+
+const CatalogRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(CatalogConfigSchema, data, 'catalog');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="catalog" error={cfg.error!} />;
+  }
+  return <CatalogRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'catalog', Component: CatalogRuntime });

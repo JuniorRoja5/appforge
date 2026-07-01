@@ -1,13 +1,18 @@
 import React from 'react';
 import { sanitize } from '../../lib/sanitize';
 import { registerRuntimeModule } from '../registry';
-// Phase 3a — schema imported from the shared package. safeParse below
-// is the anticipo of the validation flow that Phase 3c formalizes with
-// `validateConfig` + `InvalidConfigPlaceholder`. Here it's deliberately
-// minimal — falls back to defaults on invalid input, no placeholder UI
-// yet — to keep 3a focused on validating the copy-shared infrastructure
-// end-to-end without introducing UX scope that belongs to 3c.
+// Phase 3c — Outer/Inner wrapper pattern. Inner keeps the 3a pilot
+// verbatim (safeParse against the schema + fallback to TEXT_DEFAULTS
+// when invalid). Outer adds the preview placeholder gate BEFORE
+// Inner mounts, so an invalid config in preview never runs the
+// Inner's safeParse (redundant work) — the placeholder wins.
+// The 3a `console.warn` inside Inner is REMOVED because the helper's
+// dedup'd warn in validateConfig covers it (single warn per moduleId
+// per session, matches operator's ajuste 1).
 import { TextModuleConfigSchema } from '../../lib/shared/module-schemas/text_module.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 const TEXT_DEFAULTS = {
   content: '',
@@ -15,22 +20,9 @@ const TEXT_DEFAULTS = {
   fontSize: '1rem',
 };
 
-const TextRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const TextRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const parsed = TextModuleConfigSchema.safeParse(data);
   const cfg = parsed.success ? parsed.data : TEXT_DEFAULTS;
-  if (!parsed.success) {
-    console.warn('[text_module] invalid config, using defaults:', parsed.error.message);
-  }
-  // Phase 3a — previous code read `data.fontWeight` defensively, but
-  // the builder never declares or edits fontWeight (no entry in
-  // SettingsPanel, no entry in defaultConfig), so no real manifest
-  // ever carries it. The cast was zombie code that always fell to
-  // '400'. Removed — the browser inherits font-weight from the
-  // surrounding context as it would for any element without an
-  // explicit value. The schema is the source of truth: only fields
-  // that exist in the schema are read. Anything else is a sign the
-  // schema or the runtime drifted, not a license to read undeclared
-  // fields defensively.
 
   return (
     <div
@@ -43,6 +35,14 @@ const TextRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
       dangerouslySetInnerHTML={{ __html: sanitize(cfg.content) }}
     />
   );
+};
+
+const TextRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(TextModuleConfigSchema, data, 'text_module');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="text_module" error={cfg.error!} />;
+  }
+  return <TextRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'text_module', Component: TextRuntime });

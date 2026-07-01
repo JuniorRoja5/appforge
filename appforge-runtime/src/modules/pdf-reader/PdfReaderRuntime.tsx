@@ -5,12 +5,13 @@ import { FileText, ExternalLink } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
-// appforge-shared/src/module-schemas/pdf_reader.schema.ts and will be
-// imported in Phase 3c when safeParse + fallback UX arrives. This is the
-// cleanest of the B1 runtimes: no legacy fallbacks, no zombie reads.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+import { PdfReaderConfigSchema } from '../../lib/shared/module-schemas/pdf_reader.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
-const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const PdfReaderRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Documento';
   const pdfUrl = (data.pdfUrl as string) ?? '';
   const showTitle = (data.showTitle as boolean) ?? true;
@@ -85,6 +86,14 @@ const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data })
       </button>
     </div>
   );
+};
+
+const PdfReaderRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(PdfReaderConfigSchema, data, 'pdf_reader');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="pdf_reader" error={cfg.error!} />;
+  }
+  return <PdfReaderRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'pdf_reader', Component: PdfReaderRuntime });

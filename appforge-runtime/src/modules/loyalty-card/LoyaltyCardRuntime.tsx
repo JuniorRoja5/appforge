@@ -6,18 +6,17 @@ import { isAuthenticated, onAuthChange, getCurrentUser } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B3) — no inline sub-interfaces to dedupe here. Schema
-// (with the `stampIcons` value exported as the deliberate exception
-// to the "only re-export type" rule — see loyalty_card.schema.ts
-// JSDoc) lives in appforge-shared and will be imported in Phase 3c
-// when safeParse + fallback UX arrives. No zombie reads: `title` is a
-// legit editable field, not a latent hook.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+import { LoyaltyCardConfigSchema } from '../../lib/shared/module-schemas/loyalty_card.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 const STAMP_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
   star: Star, coffee: Coffee, heart: Heart, check: Check, gift: Gift,
 };
 
-const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const LoyaltyCardRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Tarjeta de Lealtad';
   const description = (data.description as string) ?? '';
   const totalStamps = (data.totalStamps as number) ?? 10;
@@ -306,6 +305,14 @@ const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data 
       )}
     </div>
   );
+};
+
+const LoyaltyCardRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(LoyaltyCardConfigSchema, data, 'loyalty_card');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="loyalty_card" error={cfg.error!} />;
+  }
+  return <LoyaltyCardRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'loyalty_card', Component: LoyaltyCardRuntime });

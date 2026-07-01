@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B2) — no inline sub-interfaces to dedupe here (post/comment
-// shapes come from the API via `SocialPostItem` / `SocialCommentItem`,
-// not from the module's config). Schema lives in appforge-shared/src/
-// module-schemas/social_wall.schema.ts and will be imported in Phase 3c
-// when safeParse + fallback UX arrives. No zombie reads detected.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Outer preserves the multi-line signature (data + apiUrl + appId) so
+// the registry contract is intact even though only data is consumed.
+import { SocialWallConfigSchema } from '../../lib/shared/module-schemas/social_wall.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 import {
   isAuthenticated,
   getCurrentUser,
@@ -294,7 +296,7 @@ const CreatePostForm: React.FC<{ onCreated: (post: SocialPostItem) => void; allo
 
 // ─── Main Component ────────────────────────────────────
 
-const SocialWallRuntime: React.FC<{
+const SocialWallRuntimeInner: React.FC<{
   data: Record<string, unknown>;
   apiUrl: string;
   appId: string;
@@ -468,6 +470,18 @@ const SocialWallRuntime: React.FC<{
       )}
     </div>
   );
+};
+
+const SocialWallRuntime: React.FC<{
+  data: Record<string, unknown>;
+  apiUrl: string;
+  appId: string;
+}> = (props) => {
+  const cfg = validateConfig(SocialWallConfigSchema, props.data, 'social_wall');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="social_wall" error={cfg.error!} />;
+  }
+  return <SocialWallRuntimeInner {...props} />;
 };
 
 registerRuntimeModule({ id: 'social_wall', Component: SocialWallRuntime });

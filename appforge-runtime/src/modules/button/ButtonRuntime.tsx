@@ -1,12 +1,12 @@
 import React from 'react';
 import { BrowserShim as Browser } from '../../lib/platform';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B1) — no inline sub-interfaces to dedupe here. Schema lives in
-// appforge-shared/src/module-schemas/button_module.schema.ts and will be
-// imported in Phase 3c when safeParse + fallback UX arrives. The STYLE_MAP
-// below stays permissive (accepts `solid`/`outline` from the present
-// contract plus `filled`/`outlined`/`ghost` from legacy manifests) — that
-// flexibility is the runtime's job, not the contract's.
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// STYLE_MAP permissiveness (legacy `filled/outlined/ghost`) preserved.
+import { ButtonModuleConfigSchema } from '../../lib/shared/module-schemas/button_module.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 // Map builder's style names to variant styles
 const STYLE_MAP: Record<string, string> = {
@@ -17,7 +17,7 @@ const STYLE_MAP: Record<string, string> = {
   ghost: 'ghost',
 };
 
-const ButtonRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const ButtonRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const label = (data.label as string) ?? 'Botón';
   const url = (data.url as string) ?? '';
   // Builder uses 'style', runtime used 'variant' — accept both
@@ -74,6 +74,14 @@ const ButtonRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =>
       {label}
     </button>
   );
+};
+
+const ButtonRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(ButtonModuleConfigSchema, data, 'button_module');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="button_module" error={cfg.error!} />;
+  }
+  return <ButtonRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'button_module', Component: ButtonRuntime });

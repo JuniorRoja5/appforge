@@ -10,6 +10,12 @@ import { imgFallback } from '../../lib/img-fallback';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
 import { HorizontalCarousel, carouselItemStyle } from '../../components/HorizontalCarousel';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Latent hook `data.title` preserved (see Inner NOTE).
+import { NewsFeedConfigSchema } from '../../lib/shared/module-schemas/news_feed.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type Article = Awaited<ReturnType<typeof getNews>>[number];
 
@@ -28,7 +34,7 @@ const stripHtml = (html: string): string => {
   return html.replace(/<[^>]+>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
-const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const NewsFeedRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // NOTE: `data.title` is a latent hook for the upcoming "editable
   // header" feature — the runtime reads it defensively even though the
   // builder does not currently expose a module-level `title` in the
@@ -306,5 +312,13 @@ const LoadingCards = () => (
     ))}
   </div>
 );
+
+const NewsFeedRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(NewsFeedConfigSchema, data, 'news_feed');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="news_feed" error={cfg.error!} />;
+  }
+  return <NewsFeedRuntimeInner data={data} />;
+};
 
 registerRuntimeModule({ id: 'news_feed', Component: NewsFeedRuntime });

@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getCaptcha, submitContact, uploadAppUserImage } from '../../lib/api';
 import { compressImage } from '../../lib/image-utils';
 import { registerRuntimeModule } from '../registry';
-// Phase 3b (B2) — ContactField type imported from the shared schema; the
-// local `interface ContactField` is gone. The contract's optionality of
-// `placeholder` and `options` matches what the runtime expects exactly,
-// so a plain alias is correct (no Omit/Pick/Partial needed — the original
-// was already symmetric with the contract).
-import type { ContactField } from '../../lib/shared/module-schemas/contact.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Outer gate prevents useEffect [enableCaptcha] from firing getCaptcha
+// with invalid config in preview.
+import { ContactConfigSchema, type ContactField } from '../../lib/shared/module-schemas/contact.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 const DEFAULT_FIELDS: ContactField[] = [
   { id: '1', type: 'text', label: 'Nombre', placeholder: 'Tu nombre', required: true },
@@ -27,7 +28,7 @@ function normalizeFields(raw: unknown): ContactField[] {
   }));
 }
 
-const ContactRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const ContactRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   // Read builder field names with fallbacks to old runtime names
   const title = (data.formTitle as string) ?? (data.title as string) ?? 'Contáctanos';
   const submitButtonText = (data.submitButtonText as string) ?? 'Enviar';
@@ -236,6 +237,14 @@ const ContactRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
       </form>
     </div>
   );
+};
+
+const ContactRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(ContactConfigSchema, data, 'contact');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="contact" error={cfg.error!} />;
+  }
+  return <ContactRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'contact', Component: ContactRuntime });

@@ -6,14 +6,15 @@ import { isAuthenticated } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
-// Phase 3b (B3) — BookingField type imported from the shared schema;
-// the local `interface BookingField` is gone. The contract shape is
-// symmetric with what the runtime expects (id/type/label all required,
-// type is the same 4-value enum), so a plain alias is correct — no
-// Omit/Pick/Partial needed. The runtime's `normalizeFields()` below
-// keeps a defensive fallback for the legacy `data.formFields` name
-// (see booking.schema.ts JSDoc).
-import type { BookingField } from '../../lib/shared/module-schemas/booking.schema';
+// Phase 3c — Outer/Inner wrapper. Inner byte-identical to 6e1290a.
+// Legacy `data.fields ?? data.formFields` fallback preserved. Outer
+// gate prevents useEffect [] mount `getMyBookings()` and the closure
+// over `timeSlots.filter(...)` from firing with invalid config in
+// preview — the placeholder wins before Inner mounts.
+import { BookingConfigSchema, type BookingField } from '../../lib/shared/module-schemas/booking.schema';
+import { validateConfig } from '../../lib/module-validation';
+import { InvalidConfigPlaceholder } from '../../components/InvalidConfigPlaceholder';
+import { isPreviewMode } from '../../lib/manifest';
 
 type MyBooking = Awaited<ReturnType<typeof getMyBookings>>[number];
 
@@ -44,7 +45,7 @@ function getCalendarDays(year: number, month: number): (number | null)[] {
   return cells;
 }
 
-const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+const BookingRuntimeInner: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
   const title = (data.title as string) ?? 'Reservar Cita';
   const description = (data.description as string) ?? '';
   const timeSlots = (data.timeSlots as string[]) ?? [];
@@ -460,6 +461,14 @@ const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) =
       )}
     </div>
   );
+};
+
+const BookingRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  const cfg = validateConfig(BookingConfigSchema, data, 'booking');
+  if (!cfg.ok && isPreviewMode()) {
+    return <InvalidConfigPlaceholder moduleId="booking" error={cfg.error!} />;
+  }
+  return <BookingRuntimeInner data={data} />;
 };
 
 registerRuntimeModule({ id: 'booking', Component: BookingRuntime });
