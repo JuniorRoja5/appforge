@@ -6,6 +6,12 @@ import { isAuthenticated, onAuthChange, getCurrentUser } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B3) — no inline sub-interfaces to dedupe here. Schema
+// (with the `stampIcons` value exported as the deliberate exception
+// to the "only re-export type" rule — see loyalty_card.schema.ts
+// JSDoc) lives in appforge-shared and will be imported in Phase 3c
+// when safeParse + fallback UX arrives. No zombie reads: `title` is a
+// legit editable field, not a latent hook.
 
 const STAMP_ICONS: Record<string, React.FC<{ size?: number; className?: string }>> = {
   star: Star, coffee: Coffee, heart: Heart, check: Check, gift: Gift,

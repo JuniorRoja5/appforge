@@ -6,15 +6,16 @@ import { isAuthenticated } from '../../lib/auth';
 import { registerRuntimeModule } from '../registry';
 import { useBackButton } from '../../lib/use-back-button';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B3) — BookingField type imported from the shared schema;
+// the local `interface BookingField` is gone. The contract shape is
+// symmetric with what the runtime expects (id/type/label all required,
+// type is the same 4-value enum), so a plain alias is correct — no
+// Omit/Pick/Partial needed. The runtime's `normalizeFields()` below
+// keeps a defensive fallback for the legacy `data.formFields` name
+// (see booking.schema.ts JSDoc).
+import type { BookingField } from '../../lib/shared/module-schemas/booking.schema';
 
 type MyBooking = Awaited<ReturnType<typeof getMyBookings>>[number];
-
-interface BookingField {
-  id: string;
-  type: 'text' | 'email' | 'phone' | 'textarea';
-  label: string;
-  required: boolean;
-}
 
 const DEFAULT_FIELDS: BookingField[] = [
   { id: '1', type: 'text', label: 'Nombre completo', required: true },

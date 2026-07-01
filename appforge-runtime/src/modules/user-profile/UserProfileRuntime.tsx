@@ -19,6 +19,11 @@ import {
   onAuthChange,
   type AppUserData,
 } from '../../lib/auth';
+// Phase 3b (B3) — no inline sub-interfaces to dedupe here (`AppUserData`
+// is API-derived from lib/auth, `Tab` is a local UI enum). Schema
+// lives in appforge-shared/src/module-schemas/user_profile.schema.ts
+// and will be imported in Phase 3c when safeParse + fallback UX
+// arrives. No latent hooks: this module has no header title.
 
 type Tab = 'login' | 'register';
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Ticket,
   ChevronDown, ChevronUp,
@@ -22,20 +21,13 @@ import {
   formatDiscount,
   formatDate,
 } from '../../lib/coupon-helpers';
+// Phase 3b (B3) — schema imported from the shared package.
+import {
+  DiscountCouponConfigSchema,
+  type DiscountCouponConfig,
+} from '../../lib/shared/module-schemas/discount_coupon.schema';
 
-// ===== CONFIG =====
-
-const DiscountCouponConfigSchema = z.object({
-  layout: z.enum(['list', 'cards']),
-  showExpiry: z.boolean(),
-  showConditions: z.boolean(),
-  showUsageCount: z.boolean(),
-  currency: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-type DiscountCouponConfig = z.infer<typeof DiscountCouponConfigSchema>;
+export type { DiscountCouponConfig };
 
 // ===== CURRENCIES =====
 

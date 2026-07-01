@@ -1,32 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { z } from 'zod';
 import type { ModuleDefinition } from '../base/module.interface';
 import { setupLoyalty, getLoyaltyConfig, getLoyaltyStats } from '../../lib/api';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Loader2, Users, Stamp, Trophy, ChevronDown, ChevronUp, Link as LinkIcon } from 'lucide-react';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B3) — schema imported from the shared package. `stampIcons`
+// is imported as a VALUE (not just a type) — the deliberate exception to
+// the "only re-export XxxConfig type" rule fixed in B2. Reason: this
+// file has 4 real consumers of `stampIcons` (the schema enum via alias,
+// the type `typeof stampIcons[number]` in StampIconSvg, the same type
+// in stampIconLabels, and the `.map` of the icon picker). See the
+// shared file's JSDoc for the refined rule.
+import {
+  LoyaltyCardConfigSchema as LoyaltyCardSchema,
+  stampIcons,
+  type LoyaltyCardConfig,
+} from '../../lib/shared/module-schemas/loyalty_card.schema';
 
-/* ─── Schema ─── */
-
-const stampIcons = ['star', 'coffee', 'heart', 'check', 'gift'] as const;
-
-const LoyaltyCardSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  totalStamps: z.number().min(4).max(20),
-  reward: z.string(),
-  rewardDescription: z.string(),
-  cardColor: z.string(),
-  stampIcon: z.enum(stampIcons),
-  logoUrl: z.string(),
-  termsText: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type LoyaltyCardConfig = z.infer<typeof LoyaltyCardSchema>;
+export type { LoyaltyCardConfig };
 
 const defaultConfig: LoyaltyCardConfig = {
   title: 'Mi Tarjeta de Lealtad',

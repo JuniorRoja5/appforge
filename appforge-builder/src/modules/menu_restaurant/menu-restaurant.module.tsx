@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   UtensilsCrossed, Plus, Pencil, Trash2, Save, X,
   ChevronDown, ChevronUp,
@@ -21,21 +20,13 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { ImageInputField } from '../../components/shared/ImageInputField';
 import type { MenuCategory, MenuItemAPI } from '../../lib/api';
+// Phase 3b (B3) — schema imported from the shared package.
+import {
+  MenuRestaurantConfigSchema,
+  type MenuRestaurantConfig,
+} from '../../lib/shared/module-schemas/menu_restaurant.schema';
 
-// ===== CONFIG =====
-
-const MenuRestaurantConfigSchema = z.object({
-  layout: z.enum(['accordion', 'tabs', 'scroll']),
-  showImages: z.boolean(),
-  showPrices: z.boolean(),
-  showAllergens: z.boolean(),
-  showDescription: z.boolean(),
-  currency: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-type MenuRestaurantConfig = z.infer<typeof MenuRestaurantConfigSchema>;
+export type { MenuRestaurantConfig };
 
 // ===== CURRENCIES =====
 

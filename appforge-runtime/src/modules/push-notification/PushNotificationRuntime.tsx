@@ -1,5 +1,10 @@
 import React from 'react';
 import { registerRuntimeModule } from '../registry';
+// Phase 3b (B3) — no inline sub-interfaces to dedupe here. Schema
+// lives in appforge-shared/src/module-schemas/push_notification.schema.ts
+// and will be imported in Phase 3c when safeParse + fallback UX
+// arrives. This component is a minimal placeholder — the real push
+// flow runs at the system level via FCM topics (Plano 1).
 
 const PushNotificationRuntime: React.FC<{
   data: Record<string, unknown>;

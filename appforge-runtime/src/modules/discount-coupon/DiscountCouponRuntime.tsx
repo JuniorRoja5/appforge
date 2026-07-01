@@ -6,8 +6,20 @@ import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import { imgFallback } from '../../lib/img-fallback';
 import { registerRuntimeModule } from '../registry';
 import { ModuleHeader } from '../../components/ModuleHeader';
+// Phase 3b (B3) — no inline sub-interfaces to dedupe here (coupon shape
+// comes from the API). Schema lives in appforge-shared/src/module-
+// schemas/discount_coupon.schema.ts and will be imported in Phase 3c
+// when safeParse + fallback UX arrives.
 
 const DiscountCouponRuntime: React.FC<{ data: Record<string, unknown> }> = ({ data }) => {
+  // NOTE: `data.title` is a latent hook for the upcoming "editable
+  // header" feature (Phase 3.5). The runtime reads it defensively even
+  // though the builder does not currently expose a module-level
+  // `title` in the schema or SettingsPanel. When the title-editable
+  // epic ships, the schema will declare `title` and the builder will
+  // edit it. Until then the cast falls through to 'Cupones' for every
+  // real manifest. Do NOT clean this up as a zombie — it's contract
+  // that does not exist yet, not dead code.
   const title = (data.title as string) ?? 'Cupones';
   const layout = (data.layout as string) ?? 'cards';
   const showExpiry = (data.showExpiry as boolean) ?? true;

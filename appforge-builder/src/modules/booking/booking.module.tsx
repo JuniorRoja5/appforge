@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Calendar, Clock, Plus, Trash2,
   ChevronLeft, ChevronRight,
@@ -13,37 +12,15 @@ import {
   getAvailableSlots,
   getAppSmtpConfig,
 } from '../../lib/api';
+// Phase 3b (B3) — schemas imported from the shared package. Subschema
+// (BookingField) is exported by shared so we get it from the same import.
+import {
+  BookingConfigSchema,
+  type BookingConfig,
+  type BookingField,
+} from '../../lib/shared/module-schemas/booking.schema';
 
-// --- Zod schemas ---
-
-const BookingFieldSchema = z.object({
-  id: z.string(),
-  type: z.enum(['text', 'email', 'phone', 'textarea']),
-  label: z.string(),
-  required: z.boolean(),
-});
-
-type BookingField = z.infer<typeof BookingFieldSchema>;
-
-const BookingConfigSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  timeSlots: z.array(z.string()),
-  slotDuration: z.number(),
-  fields: z.array(BookingFieldSchema),
-  submitButtonText: z.string(),
-  cancellationDeadlineHours: z.number().min(1).max(72).optional(),
-  reminder24hEnabled: z.boolean().optional(),
-  reminder2hEnabled: z.boolean().optional(),
-  availableWeekdays: z.array(z.number().min(0).max(6)).optional(),
-  bookingHorizonDays: z.number().min(1).max(365).optional(),
-  blockedDates: z.array(z.string()).optional(),
-  businessAddress: z.string().optional(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-type BookingConfig = z.infer<typeof BookingConfigSchema>;
+export type { BookingConfig };
 
 // --- Field type icons ---
 const fieldTypeIcons: Record<BookingField['type'], React.ReactNode> = {

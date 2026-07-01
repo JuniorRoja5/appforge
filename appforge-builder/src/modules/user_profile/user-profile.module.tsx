@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   UserCircle, ChevronDown, ChevronUp,
   Loader2, Users, UserCheck, UserX, ExternalLink,
@@ -9,22 +8,13 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getAppUserStats } from '../../lib/api';
+// Phase 3b (B3) — schema imported from the shared package.
+import {
+  UserProfileConfigSchema,
+  type UserProfileConfig,
+} from '../../lib/shared/module-schemas/user_profile.schema';
 
-// --- Zod schema ---
-const UserProfileConfigSchema = z.object({
-  enabled: z.boolean(),
-  allowRegistration: z.boolean(),
-  layout: z.enum(['classic', 'centered', 'card']),
-  requireLogin: z.boolean(),
-  loginButtonText: z.string(),
-  registrationButtonText: z.string(),
-  buttonColor: z.string(),
-  buttonTextColor: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type UserProfileConfig = z.infer<typeof UserProfileConfigSchema>;
+export type { UserProfileConfig };
 
 // --- Preview Component ---
 const PreviewComponent: React.FC<{ data: UserProfileConfig; isSelected: boolean }> = ({

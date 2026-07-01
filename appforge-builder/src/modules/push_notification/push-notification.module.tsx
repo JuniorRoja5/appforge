@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   Bell, Send, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Clock, Smartphone,
@@ -14,16 +13,13 @@ import {
   type PushNotificationItem,
 } from '../../lib/api';
 import { ImageInputField } from '../../components/shared/ImageInputField';
+// Phase 3b (B3) — schema imported from the shared package.
+import {
+  PushNotificationConfigSchema,
+  type PushNotificationConfig,
+} from '../../lib/shared/module-schemas/push_notification.schema';
 
-// --- Zod schema ---
-const PushNotificationConfigSchema = z.object({
-  enabled: z.boolean(),
-  autoRequestPermission: z.boolean(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-export type PushNotificationConfig = z.infer<typeof PushNotificationConfigSchema>;
+export type { PushNotificationConfig };
 
 // --- Preview Component ---
 const MOCK_NOTIFICATIONS = [

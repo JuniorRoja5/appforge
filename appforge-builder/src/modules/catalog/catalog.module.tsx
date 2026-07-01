@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModuleDefinition } from '../base/module.interface';
-import { z } from 'zod';
 import {
   ShoppingBag, Plus, Pencil, Trash2, Save, X,
   ChevronDown, ChevronUp,
@@ -27,22 +26,13 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { resolveAssetUrl } from '../../lib/resolve-asset-url';
 import type { CatalogCollection, CatalogProduct } from '../../lib/api';
 import { Loader2, Package, CheckCircle } from 'lucide-react';
+// Phase 3b (B3) — schema imported from the shared package.
+import {
+  CatalogConfigSchema,
+  type CatalogConfig,
+} from '../../lib/shared/module-schemas/catalog.schema';
 
-// ===== CONFIG =====
-
-const CatalogConfigSchema = z.object({
-  layout: z.enum(['grid', 'list']),
-  columns: z.number().min(1).max(3),
-  showPrices: z.boolean(),
-  showComparePrice: z.boolean(),
-  showTags: z.boolean(),
-  enableCart: z.boolean(),
-  currency: z.string(),
-  appId: z.string().optional(),
-  _refreshKey: z.number().optional(),
-});
-
-type CatalogConfig = z.infer<typeof CatalogConfigSchema>;
+export type { CatalogConfig };
 
 // ===== CURRENCIES =====
 
